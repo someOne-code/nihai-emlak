@@ -29,6 +29,7 @@
   - `README.md`: quick orientation
   - `IMPLEMENTATION_PLAN.md`: phase order
   - `PHASE_1_2_TASKS.md`: daily execution list for current backend work (task selection)
+  - `BACKEND_PHASE_1.md`: backend engineering blueprint and phase limitations
   - `SUPABASE_CAPABILITY_AUDIT.md`: Supabase-first decision matrix (pre-implementation layer check)
   - `PROJECT_PLAN.md`: business/domain context
 - Do not reopen architecture debates that are already settled in these docs unless the user asks to revise them.

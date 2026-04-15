@@ -76,6 +76,16 @@ values (
   'rent', 'active', 'Task4 Test Ilan', 'task4-test-ilan', 'Istanbul', 30000
 );
 
+-- ensure a service + listing_service_option exists for service_item FK
+delete from public.service_catalog where id = 'cccccccc-cccc-cccc-cccc-cccccccccc99'::uuid;
+insert into public.service_catalog (id, code, name, base_price, is_active)
+values ('cccccccc-cccc-cccc-cccc-cccccccccc99'::uuid, 'cleaning_t4', 'Temizlik T4', 2200, true);
+
+delete from public.listing_service_options where listing_id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1'::uuid
+  and service_id = 'cccccccc-cccc-cccc-cccc-cccccccccc99'::uuid;
+insert into public.listing_service_options (listing_id, service_id, is_enabled)
+values ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1'::uuid, 'cccccccc-cccc-cccc-cccc-cccccccccc99'::uuid, true);
+
 -- ============================================================
 -- TEST 1: Tables exist with correct columns
 -- ============================================================
@@ -237,14 +247,16 @@ begin
     30000
   );
 
-  -- service_item type
-  insert into public.order_items (id, order_id, item_type, label, amount)
+  -- service_item type (with catalog and listing references for Task 6 constraints)
+  insert into public.order_items (id, order_id, item_type, label, amount, service_catalog_id, listing_id)
   values (
     '44444444-dddd-dddd-dddd-dddddddddddd'::uuid,
     '22222222-bbbb-bbbb-bbbb-bbbbbbbbbbbb'::uuid,
     'service_item',
     'Temizlik Hizmeti',
-    2200
+    2200,
+    'cccccccc-cccc-cccc-cccc-cccccccccc99'::uuid,
+    'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1'::uuid
   );
 
   insert into public.payments (id, order_id, user_id, amount, currency, status)
@@ -448,6 +460,7 @@ delete from public.order_items where id in (
 delete from public.orders where id = '22222222-bbbb-bbbb-bbbb-bbbbbbbbbbbb'::uuid;
 delete from public.reservations where id = '11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa'::uuid;
 delete from public.listings where id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1'::uuid;
+delete from public.service_catalog where id = 'cccccccc-cccc-cccc-cccc-cccccccccc99'::uuid;
 delete from auth.users where id in (
   '33333333-3333-3333-3333-333333333333'::uuid,
   '55555555-5555-5555-5555-555555555555'::uuid,
