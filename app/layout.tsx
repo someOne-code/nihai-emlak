@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
+import { headers } from "next/headers";
 import { ThemeProvider } from "next-themes";
+import { Suspense } from "react";
 import "./globals.css";
 
 const defaultUrl = process.env.VERCEL_URL
@@ -27,15 +29,30 @@ export default function RootLayout({
   return (
     <html lang="tr" suppressHydrationWarning>
       <body className={`${geistSans.className} antialiased`}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          {children}
-        </ThemeProvider>
+        <Suspense fallback={null}>
+          <NoncedThemeProvider>{children}</NoncedThemeProvider>
+        </Suspense>
       </body>
     </html>
+  );
+}
+
+async function NoncedThemeProvider({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
+
+  return (
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="system"
+      enableSystem
+      disableTransitionOnChange
+      nonce={nonce}
+    >
+      {children}
+    </ThemeProvider>
   );
 }

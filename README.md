@@ -129,6 +129,7 @@ Zorunlu cekirdek degiskenler:
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 - `NEXT_PUBLIC_SITE_URL`
+- `SITE_URL` (onerilen; production server-side origin icin)
 - `DATABASE_URI`
 - `PAYLOAD_SECRET`
 

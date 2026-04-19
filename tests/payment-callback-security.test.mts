@@ -3,6 +3,8 @@ import test from "node:test";
 
 import {
   buildIsbankHostedPaymentCallbackKey,
+  extractPaymentCallbackReference,
+  extractPaymentIdHintFromCallback,
   getSupportedPaymentCallbackContentType,
   parsePaymentCallbackPayload,
   readPaymentCallbackRawBody,
@@ -88,4 +90,29 @@ test("builds stable hosted payment callback key", () => {
     eventKey,
     /^isbank:ORDER-42:-:-:HOST-9:-:00:APPROVED:ABCDEF0123456789ABCDEF0123456789ABCDEF01:[A-F0-9]{64}$/,
   );
+});
+
+test("extracts callback payment reference from oid case-insensitively", () => {
+  const reference = extractPaymentCallbackReference({
+    OID: "  ORDER-900  ",
+  });
+
+  assert.equal(reference, "ORDER-900");
+});
+
+test("prefers signed oid over explicit payment_id for payment hint", () => {
+  const paymentIdHint = extractPaymentIdHintFromCallback({
+    payment_id: " 11111111-1111-1111-1111-111111111111 ",
+    oid: " 22222222-2222-2222-2222-222222222222 ",
+  });
+
+  assert.equal(paymentIdHint, "22222222-2222-2222-2222-222222222222");
+});
+
+test("falls back to explicit payment_id when oid is absent", () => {
+  const paymentIdHint = extractPaymentIdHintFromCallback({
+    payment_id: " 33333333-3333-3333-3333-333333333333 ",
+  });
+
+  assert.equal(paymentIdHint, "33333333-3333-3333-3333-333333333333");
 });

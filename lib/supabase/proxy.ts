@@ -1,11 +1,14 @@
+import { randomUUID } from "node:crypto";
+
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { buildContentSecurityPolicy } from "../security/csp";
 import { hasEnvVars } from "../utils";
 
 export async function updateSession(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({
-    request,
-  });
+  const nonce = createNonce();
+
+  let supabaseResponse = createResponseWithSecurityHeaders(request, nonce);
 
   // If the env vars are not set, skip proxy check. You can remove this
   // once you setup the project.
@@ -27,9 +30,7 @@ export async function updateSession(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value),
           );
-          supabaseResponse = NextResponse.next({
-            request,
-          });
+          supabaseResponse = createResponseWithSecurityHeaders(request, nonce);
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options),
           );
@@ -76,4 +77,45 @@ export async function updateSession(request: NextRequest) {
   // of sync and terminate the user's session prematurely!
 
   return supabaseResponse;
+}
+
+function createResponseWithSecurityHeaders(
+  request: NextRequest,
+  nonce: string,
+) {
+  const responseRequestHeaders = new Headers(request.headers);
+  const contentSecurityPolicy = buildContentSecurityPolicy({
+    isbankCheckoutUrl: process.env.ISBANK_HOSTED_CHECKOUT_URL,
+    nonce,
+    pathname: request.nextUrl.pathname,
+    siteUrl: process.env.SITE_URL,
+    publicSiteUrl: process.env.NEXT_PUBLIC_SITE_URL,
+    supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+  });
+
+  responseRequestHeaders.set("x-nonce", nonce);
+  responseRequestHeaders.set(
+    "Content-Security-Policy",
+    contentSecurityPolicy,
+  );
+
+  const response = NextResponse.next({
+    request: {
+      headers: responseRequestHeaders,
+    },
+  });
+
+  response.headers.set("X-Content-Type-Options", "nosniff");
+  response.headers.set("X-Frame-Options", "DENY");
+  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  response.headers.set(
+    "Content-Security-Policy",
+    contentSecurityPolicy,
+  );
+
+  return response;
+}
+
+function createNonce(): string {
+  return Buffer.from(randomUUID()).toString("base64url");
 }

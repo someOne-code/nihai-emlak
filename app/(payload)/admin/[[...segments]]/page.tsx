@@ -1,5 +1,6 @@
 import configPromise from "@payload-config";
 import { RootPage, generatePageMetadata } from "@payloadcms/next/views";
+import { connection } from "next/server";
 
 import { importMap } from "../importMap";
 
@@ -19,7 +20,9 @@ export const generateMetadata = ({ params, searchParams }: AdminPageProps) =>
     searchParams,
   });
 
-export default function AdminPage({ params, searchParams }: AdminPageProps) {
+export default async function AdminPage({ params, searchParams }: AdminPageProps) {
+  await connection();
+
   return RootPage({
     config: configPromise,
     importMap,
