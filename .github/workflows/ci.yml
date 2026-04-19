@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      payment_callback_smoke: ${{ steps.filter.outputs.payment_callback_smoke }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect changed paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            payment_callback_smoke:
+              - "app/api/payment/callback/**"
+              - "lib/payments/**"
+              - "tests/payment-callback*.test.mts"
+              - ".codex/scripts/test-payment-callback-smoke*.sh"
+              - ".codex/scripts/test-payment-callback-security*.sh"
+              - "supabase/migrations/**"
+              - "package.json"
+              - "package-lock.json"
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run test baseline
+        run: npm test
+
+  payment-callback-smoke:
+    name: Payment Callback Smoke
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.payment_callback_smoke == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run payment callback smoke test
+        env:
+          ISBANK_STORE_KEY: CI_SMOKE_ISBANK_STORE_KEY
+        run: npm run test:payment-callback-smoke

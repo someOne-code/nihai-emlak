@@ -8,7 +8,8 @@
     "typecheck": "tsc --noEmit",
     "test": "npm run test:payment-callback-security && npm run typecheck && npm run lint",
     "test:db-security": "bash .codex/scripts/test-db-security.sh",
-    "test:payment-callback-security": "bash .codex/scripts/test-payment-callback-security.sh"
+    "test:payment-callback-security": "bash .codex/scripts/test-payment-callback-security.sh",
+    "test:payment-callback-smoke": "bash .codex/scripts/test-payment-callback-smoke.sh"
   },
   "dependencies": {
     "@payloadcms/db-postgres": "3.83.0-internal.ddc1147",
@@ -44,6 +45,8 @@
     "typescript": "^5"
   },
   "overrides": {
-    "dompurify": "3.3.3"
+    "dompurify": "3.4.0",
+    "esbuild": "0.27.7",
+    "protobufjs": "7.5.5"
   }
 }

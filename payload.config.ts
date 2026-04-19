@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { postgresAdapter } from "@payloadcms/db-postgres";
 import { buildConfig } from "payload";
 
+import { resolvePayloadServerURL } from "./payload/server-url";
 import { Users } from "./payload/collections/Users";
 
 const filename = fileURLToPath(import.meta.url);
@@ -11,28 +12,35 @@ const dirname = path.dirname(filename);
 
 const databaseURI = process.env.DATABASE_URI;
 const payloadSecret = process.env.PAYLOAD_SECRET;
-const publicServerURL =
-  process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-const isProduction = process.env.NODE_ENV === "production";
+const publicServerURL = resolvePayloadServerURL({
+  nodeEnv: process.env.NODE_ENV,
+  publicSiteUrl: process.env.NEXT_PUBLIC_SITE_URL,
+  siteUrl: process.env.SITE_URL,
+});
+const isTest = process.env.NODE_ENV === "test";
 
-if (!databaseURI) {
-  console.warn("DATABASE_URI is not set. Payload DB connection will fail.");
+if (!isTest && !databaseURI) {
+  throw new Error("DATABASE_URI must be set outside test environment");
 }
 
-if (!payloadSecret) {
-  console.warn("PAYLOAD_SECRET is not set. Using an insecure dev fallback.");
+if (!isTest && !payloadSecret) {
+  throw new Error("PAYLOAD_SECRET must be set outside test environment");
 }
 
-if (isProduction && !databaseURI) {
-  throw new Error("DATABASE_URI must be set in production");
+if (isTest && !databaseURI) {
+  console.warn("DATABASE_URI is not set. Falling back to test-only local postgres URI.");
 }
 
-if (isProduction && !payloadSecret) {
-  throw new Error("PAYLOAD_SECRET must be set in production");
+if (isTest && !payloadSecret) {
+  console.warn("PAYLOAD_SECRET is not set. Falling back to test-only secret.");
 }
+
+const resolvedDatabaseURI =
+  databaseURI ?? "postgres://postgres:postgres@127.0.0.1:5432/postgres";
+const resolvedPayloadSecret = payloadSecret ?? "test-only-payload-secret";
 
 export default buildConfig({
-  secret: payloadSecret ?? "dev-only-payload-secret",
+  secret: resolvedPayloadSecret,
   serverURL: publicServerURL,
   admin: {
     user: Users.slug,
@@ -42,8 +50,7 @@ export default buildConfig({
   },
   db: postgresAdapter({
     pool: {
-      connectionString:
-        databaseURI ?? "postgres://postgres:postgres@127.0.0.1:5432/postgres",
+      connectionString: resolvedDatabaseURI,
     },
     schemaName: "payload",
   }),

@@ -98,6 +98,28 @@ export function sha256Upper(input: string): string {
   return crypto.createHash("sha256").update(input, "utf8").digest("hex").toUpperCase();
 }
 
+export function extractPaymentCallbackReference(payload: LooseRecord): string | null {
+  return readTrimmedCallbackValue(payload, ["oid"]);
+}
+
+export function extractPaymentIdHintFromCallback(payload: LooseRecord): string | null {
+  const signedReference = extractPaymentCallbackReference(payload);
+  if (signedReference) {
+    return signedReference;
+  }
+
+  return extractExplicitPaymentIdFromCallback(payload);
+}
+
+export function extractExplicitPaymentIdFromCallback(payload: LooseRecord): string | null {
+  return readTrimmedCallbackValue(payload, [
+    "payment_id",
+    "paymentid",
+    "paymentuuid",
+    "payment_uuid",
+  ]);
+}
+
 export function buildIsbankHostedPaymentCallbackKey(
   payload: LooseRecord,
   providedHash: string,
@@ -127,4 +149,18 @@ function readCallbackKeyPart(payload: LooseRecord, field: string): string {
   }
 
   return value.trim().toUpperCase();
+}
+
+function readTrimmedCallbackValue(
+  payload: LooseRecord,
+  fieldNames: readonly string[],
+): string | null {
+  for (const fieldName of fieldNames) {
+    const value = findCaseInsensitiveValue(payload, fieldName);
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+
+  return null;
 }

@@ -1,6 +1,32 @@
 \set ON_ERROR_STOP on
 
-set role anon;
+do $$
+begin
+  if has_function_privilege(
+    'anon',
+    'public.register_payment_callback_receipt(text, text, text, text)',
+    'EXECUTE'
+  ) then
+    raise exception 'anon role must not have EXECUTE on register_payment_callback_receipt';
+  end if;
+
+  if has_function_privilege(
+    'authenticated',
+    'public.register_payment_callback_receipt(text, text, text, text)',
+    'EXECUTE'
+  ) then
+    raise exception 'authenticated role must not have EXECUTE on register_payment_callback_receipt';
+  end if;
+
+  if not has_function_privilege(
+    'service_role',
+    'public.register_payment_callback_receipt(text, text, text, text)',
+    'EXECUTE'
+  ) then
+    raise exception 'service_role must have EXECUTE on register_payment_callback_receipt';
+  end if;
+end;
+$$;
 
 do $$
 declare
@@ -16,7 +42,7 @@ begin
   into v_first;
 
   if v_first is not true then
-    raise exception 'Expected first callback receipt insert to succeed';
+    raise exception 'Expected privileged callback receipt insert to succeed';
   end if;
 
   select public.register_payment_callback_receipt(
@@ -32,8 +58,6 @@ begin
   end if;
 end;
 $$;
-
-reset role;
 
 do $$
 declare
