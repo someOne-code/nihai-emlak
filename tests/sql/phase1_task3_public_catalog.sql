@@ -357,6 +357,86 @@ begin
 end;
 $$;
 
+-- parser-incompatible service codes must fail at the catalog boundary
+do $$
+begin
+  begin
+    insert into public.service_catalog (
+      id,
+      code,
+      name,
+      base_price,
+      is_active
+    )
+    values (
+      extensions.gen_random_uuid(),
+      'cleaning.v2',
+      'Parser Incompatible Cleaning',
+      9999,
+      true
+    );
+
+    raise exception 'Parser-incompatible service code unexpectedly succeeded';
+  exception
+    when check_violation then
+      null;
+  end;
+end;
+$$;
+
+do $$
+begin
+  begin
+    insert into public.service_catalog (
+      id,
+      code,
+      name,
+      base_price,
+      is_active
+    )
+    values (
+      extensions.gen_random_uuid(),
+      ' Cleaning ',
+      'Non-normalized Cleaning',
+      9999,
+      true
+    );
+
+    raise exception 'Non-normalized service code unexpectedly succeeded';
+  exception
+    when check_violation then
+      null;
+  end;
+end;
+$$;
+
+-- duplicate canonical service codes must fail
+do $$
+begin
+  begin
+    insert into public.service_catalog (
+      id,
+      code,
+      name,
+      base_price,
+      is_active
+    )
+    values (
+      extensions.gen_random_uuid(),
+      'cleaning',
+      'Ambiguous Cleaning',
+      9999,
+      true
+    );
+
+    raise exception 'Duplicate service code unexpectedly succeeded';
+  exception
+    when unique_violation then
+      null;
+  end;
+end;
+$$;
+
 -- negative price must fail
 do $$
 begin

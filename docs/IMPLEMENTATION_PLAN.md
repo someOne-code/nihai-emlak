@@ -40,11 +40,11 @@ Bu revizyonda özellikle şu kararlar netleştirildi:
 
 ### Faz 0: Kararları sabitle
 - `PROJECT_PLAN.md`, `BACKEND_PHASE_1.md`, `IMPLEMENTATION_PLAN.md`, `README.md` tek kaynak gerçeklik kabul edilir.
-- Checkout kuralı sabittir:
-  - en az 1 ana ödeme kalemi zorunlu
-  - birden fazla ana ödeme kalemi seçilebilir
-  - aynı ana kalem tekrar edemez
-  - ek hizmet ancak ana ödeme varsa seçilebilir
+- Checkout kurali sabittir:
+  - en az 1 ana odeme kalemi zorunlu
+  - ana odeme kalemi secimi frontend request'inden gelir
+  - secilebilirlik ve fiyat emlakci/admin tarafindan yonetilen DB konfigurasyonundan gelir
+  - ek hizmet ancak ana odeme varsa secilebilir
 - Sorumluluk sınırı sabittir:
   - frontend ayrı ekip
   - admin UI ayrı ekip
@@ -132,13 +132,15 @@ Bu revizyonda özellikle şu kararlar netleştirildi:
   - `service_items`
   - havale benzeri açıklama/not
 - Validation:
-  - en az 1 ana kalem
-  - duplicate main item yok
+  - `main_items` en az 1 secim icermeli
+  - `main_items` duplicate icermemeli
+  - secilen ana kalemler listing icin DB/admin konfigurasyonunda aktif ve secilebilir olmali
   - service seçimleri listing’e uygun olmalı
   - inactive listing checkout’a girememeli
 - Fiyat hesaplama:
   - frontend toplam göndermez
-  - backend listing + service override verisine göre hesaplar
+  - authoritative toplam PostgreSQL/RPC içinde listing + secili ana kalemlerin admin/DB fiyat konfigurasyonu + service override verisine gore hesaplanir
+  - Node.js tarafinda uretilen fiyat, checkout create icin source-of-truth kabul edilmez
 - Çıktı:
   - `reservation`
   - `order`
@@ -214,6 +216,9 @@ Bu revizyonda özellikle şu kararlar netleştirildi:
   - `main_items: string[]`
   - `service_items: string[]`
   - `main_items.length >= 1`
+  - secilen ana odeme kalemleri DB/admin konfigurasyonuna karsi dogrulanir
+  - toplam fiyat frontend'den alinmaz
+  - toplam fiyat checkout create sirasinda DB/RPC tarafinda hesaplanir
 - Payment callback:
   - ham payload işlenmeden önce imza doğrulanır
   - doğrulanmış callback tek DB function yoluna girer
@@ -248,9 +253,10 @@ Bu revizyonda özellikle şu kararlar netleştirildi:
 - admin role gerekli kayıtları okuyabilir
 
 ### Checkout
-- ana kalem seçmeden request reddedilir
-- duplicate ana kalem içeren request reddedilir
-- service + no main item reddedilir
+- request `main_items` gondermezse veya bos gonderirse reddedilir
+- duplicate `main_items` reddedilir
+- secilen ana kalem listing DB/admin konfigurasyonunda yoksa reddedilir
+- listing için aktif ana kalem konfigürasyonu yoksa checkout reddedilir
 - inactive listing checkout’a girmez
 - valid checkout reservation + order + order_items + payment üretir
 
