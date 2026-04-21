@@ -97,6 +97,17 @@ export async function handleCheckoutInitPost(
   request: Request,
   dependencies: CheckoutInitRouteDependencies,
 ): Promise<Response> {
+  const trustedRequestResult = validateCheckoutInitRequestEnvelope(request);
+  if (!trustedRequestResult.ok) {
+    return Response.json(
+      {
+        success: false,
+        error: trustedRequestResult.error,
+      },
+      { status: trustedRequestResult.status },
+    );
+  }
+
   const bodyResult = await readCheckoutInitRequestBody(request);
   if (!bodyResult.ok) {
     return Response.json(
@@ -325,6 +336,98 @@ export async function handleCheckoutInitPost(
       providerRef: payment.providerRef,
     }),
   );
+}
+
+function validateCheckoutInitRequestEnvelope(
+  request: Request,
+): { ok: true } | { ok: false; status: number; error: string } {
+  if (!isJsonContentType(request.headers.get("content-type"))) {
+    return {
+      ok: false,
+      status: 415,
+      error: "Checkout init requires application/json",
+    };
+  }
+
+  const expectedOrigin = resolveTrustedCheckoutOriginFromEnvironment();
+  if (!expectedOrigin.ok) {
+    return expectedOrigin;
+  }
+
+  const originHeader = request.headers.get("origin");
+  if (!originHeader || originHeader.trim().length === 0) {
+    return {
+      ok: false,
+      status: 403,
+      error: "Checkout init Origin header is required",
+    };
+  }
+
+  const requestOrigin = normalizeHttpOrigin(originHeader);
+  if (!requestOrigin) {
+    return {
+      ok: false,
+      status: 403,
+      error: "Checkout init Origin is not trusted",
+    };
+  }
+
+  if (requestOrigin !== expectedOrigin.origin) {
+    return {
+      ok: false,
+      status: 403,
+      error: "Checkout init Origin is not trusted",
+    };
+  }
+
+  const urlOrigin = normalizeRequestUrlOrigin(request.url);
+  if (urlOrigin && urlOrigin !== expectedOrigin.origin) {
+    return {
+      ok: false,
+      status: 403,
+      error: "Checkout init Host is not trusted",
+    };
+  }
+
+  return { ok: true };
+}
+
+function resolveTrustedCheckoutOriginFromEnvironment():
+  | { ok: true; origin: string }
+  | { ok: false; status: number; error: string } {
+  const nodeEnv = typeof process.env.NODE_ENV === "string" ? process.env.NODE_ENV.toLowerCase() : "";
+  const isNonDevEnvironment = nodeEnv !== "development" && nodeEnv !== "test";
+  const siteUrl = asNonEmptyString(process.env.SITE_URL)
+    ?? asNonEmptyString(process.env.NEXT_PUBLIC_SITE_URL);
+
+  if (!siteUrl) {
+    if (isNonDevEnvironment) {
+      return {
+        ok: false,
+        status: 500,
+        error: "SITE_URL or NEXT_PUBLIC_SITE_URL must be configured outside development/test",
+      };
+    }
+
+    return {
+      ok: true,
+      origin: "http://localhost:3000",
+    };
+  }
+
+  const origin = normalizeHttpOrigin(siteUrl);
+  if (!origin) {
+    return {
+      ok: false,
+      status: 500,
+      error: "Checkout trusted origin configuration is invalid",
+    };
+  }
+
+  return {
+    ok: true,
+    origin,
+  };
 }
 
 async function getExistingPendingIsbankPayment(
@@ -634,6 +737,37 @@ function asNonEmptyString(value: unknown): string | null {
   }
 
   return value.trim();
+}
+
+function isJsonContentType(value: string | null): boolean {
+  return value?.toLowerCase().split(";")[0]?.trim() === "application/json";
+}
+
+function normalizeHttpOrigin(value: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(value.trim());
+  } catch {
+    return null;
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return null;
+  }
+
+  if (parsed.username || parsed.password) {
+    return null;
+  }
+
+  return parsed.origin;
+}
+
+function normalizeRequestUrlOrigin(value: string): string | null {
+  try {
+    return normalizeHttpOrigin(new URL(value).origin);
+  } catch {
+    return null;
+  }
 }
 
 function asPaymentLifecycleStatus(value: unknown): PaymentLifecycleStatus | null {

@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import {
+  canAccessPayloadAdmin,
+  canManagePayloadUsers,
+  canReadPayloadUsers,
+  canUpdatePayloadUsers,
+} from "../payload/collections/Users.ts";
 import { resolvePayloadServerURL } from "../payload/server-url.ts";
 
 test("Payload server URL fails closed outside development/test", () => {
@@ -35,4 +41,108 @@ test("Payload server URL prefers private SITE_URL and normalizes to origin", () 
   });
 
   assert.equal(result, "https://admin.example.com");
+});
+
+test("Payload users admin surface requires admin role", () => {
+  assert.equal(
+    canAccessPayloadAdmin({
+      req: {
+        user: {
+          collection: "users",
+          role: "admin",
+        },
+      },
+    }),
+    true,
+  );
+
+  assert.equal(
+    canAccessPayloadAdmin({
+      req: {
+        user: {
+          collection: "users",
+          role: "editor",
+        },
+      },
+    }),
+    false,
+  );
+
+  assert.equal(
+    canAccessPayloadAdmin({
+      req: {
+        user: undefined,
+      },
+    }),
+    false,
+  );
+});
+
+test("Payload users collection management requires admin role", () => {
+  assert.equal(
+    canManagePayloadUsers({
+      req: {
+        user: {
+          collection: "users",
+          role: "admin",
+        },
+      },
+    }),
+    true,
+  );
+
+  assert.equal(
+    canManagePayloadUsers({
+      req: {
+        user: {
+          collection: "users",
+          role: "editor",
+        },
+      },
+    }),
+    false,
+  );
+});
+
+test("Payload non-admin users can only read and update their own row", () => {
+  const ownRead = canReadPayloadUsers({
+    req: {
+      user: {
+        collection: "users",
+        id: "user-1",
+        role: "editor",
+      },
+    },
+  });
+
+  assert.deepEqual(ownRead, {
+    id: {
+      equals: "user-1",
+    },
+  });
+
+  const ownUpdate = canUpdatePayloadUsers({
+    req: {
+      user: {
+        collection: "users",
+        id: "user-1",
+        role: "editor",
+      },
+    },
+  });
+
+  assert.deepEqual(ownUpdate, {
+    id: {
+      equals: "user-1",
+    },
+  });
+
+  assert.equal(
+    canReadPayloadUsers({
+      req: {
+        user: undefined,
+      },
+    }),
+    false,
+  );
 });

@@ -8,6 +8,71 @@ import {
 } from "../lib/payments/checkout-init-route.ts";
 import { buildIsbankSha1Input, sha1Upper } from "../lib/payments/isbank.ts";
 
+test("checkout init rejects non-json state-changing requests before auth", async (t) => {
+  setupCheckoutInitEnv(t);
+
+  const response = await handleCheckoutInitPost(
+    new Request("http://localhost:3000/api/checkout/init", {
+      method: "POST",
+      headers: {
+        "content-type": "text/plain",
+        origin: "http://localhost:3000",
+      },
+      body: "not-json",
+    }),
+    createFailingDependencies(),
+  );
+
+  assert.equal(response.status, 415);
+
+  const payload = await response.json();
+  assert.equal(payload.success, false);
+  assert.equal(payload.error, "Checkout init requires application/json");
+});
+
+test("checkout init rejects missing origin before auth", async (t) => {
+  setupCheckoutInitEnv(t);
+
+  const response = await handleCheckoutInitPost(
+    new Request("http://localhost:3000/api/checkout/init", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ orderId: "11111111-1111-4111-8111-111111111111" }),
+    }),
+    createFailingDependencies(),
+  );
+
+  assert.equal(response.status, 403);
+
+  const payload = await response.json();
+  assert.equal(payload.success, false);
+  assert.equal(payload.error, "Checkout init Origin header is required");
+});
+
+test("checkout init rejects untrusted origin before auth", async (t) => {
+  setupCheckoutInitEnv(t);
+
+  const response = await handleCheckoutInitPost(
+    new Request("http://localhost:3000/api/checkout/init", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "https://evil.example",
+      },
+      body: JSON.stringify({ orderId: "11111111-1111-4111-8111-111111111111" }),
+    }),
+    createFailingDependencies(),
+  );
+
+  assert.equal(response.status, 403);
+
+  const payload = await response.json();
+  assert.equal(payload.success, false);
+  assert.equal(payload.error, "Checkout init Origin is not trusted");
+});
+
 test("checkout init reuses existing pending isbank payment for same order", async (t) => {
   setupCheckoutInitEnv(t);
 
@@ -46,10 +111,11 @@ test("checkout init reuses existing pending isbank payment for same order", asyn
   });
 
   const response = await handleCheckoutInitPost(
-    new Request("http://localhost/api/checkout/init", {
+    new Request("http://localhost:3000/api/checkout/init", {
       method: "POST",
       headers: {
         "content-type": "application/json",
+        origin: "http://localhost:3000",
       },
       body: JSON.stringify({ orderId }),
     }),
@@ -120,10 +186,11 @@ test("checkout init resolves pending payment after unique violation race", async
   });
 
   const response = await handleCheckoutInitPost(
-    new Request("http://localhost/api/checkout/init", {
+    new Request("http://localhost:3000/api/checkout/init", {
       method: "POST",
       headers: {
         "content-type": "application/json",
+        origin: "http://localhost:3000",
       },
       body: JSON.stringify({ orderId }),
     }),
@@ -188,10 +255,11 @@ test("checkout init refreshes reused pending payment when order total changes", 
   });
 
   const response = await handleCheckoutInitPost(
-    new Request("http://localhost/api/checkout/init", {
+    new Request("http://localhost:3000/api/checkout/init", {
       method: "POST",
       headers: {
         "content-type": "application/json",
+        origin: "http://localhost:3000",
       },
       body: JSON.stringify({ orderId }),
     }),
@@ -283,10 +351,11 @@ test("checkout init refreshes mismatched payment through service-role client", a
   });
 
   const response = await handleCheckoutInitPost(
-    new Request("http://localhost/api/checkout/init", {
+    new Request("http://localhost:3000/api/checkout/init", {
       method: "POST",
       headers: {
         "content-type": "application/json",
+        origin: "http://localhost:3000",
       },
       body: JSON.stringify({ orderId }),
     }),
@@ -346,10 +415,11 @@ test("checkout init does not rewrite terminal payment during callback race", asy
   });
 
   const response = await handleCheckoutInitPost(
-    new Request("http://localhost/api/checkout/init", {
+    new Request("http://localhost:3000/api/checkout/init", {
       method: "POST",
       headers: {
         "content-type": "application/json",
+        origin: "http://localhost:3000",
       },
       body: JSON.stringify({ orderId }),
     }),
@@ -389,6 +459,20 @@ function setupCheckoutInitEnv(t: TestContext) {
   process.env.NODE_ENV = "test";
   process.env.SITE_URL = "http://localhost:3000";
   process.env.NEXT_PUBLIC_SITE_URL = "http://localhost:3000";
+}
+
+function createFailingDependencies(): CheckoutInitRouteDependencies {
+  return {
+    createRandomValue: () => {
+      throw new Error("createRandomValue should not be called");
+    },
+    createServerSupabaseClient: async () => {
+      throw new Error("createServerSupabaseClient should not be called");
+    },
+    createServiceRoleSupabaseClient: async () => {
+      throw new Error("createServiceRoleSupabaseClient should not be called");
+    },
+  };
 }
 
 function createDependencies(input: {

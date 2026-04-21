@@ -7,7 +7,7 @@ import {
   extractPaymentIdHintFromCallback,
   getSupportedPaymentCallbackContentType,
   parsePaymentCallbackPayload,
-  readPaymentCallbackRawBody,
+  readPaymentCallbackRawRequestBody,
   sha256Upper,
 } from "./callback.ts";
 import {
@@ -152,7 +152,7 @@ export async function handlePaymentCallbackPost(
     );
   }
 
-  const rawBodyResult = readPaymentCallbackRawBody(await request.arrayBuffer());
+  const rawBodyResult = await readPaymentCallbackRawRequestBody(request);
   if (!rawBodyResult.ok) {
     return Response.json(
       {

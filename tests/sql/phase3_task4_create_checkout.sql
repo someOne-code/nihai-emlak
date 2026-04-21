@@ -1,0 +1,487 @@
+\set ON_ERROR_STOP on
+
+-- Phase 3 / Task 4: create_checkout must atomically create reservation/order/items/payment.
+
+-- deterministic users
+-- admin:  66666666-7777-4777-8777-777777777761
+-- user:   66666666-7777-4777-8777-777777777762
+
+-- deterministic listings
+-- valid listing:    77777777-7777-4777-8777-777777777761
+-- rollback listing: 77777777-7777-4777-8777-777777777762
+
+-- deterministic main item ids
+-- deposit:          88888888-7777-4777-8777-777777777761
+-- first rent:       88888888-7777-4777-8777-777777777762
+-- dup label one:    88888888-7777-4777-8777-777777777763
+-- dup label two:    88888888-7777-4777-8777-777777777764
+
+-- deterministic service ids
+-- cleaning:         99999999-7777-4777-8777-777777777761
+
+delete from auth.users
+where id in (
+  '66666666-7777-4777-8777-777777777761'::uuid,
+  '66666666-7777-4777-8777-777777777762'::uuid
+);
+
+delete from public.listing_service_options
+where id in (
+  'aaaaaaaa-7777-4777-8777-777777777761'::uuid,
+  'aaaaaaaa-7777-4777-8777-777777777762'::uuid
+);
+
+delete from public.service_catalog
+where id = '99999999-7777-4777-8777-777777777761'::uuid;
+
+delete from public.listing_main_item_options
+where id in (
+  'bbbbbbbb-7777-4777-8777-777777777761'::uuid,
+  'bbbbbbbb-7777-4777-8777-777777777762'::uuid,
+  'bbbbbbbb-7777-4777-8777-777777777763'::uuid,
+  'bbbbbbbb-7777-4777-8777-777777777764'::uuid
+);
+
+delete from public.main_item_catalog
+where id in (
+  '88888888-7777-4777-8777-777777777761'::uuid,
+  '88888888-7777-4777-8777-777777777762'::uuid,
+  '88888888-7777-4777-8777-777777777763'::uuid,
+  '88888888-7777-4777-8777-777777777764'::uuid
+);
+
+delete from public.listings
+where id in (
+  '77777777-7777-4777-8777-777777777761'::uuid,
+  '77777777-7777-4777-8777-777777777762'::uuid
+);
+
+insert into auth.users (
+  instance_id,
+  id,
+  aud,
+  role,
+  email,
+  encrypted_password,
+  email_confirmed_at,
+  raw_app_meta_data,
+  raw_user_meta_data,
+  created_at,
+  updated_at,
+  confirmation_token,
+  email_change,
+  email_change_token_new,
+  recovery_token
+)
+values
+(
+  '00000000-0000-0000-0000-000000000000',
+  '66666666-7777-4777-8777-777777777761'::uuid,
+  'authenticated',
+  'authenticated',
+  'phase3-create-admin@example.com',
+  crypt('test-password', gen_salt('bf')),
+  now(),
+  jsonb_build_object('provider', 'email', 'providers', jsonb_build_array('email')),
+  jsonb_build_object('full_name', 'Phase3 Create Admin'),
+  now(),
+  now(),
+  '',
+  '',
+  '',
+  ''
+),
+(
+  '00000000-0000-0000-0000-000000000000',
+  '66666666-7777-4777-8777-777777777762'::uuid,
+  'authenticated',
+  'authenticated',
+  'phase3-create-user@example.com',
+  crypt('test-password', gen_salt('bf')),
+  now(),
+  jsonb_build_object('provider', 'email', 'providers', jsonb_build_array('email')),
+  jsonb_build_object('full_name', 'Phase3 Create User'),
+  now(),
+  now(),
+  '',
+  '',
+  '',
+  ''
+);
+
+update public.profiles
+set role = 'admin'
+where id = '66666666-7777-4777-8777-777777777761'::uuid;
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', '66666666-7777-4777-8777-777777777761', false);
+select set_config('request.jwt.claim.role', 'authenticated', false);
+
+insert into public.listings (
+  id,
+  type,
+  status,
+  title,
+  slug,
+  city,
+  price,
+  currency
+)
+values
+(
+  '77777777-7777-4777-8777-777777777761'::uuid,
+  'rent',
+  'active',
+  'Phase3 Create Listing',
+  'phase3-create-listing',
+  'Istanbul',
+  42000,
+  'TRY'
+),
+(
+  '77777777-7777-4777-8777-777777777762'::uuid,
+  'rent',
+  'active',
+  'Phase3 Rollback Listing',
+  'phase3-rollback-listing',
+  'Istanbul',
+  30000,
+  'TRY'
+);
+
+insert into public.main_item_catalog (
+  id,
+  code,
+  label,
+  pricing_strategy,
+  default_amount,
+  default_multiplier,
+  is_active,
+  sort_order
+)
+values
+(
+  '88888888-7777-4777-8777-777777777761'::uuid,
+  'deposit_t4',
+  'Kapora',
+  'fixed',
+  15000,
+  null,
+  true,
+  1
+),
+(
+  '88888888-7777-4777-8777-777777777762'::uuid,
+  'first_rent_t4',
+  'Bir Aylik Kira',
+  'listing_price_multiplier',
+  null,
+  1.0,
+  true,
+  2
+),
+(
+  '88888888-7777-4777-8777-777777777763'::uuid,
+  'dup_one_t4',
+  'Ayni Etiket',
+  'fixed',
+  1000,
+  null,
+  true,
+  3
+),
+(
+  '88888888-7777-4777-8777-777777777764'::uuid,
+  'dup_two_t4',
+  'Ayni Etiket',
+  'fixed',
+  2000,
+  null,
+  true,
+  4
+);
+
+insert into public.listing_main_item_options (
+  id,
+  listing_id,
+  main_item_id,
+  override_amount,
+  is_enabled,
+  sort_order
+)
+values
+(
+  'bbbbbbbb-7777-4777-8777-777777777761'::uuid,
+  '77777777-7777-4777-8777-777777777761'::uuid,
+  '88888888-7777-4777-8777-777777777761'::uuid,
+  17000,
+  true,
+  1
+),
+(
+  'bbbbbbbb-7777-4777-8777-777777777762'::uuid,
+  '77777777-7777-4777-8777-777777777761'::uuid,
+  '88888888-7777-4777-8777-777777777762'::uuid,
+  null,
+  true,
+  2
+),
+(
+  'bbbbbbbb-7777-4777-8777-777777777763'::uuid,
+  '77777777-7777-4777-8777-777777777762'::uuid,
+  '88888888-7777-4777-8777-777777777763'::uuid,
+  null,
+  true,
+  1
+),
+(
+  'bbbbbbbb-7777-4777-8777-777777777764'::uuid,
+  '77777777-7777-4777-8777-777777777762'::uuid,
+  '88888888-7777-4777-8777-777777777764'::uuid,
+  null,
+  true,
+  2
+);
+
+insert into public.service_catalog (
+  id,
+  code,
+  name,
+  base_price,
+  is_active
+)
+values (
+  '99999999-7777-4777-8777-777777777761'::uuid,
+  'cleaning_t4',
+  'Temizlik',
+  2500,
+  true
+);
+
+insert into public.listing_service_options (
+  id,
+  listing_id,
+  service_id,
+  override_price,
+  is_enabled
+)
+values
+(
+  'aaaaaaaa-7777-4777-8777-777777777761'::uuid,
+  '77777777-7777-4777-8777-777777777761'::uuid,
+  '99999999-7777-4777-8777-777777777761'::uuid,
+  2200,
+  true
+),
+(
+  'aaaaaaaa-7777-4777-8777-777777777762'::uuid,
+  '77777777-7777-4777-8777-777777777762'::uuid,
+  '99999999-7777-4777-8777-777777777761'::uuid,
+  2200,
+  true
+);
+
+select set_config('request.jwt.claim.sub', '66666666-7777-4777-8777-777777777762', false);
+
+-- TEST 1: valid checkout creates reservation, order, order_items and pending Isbank payment atomically
+do $$
+declare
+  v_result jsonb;
+  v_reservation_id uuid;
+  v_order_id uuid;
+  v_payment_id uuid;
+  v_reservation public.reservations%rowtype;
+  v_order public.orders%rowtype;
+  v_payment public.payments%rowtype;
+  v_item_count integer;
+  v_code_count integer;
+  v_item_sum numeric(12, 2);
+  v_listing_status public.listing_status;
+begin
+  v_result := public.create_checkout(
+    '77777777-7777-4777-8777-777777777761'::uuid,
+    current_date + 30,
+    6,
+    2,
+    array['deposit_t4', 'first_rent_t4'],
+    array['cleaning_t4'],
+    'Havale notu'
+  );
+
+  if v_result->>'result' <> 'created' then
+    raise exception 'TEST 1 FAILED: expected created result, got %', v_result;
+  end if;
+
+  v_reservation_id := (v_result->>'reservation_id')::uuid;
+  v_order_id := (v_result->>'order_id')::uuid;
+  v_payment_id := (v_result->>'payment_id')::uuid;
+
+  select * into v_reservation
+  from public.reservations
+  where id = v_reservation_id;
+
+  select * into v_order
+  from public.orders
+  where id = v_order_id;
+
+  select * into v_payment
+  from public.payments
+  where id = v_payment_id;
+
+  select count(*), coalesce(sum(amount), 0)
+  into v_item_count, v_item_sum
+  from public.order_items
+  where order_id = v_order_id;
+
+  select count(*)
+  into v_code_count
+  from public.order_items
+  where order_id = v_order_id
+    and code in ('deposit_t4', 'first_rent_t4', 'cleaning_t4');
+
+  select status into v_listing_status
+  from public.listings
+  where id = '77777777-7777-4777-8777-777777777761'::uuid;
+
+  if v_reservation.id is null or v_order.id is null or v_payment.id is null then
+    raise exception 'TEST 1 FAILED: expected reservation/order/payment rows to exist';
+  end if;
+
+  if v_reservation.user_id <> '66666666-7777-4777-8777-777777777762'::uuid
+     or v_order.user_id <> '66666666-7777-4777-8777-777777777762'::uuid
+     or v_payment.user_id <> '66666666-7777-4777-8777-777777777762'::uuid then
+    raise exception 'TEST 1 FAILED: generated rows must belong to auth.uid()';
+  end if;
+
+  if v_reservation.status <> 'pending'
+     or v_order.status <> 'pending'
+     or v_payment.status <> 'pending' then
+    raise exception
+      'TEST 1 FAILED: expected pending statuses reservation=% order=% payment=%',
+      v_reservation.status, v_order.status, v_payment.status;
+  end if;
+
+  if v_order.total_amount <> 61200
+     or v_payment.amount <> 61200
+     or v_item_sum <> 61200
+     or v_item_count <> 3 then
+    raise exception
+      'TEST 1 FAILED: amount/count mismatch order=% payment=% sum=% count=%',
+      v_order.total_amount, v_payment.amount, v_item_sum, v_item_count;
+  end if;
+
+  if v_code_count <> 3 then
+    raise exception 'TEST 1 FAILED: expected quote item codes to be stored on order_items, got %',
+      v_code_count;
+  end if;
+
+  if v_order.currency <> 'TRY' or v_payment.currency <> 'TRY' then
+    raise exception 'TEST 1 FAILED: expected TRY currency order=% payment=%',
+      v_order.currency, v_payment.currency;
+  end if;
+
+  if v_payment.provider <> 'isbank' or v_payment.provider_ref <> v_payment.id::text then
+    raise exception 'TEST 1 FAILED: Isbank provider_ref must equal payment id';
+  end if;
+
+  if v_payment.order_id <> v_order.id or v_order.reservation_id <> v_reservation.id then
+    raise exception 'TEST 1 FAILED: generated rows are not linked correctly';
+  end if;
+
+  if v_listing_status <> 'active' then
+    raise exception 'TEST 1 FAILED: checkout create must not close listing, got %', v_listing_status;
+  end if;
+end;
+$$;
+
+-- TEST 2: failure while writing order_items leaves no partial checkout rows
+do $$
+declare
+  v_reservation_count integer;
+  v_order_count integer;
+  v_payment_count integer;
+  v_order_item_count integer;
+begin
+  begin
+    perform public.create_checkout(
+      '77777777-7777-4777-8777-777777777762'::uuid,
+      current_date + 45,
+      6,
+      1,
+      array['dup_one_t4', 'dup_two_t4'],
+      array[]::text[],
+      'Rollback kontrolu'
+    );
+    raise exception 'TEST 2 FAILED: duplicate order item labels should have raised';
+  exception
+    when unique_violation then
+      null;
+  end;
+
+  select count(*)
+  into v_reservation_count
+  from public.reservations
+  where listing_id = '77777777-7777-4777-8777-777777777762'::uuid
+    and user_id = '66666666-7777-4777-8777-777777777762'::uuid;
+
+  select count(*)
+  into v_order_count
+  from public.orders o
+  join public.reservations r
+    on r.id = o.reservation_id
+  where r.listing_id = '77777777-7777-4777-8777-777777777762'::uuid
+    and o.user_id = '66666666-7777-4777-8777-777777777762'::uuid;
+
+  select count(*)
+  into v_payment_count
+  from public.payments p
+  join public.orders o
+    on o.id = p.order_id
+  join public.reservations r
+    on r.id = o.reservation_id
+  where r.listing_id = '77777777-7777-4777-8777-777777777762'::uuid
+    and p.user_id = '66666666-7777-4777-8777-777777777762'::uuid;
+
+  select count(*)
+  into v_order_item_count
+  from public.order_items oi
+  join public.orders o
+    on o.id = oi.order_id
+  join public.reservations r
+    on r.id = o.reservation_id
+  where r.listing_id = '77777777-7777-4777-8777-777777777762'::uuid;
+
+  if v_reservation_count <> 0
+     or v_order_count <> 0
+     or v_payment_count <> 0
+     or v_order_item_count <> 0 then
+    raise exception
+      'TEST 2 FAILED: partial rows remain reservation=% order=% payment=% item=%',
+      v_reservation_count, v_order_count, v_payment_count, v_order_item_count;
+  end if;
+end;
+$$;
+
+-- TEST 3: anonymous clients cannot execute checkout create directly
+reset role;
+do $$
+begin
+  if has_function_privilege(
+    'anon',
+    'public.create_checkout(uuid, date, integer, integer, text[], text[], text)',
+    'EXECUTE'
+  ) then
+    raise exception 'TEST 3 FAILED: anon should not be allowed to execute create_checkout';
+  end if;
+
+  if not has_function_privilege(
+    'authenticated',
+    'public.create_checkout(uuid, date, integer, integer, text[], text[], text)',
+    'EXECUTE'
+  ) then
+    raise exception 'TEST 3 FAILED: authenticated should be allowed to execute create_checkout';
+  end if;
+end;
+$$;
+
+select 'phase3_task4_create_checkout_ok' as result;

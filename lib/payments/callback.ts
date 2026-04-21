@@ -58,6 +58,55 @@ export function readPaymentCallbackRawBody(
   };
 }
 
+export async function readPaymentCallbackRawRequestBody(
+  request: Request,
+  maxBytes = MAX_PAYMENT_CALLBACK_BYTES,
+): Promise<{ ok: true; rawBody: string } | { ok: false; status: number; error: string }> {
+  if (!request.body) {
+    return readPaymentCallbackRawBody(await request.arrayBuffer(), maxBytes);
+  }
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel();
+        return {
+          ok: false,
+          status: 413,
+          error: "Callback payload is too large",
+        };
+      }
+
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  if (totalBytes === 0) {
+    return {
+      ok: false,
+      status: 400,
+      error: "Empty callback payload",
+    };
+  }
+
+  return {
+    ok: true,
+    rawBody: Buffer.concat(chunks, totalBytes).toString("utf8"),
+  };
+}
+
 export function parsePaymentCallbackPayload(
   rawBody: string,
   contentType: SupportedPaymentCallbackContentType,

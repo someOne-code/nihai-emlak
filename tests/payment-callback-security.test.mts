@@ -7,6 +7,7 @@ import {
   extractPaymentIdHintFromCallback,
   getSupportedPaymentCallbackContentType,
   parsePaymentCallbackPayload,
+  readPaymentCallbackRawRequestBody,
   readPaymentCallbackRawBody,
   sha256Upper,
 } from "../lib/payments/callback.ts";
@@ -38,6 +39,29 @@ test("rejects oversized callback body", () => {
   assert.equal(result.ok, false);
   if (result.ok) {
     throw new Error("Expected oversized callback body to fail");
+  }
+  assert.equal(result.status, 413);
+});
+
+test("rejects oversized callback request while streaming", async () => {
+  const oversizedBody = Buffer.alloc((16 * 1024) + 1, "a");
+  const request = new Request("http://localhost/api/payment/callback", {
+    method: "POST",
+    body: new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(oversizedBody.subarray(0, 8 * 1024));
+        controller.enqueue(oversizedBody.subarray(8 * 1024));
+        controller.close();
+      },
+    }),
+    duplex: "half",
+  } as RequestInit & { duplex: "half" });
+
+  const result = await readPaymentCallbackRawRequestBody(request);
+
+  assert.equal(result.ok, false);
+  if (result.ok) {
+    throw new Error("Expected streamed oversized callback body to fail");
   }
   assert.equal(result.status, 413);
 });

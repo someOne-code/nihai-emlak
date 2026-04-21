@@ -3,14 +3,17 @@ import { Geist } from "next/font/google";
 import { headers } from "next/headers";
 import { ThemeProvider } from "next-themes";
 import { Suspense } from "react";
+import { resolvePayloadServerURL } from "@/payload/server-url";
 import "./globals.css";
 
-const defaultUrl = process.env.VERCEL_URL
-  ? `https://${process.env.VERCEL_URL}`
-  : "http://localhost:3000";
+const metadataBaseUrl = resolvePayloadServerURL({
+  nodeEnv: process.env.NODE_ENV,
+  publicSiteUrl: process.env.NEXT_PUBLIC_SITE_URL,
+  siteUrl: process.env.SITE_URL,
+});
 
 export const metadata: Metadata = {
-  metadataBase: new URL(defaultUrl),
+  metadataBase: new URL(metadataBaseUrl),
   title: "Nihai Emlak",
   description: "Supabase, Payload ve odeme iskeleti ile emlak operasyon platformu.",
 };
