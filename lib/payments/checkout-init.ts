@@ -87,6 +87,7 @@ export function buildCheckoutReturnUrls(
 
 export function resolveCheckoutInitReturnUrlsFromEnvironment(input: {
   nodeEnv: string | null | undefined;
+  preferredOrigin?: string | null | undefined;
   siteUrl: string | null | undefined;
   publicSiteUrl: string | null | undefined;
   vercelUrl?: string | null | undefined;
@@ -99,6 +100,7 @@ export function resolveCheckoutInitReturnUrlsFromEnvironment(input: {
   const hasPublicSiteUrl = Boolean(asNonEmptyString(input.publicSiteUrl));
   const normalizedVercelUrl = normalizeVercelUrl(input.vercelUrl);
   const hasVercelUrl = Boolean(normalizedVercelUrl);
+  const normalizedPreferredOrigin = normalizeHttpOrigin(input.preferredOrigin);
 
   if (isNonDevEnvironment && !hasPrivateSiteUrl && !hasPublicSiteUrl && !hasVercelUrl) {
     return {
@@ -113,11 +115,22 @@ export function resolveCheckoutInitReturnUrlsFromEnvironment(input: {
     : hasPublicSiteUrl
       ? input.publicSiteUrl
       : normalizedVercelUrl;
+  const configuredOrigins = [
+    normalizeHttpOrigin(input.siteUrl),
+    normalizeHttpOrigin(input.publicSiteUrl),
+    normalizeHttpOrigin(normalizedVercelUrl),
+  ].filter((value): value is string => value !== null);
+  const selectedOrigin = normalizedPreferredOrigin && (
+    configuredOrigins.includes(normalizedPreferredOrigin)
+    || (!isNonDevEnvironment && configuredOrigins.length === 0)
+  )
+    ? normalizedPreferredOrigin
+    : configuredSiteUrl;
 
   try {
     return {
       ok: true,
-      returnUrls: buildCheckoutReturnUrls(configuredSiteUrl),
+      returnUrls: buildCheckoutReturnUrls(selectedOrigin),
     };
   } catch {
     return {
@@ -172,6 +185,30 @@ function normalizeVercelUrl(value: string | null | undefined): string | null {
   }
 
   return normalized.includes("://") ? normalized : `https://${normalized}`;
+}
+
+function normalizeHttpOrigin(value: string | null | undefined): string | null {
+  const normalized = asNonEmptyString(value);
+  if (!normalized) {
+    return null;
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(normalized);
+  } catch {
+    return null;
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return null;
+  }
+
+  if (parsed.username || parsed.password) {
+    return null;
+  }
+
+  return parsed.origin;
 }
 
 function asNonEmptyString(value: unknown): string | null {

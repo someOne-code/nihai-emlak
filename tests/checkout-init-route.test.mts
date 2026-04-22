@@ -128,6 +128,14 @@ test("checkout init accepts preview origin when VERCEL_URL matches request host"
   const payload = await response.json();
   assert.equal(payload.success, true);
   assert.equal(payload.data.payment.id, paymentId);
+  assert.equal(
+    payload.data.isbank.okurl,
+    "https://nihai-emlak-git-phase3-umut.vercel.app/checkout/success",
+  );
+  assert.equal(
+    payload.data.isbank.failurl,
+    "https://nihai-emlak-git-phase3-umut.vercel.app/checkout/fail",
+  );
 });
 
 test("checkout init accepts trusted origin behind proxy even when request host differs", async (t) => {

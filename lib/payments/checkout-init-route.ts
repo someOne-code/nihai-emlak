@@ -174,6 +174,7 @@ export async function handleCheckoutInitPost(
 
   const returnUrlResult = resolveCheckoutInitReturnUrlsFromEnvironment({
     nodeEnv: process.env.NODE_ENV,
+    preferredOrigin: request.headers.get("origin"),
     siteUrl: process.env.SITE_URL,
     publicSiteUrl: process.env.NEXT_PUBLIC_SITE_URL,
     vercelUrl: process.env.VERCEL_URL,

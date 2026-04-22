@@ -188,6 +188,24 @@ test("resolveCheckoutInitReturnUrlsFromEnvironment falls back to VERCEL_URL outs
   assert.equal(result.returnUrls.failUrl, "https://nihai-emlak-preview.vercel.app/checkout/fail");
 });
 
+test("resolveCheckoutInitReturnUrlsFromEnvironment prefers accepted preview origin over canonical site URL", () => {
+  const result = resolveCheckoutInitReturnUrlsFromEnvironment({
+    nodeEnv: "production",
+    siteUrl: "https://nihaiemlak.com",
+    publicSiteUrl: "https://nihaiemlak.com",
+    vercelUrl: "nihai-emlak-preview.vercel.app",
+    preferredOrigin: "https://nihai-emlak-preview.vercel.app",
+  });
+
+  assert.equal(result.ok, true);
+  if (!result.ok) {
+    throw new Error("Expected preferred preview origin to succeed");
+  }
+
+  assert.equal(result.returnUrls.okUrl, "https://nihai-emlak-preview.vercel.app/checkout/success");
+  assert.equal(result.returnUrls.failUrl, "https://nihai-emlak-preview.vercel.app/checkout/fail");
+});
+
 test("resolveCheckoutInitReturnUrlsFromEnvironment fails closed on invalid configured URL", () => {
   const result = resolveCheckoutInitReturnUrlsFromEnvironment({
     nodeEnv: "production",
