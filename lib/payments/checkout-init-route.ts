@@ -5,6 +5,11 @@ import {
   type CheckoutInitRequestBody,
 } from "./checkout-init.ts";
 import { buildCheckoutInitSuccessResponse } from "./checkout-init-response.ts";
+import {
+  readStateChangingJsonRequestPayload,
+  validateStateChangingJsonRequestEnvelope,
+  type StateChangingJsonRouteConfig,
+} from "../http/state-changing-json-route.ts";
 
 type SupabaseError = {
   code?: string | null;
@@ -87,7 +92,10 @@ type PendingPaymentRow = {
   providerRef: string;
 };
 
-const MAX_CHECKOUT_INIT_BODY_BYTES = 4 * 1024;
+const CHECKOUT_INIT_JSON_ROUTE_CONFIG: StateChangingJsonRouteConfig = {
+  maxBodyBytes: 4 * 1024,
+  routeLabel: "Checkout init",
+};
 
 type PaymentLifecycleStatus =
   | "pending"
@@ -105,7 +113,10 @@ export async function handleCheckoutInitPost(
   request: Request,
   dependencies: CheckoutInitRouteDependencies,
 ): Promise<Response> {
-  const trustedRequestResult = validateCheckoutInitRequestEnvelope(request);
+  const trustedRequestResult = validateStateChangingJsonRequestEnvelope(
+    request,
+    CHECKOUT_INIT_JSON_ROUTE_CONFIG,
+  );
   if (!trustedRequestResult.ok) {
     return Response.json(
       {
@@ -302,99 +313,6 @@ export async function handleCheckoutInitPost(
   );
 }
 
-function validateCheckoutInitRequestEnvelope(
-  request: Request,
-): { ok: true } | { ok: false; status: number; error: string } {
-  if (!isJsonContentType(request.headers.get("content-type"))) {
-    return {
-      ok: false,
-      status: 415,
-      error: "Checkout init requires application/json",
-    };
-  }
-
-  const trustedOriginsResult = resolveTrustedCheckoutOriginsFromEnvironment();
-  if (!trustedOriginsResult.ok) {
-    return trustedOriginsResult;
-  }
-
-  const originHeader = request.headers.get("origin");
-  if (!originHeader || originHeader.trim().length === 0) {
-    return {
-      ok: false,
-      status: 403,
-      error: "Checkout init Origin header is required",
-    };
-  }
-
-  const requestOrigin = normalizeHttpOrigin(originHeader);
-  if (!requestOrigin) {
-    return {
-      ok: false,
-      status: 403,
-      error: "Checkout init Origin is not trusted",
-    };
-  }
-
-  if (!trustedOriginsResult.origins.includes(requestOrigin)) {
-    return {
-      ok: false,
-      status: 403,
-      error: "Checkout init Origin is not trusted",
-    };
-  }
-
-  return { ok: true };
-}
-
-function resolveTrustedCheckoutOriginsFromEnvironment():
-  | { ok: true; origins: string[] }
-  | { ok: false; status: number; error: string } {
-  const nodeEnv = typeof process.env.NODE_ENV === "string" ? process.env.NODE_ENV.toLowerCase() : "";
-  const isNonDevEnvironment = nodeEnv !== "development" && nodeEnv !== "test";
-  const configuredOrigins = [
-    asNonEmptyString(process.env.SITE_URL),
-    asNonEmptyString(process.env.NEXT_PUBLIC_SITE_URL),
-    normalizeVercelUrl(process.env.VERCEL_URL),
-  ].filter((value): value is string => value !== null);
-
-  if (configuredOrigins.length === 0) {
-    if (isNonDevEnvironment) {
-      return {
-        ok: false,
-        status: 500,
-        error: "SITE_URL or NEXT_PUBLIC_SITE_URL must be configured outside development/test",
-      };
-    }
-
-    return {
-      ok: true,
-      origins: ["http://localhost:3000"],
-    };
-  }
-
-  const trustedOrigins: string[] = [];
-  for (const configuredOrigin of configuredOrigins) {
-    const normalizedOrigin = normalizeHttpOrigin(configuredOrigin);
-    if (!normalizedOrigin) {
-      return {
-        ok: false,
-        status: 500,
-        error: "Checkout trusted origin configuration is invalid",
-      };
-    }
-
-    if (!trustedOrigins.includes(normalizedOrigin)) {
-      trustedOrigins.push(normalizedOrigin);
-    }
-  }
-
-  return {
-    ok: true,
-    origins: trustedOrigins,
-  };
-}
-
 async function getExistingPendingIsbankPayment(
   supabase: SupabaseClient,
   orderId: string,
@@ -453,10 +371,7 @@ async function reconcilePendingPaymentWithOrder(
   | { ok: false; status: number; error: string }
 > {
   if (payment.amount === order.totalAmount && payment.currency === order.currency) {
-    return {
-      ok: true,
-      payment,
-    };
+    return refreshPendingPaymentForCheckoutInit(createServiceRoleSupabaseClient, payment.id);
   }
 
   let supabase: PaymentWriteClient;
@@ -522,6 +437,78 @@ async function reconcilePendingPaymentWithOrder(
   }
 
   const refreshedPayment = parsePendingPaymentRow(paymentUpdate.data);
+  if (!refreshedPayment) {
+    return {
+      ok: false,
+      status: 500,
+      error: "Invalid pending payment row returned from database",
+    };
+  }
+
+  return {
+    ok: true,
+    payment: refreshedPayment,
+  };
+}
+
+async function refreshPendingPaymentForCheckoutInit(
+  createServiceRoleSupabaseClient: () => Promise<unknown>,
+  paymentId: string,
+): Promise<
+  | { ok: true; payment: PendingPaymentRow }
+  | { ok: false; status: number; error: string }
+> {
+  let supabase: PaymentWriteClient;
+  try {
+    supabase = (await createServiceRoleSupabaseClient()) as PaymentWriteClient;
+  } catch {
+    return {
+      ok: false,
+      status: 500,
+      error: "Failed to refresh pending payment for checkout init",
+    };
+  }
+
+  const paymentSelect = await supabase
+    .from("payments")
+    .select("id,order_id,amount,currency,status,provider_ref")
+    .eq("id", paymentId)
+    .eq("status", "pending")
+    .maybeSingle();
+
+  if (paymentSelect.error) {
+    return {
+      ok: false,
+      status: 500,
+      error: "Failed to refresh pending payment for checkout init",
+    };
+  }
+
+  if (!paymentSelect.data) {
+    const currentPaymentResult = await getPaymentStatusForCheckoutInit(
+      supabase,
+      paymentId,
+    );
+    if (!currentPaymentResult.ok) {
+      return currentPaymentResult;
+    }
+
+    if (currentPaymentResult.payment.status !== "pending") {
+      return {
+        ok: false,
+        status: 409,
+        error: "Payment is no longer pending for checkout init",
+      };
+    }
+
+    return {
+      ok: false,
+      status: 500,
+      error: "Failed to refresh pending payment for checkout init",
+    };
+  }
+
+  const refreshedPayment = parsePendingPaymentRow(paymentSelect.data);
   if (!refreshedPayment) {
     return {
       ok: false,
@@ -662,21 +649,15 @@ async function readCheckoutInitRequestBody(
   | { ok: true; body: CheckoutInitRequestBody }
   | { ok: false; status: number; error: string }
 > {
-  const rawBodyResult = await readCheckoutInitRawBody(request);
-  if (!rawBodyResult.ok) {
-    return rawBodyResult;
+  const payloadResult = await readStateChangingJsonRequestPayload(
+    request,
+    CHECKOUT_INIT_JSON_ROUTE_CONFIG,
+  );
+  if (!payloadResult.ok) {
+    return payloadResult;
   }
 
-  try {
-    const payload = JSON.parse(rawBodyResult.rawBody) as unknown;
-    return parseCheckoutInitRequestBody(payload);
-  } catch {
-    return {
-      ok: false,
-      status: 400,
-      error: "Invalid JSON request body",
-    };
-  }
+  return parseCheckoutInitRequestBody(payloadResult.value);
 }
 
 function parseOrderRow(value: unknown): OrderRow | null {
@@ -791,103 +772,6 @@ function asNonEmptyString(value: unknown): string | null {
   }
 
   return value.trim();
-}
-
-function normalizeVercelUrl(value: string | null | undefined): string | null {
-  const normalized = asNonEmptyString(value);
-  if (!normalized) {
-    return null;
-  }
-
-  return normalized.includes("://") ? normalized : `https://${normalized}`;
-}
-
-function isJsonContentType(value: string | null): boolean {
-  return value?.toLowerCase().split(";")[0]?.trim() === "application/json";
-}
-
-function normalizeHttpOrigin(value: string): string | null {
-  let parsed: URL;
-  try {
-    parsed = new URL(value.trim());
-  } catch {
-    return null;
-  }
-
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    return null;
-  }
-
-  if (parsed.username || parsed.password) {
-    return null;
-  }
-
-  return parsed.origin;
-}
-
-async function readCheckoutInitRawBody(
-  request: Request,
-): Promise<
-  | { ok: true; rawBody: string }
-  | { ok: false; status: number; error: string }
-> {
-  if (!request.body) {
-    return {
-      ok: true,
-      rawBody: "",
-    };
-  }
-
-  const reader = request.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let byteLength = 0;
-
-  try {
-    while (true) {
-      const readResult = await reader.read();
-      if (readResult.done) {
-        break;
-      }
-
-      byteLength += readResult.value.byteLength;
-      if (byteLength > MAX_CHECKOUT_INIT_BODY_BYTES) {
-        await reader.cancel();
-        return {
-          ok: false,
-          status: 413,
-          error: "Checkout init payload is too large",
-        };
-      }
-
-      chunks.push(readResult.value);
-    }
-  } catch {
-    return {
-      ok: false,
-      status: 400,
-      error: "Invalid JSON request body",
-    };
-  } finally {
-    reader.releaseLock();
-  }
-
-  const rawBody = new TextDecoder().decode(concatUint8Arrays(chunks, byteLength));
-  return {
-    ok: true,
-    rawBody,
-  };
-}
-
-function concatUint8Arrays(chunks: Uint8Array[], byteLength: number): Uint8Array {
-  const combined = new Uint8Array(byteLength);
-  let offset = 0;
-
-  for (const chunk of chunks) {
-    combined.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-
-  return combined;
 }
 
 function asPaymentLifecycleStatus(value: unknown): PaymentLifecycleStatus | null {

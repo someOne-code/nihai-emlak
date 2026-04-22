@@ -108,6 +108,14 @@ test("checkout init accepts preview origin when VERCEL_URL matches request host"
         status: "pending",
         provider_ref: paymentId,
       }),
+      getPaymentById: () => ({
+        id: paymentId,
+        order_id: orderId,
+        amount: "1250.00",
+        currency: "TRY",
+        status: "pending",
+        provider_ref: paymentId,
+      }),
       insertPayment: () => {
         throw new Error("insert should not be called when pending payment exists");
       },
@@ -150,6 +158,14 @@ test("checkout init accepts trusted origin behind proxy even when request host d
         status: "pending",
       }),
       getPendingPayment: () => ({
+        id: paymentId,
+        order_id: orderId,
+        amount: "1250.00",
+        currency: "TRY",
+        status: "pending",
+        provider_ref: paymentId,
+      }),
+      getPaymentById: () => ({
         id: paymentId,
         order_id: orderId,
         amount: "1250.00",
@@ -200,6 +216,14 @@ test("checkout init builds return URLs from VERCEL_URL when site URLs are unset"
         status: "pending",
       }),
       getPendingPayment: () => ({
+        id: paymentId,
+        order_id: orderId,
+        amount: "1250.00",
+        currency: "TRY",
+        status: "pending",
+        provider_ref: paymentId,
+      }),
+      getPaymentById: () => ({
         id: paymentId,
         order_id: orderId,
         amount: "1250.00",
@@ -277,6 +301,14 @@ test("checkout init reuses existing pending isbank payment for same order", asyn
         provider_ref: existingPaymentId,
       };
     },
+    getPaymentById: () => ({
+      id: existingPaymentId,
+      order_id: orderId,
+      amount: "1250.00",
+      currency: "TRY",
+      status: "pending",
+      provider_ref: existingPaymentId,
+    }),
     insertPayment: () => {
       state.insertCallCount += 1;
       throw new Error("insert should not be called when pending payment exists");
@@ -348,6 +380,14 @@ test("checkout init creates a pending isbank payment for legacy pending orders",
         error: null,
       };
     },
+    getPaymentById: () => ({
+      id: paymentId,
+      order_id: orderId,
+      amount: "999.99",
+      currency: "TRY",
+      status: "pending",
+      provider_ref: paymentId,
+    }),
     userId,
   });
 
@@ -408,6 +448,14 @@ test("checkout init resolves legacy payment creation race via existing pending p
         provider_ref: racedPaymentId,
       };
     },
+    getPaymentById: () => ({
+      id: racedPaymentId,
+      order_id: orderId,
+      amount: "999.99",
+      currency: "TRY",
+      status: "pending",
+      provider_ref: racedPaymentId,
+    }),
     insertPayment: () => {
       state.insertCallCount += 1;
       return {
@@ -674,6 +722,61 @@ test("checkout init does not rewrite terminal payment during callback race", asy
   assert.equal(payload.error, "Payment is no longer pending for checkout init");
 });
 
+test("checkout init does not emit hosted checkout when matching payment became terminal", async (t) => {
+  setupCheckoutInitEnv(t);
+
+  const orderId = "13131313-1313-4313-8313-131313131313";
+  const userId = "24242424-2424-4424-8424-242424242424";
+  const paymentId = "35353535-3535-4535-8535-353535353535";
+
+  const dependencies = createDependencies({
+    getOrder: () => ({
+      id: orderId,
+      total_amount: 1250,
+      currency: "TRY",
+      status: "pending",
+    }),
+    getPendingPayment: () => ({
+      id: paymentId,
+      order_id: orderId,
+      amount: "1250.00",
+      currency: "TRY",
+      status: "pending",
+      provider_ref: paymentId,
+    }),
+    insertPayment: () => {
+      throw new Error("insert should not be called when pending payment exists");
+    },
+    getPaymentById: () => ({
+      id: paymentId,
+      order_id: orderId,
+      amount: "1250.00",
+      currency: "TRY",
+      status: "succeeded",
+      provider_ref: paymentId,
+    }),
+    userId,
+  });
+
+  const response = await handleCheckoutInitPost(
+    new Request("http://localhost:3000/api/checkout/init", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "http://localhost:3000",
+      },
+      body: JSON.stringify({ orderId }),
+    }),
+    dependencies,
+  );
+
+  assert.equal(response.status, 409);
+
+  const payload = await response.json();
+  assert.equal(payload.success, false);
+  assert.equal(payload.error, "Payment is no longer pending for checkout init");
+});
+
 function setupCheckoutInitEnv(
   t: TestContext,
   overrides?: {
@@ -767,8 +870,23 @@ function createDependencies(input: {
       createQueryBuilder((filters) => {
         if (filters.some((filter) => filter.column === "id")) {
           const paymentId = filters.find((filter) => filter.column === "id")?.value ?? "";
+          const expectedStatus = filters.find((filter) => filter.column === "status")?.value;
+          const payment = input.getPaymentById?.(paymentId) ?? null;
+
+          if (
+            payment
+            && expectedStatus
+            && typeof payment.status === "string"
+            && payment.status !== expectedStatus
+          ) {
+            return {
+              data: null,
+              error: null,
+            };
+          }
+
           return {
-            data: input.getPaymentById?.(paymentId) ?? null,
+            data: payment,
             error: null,
           };
         }

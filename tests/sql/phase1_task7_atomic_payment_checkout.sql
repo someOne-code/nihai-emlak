@@ -16,6 +16,10 @@
 -- reservation_rb:  77777777-7777-4777-8777-777777777823
 -- order_rb:        77777777-7777-4777-8777-777777777833
 -- payment_rb:      77777777-7777-4777-8777-777777777843
+-- listing_partial: 77777777-7777-4777-8777-777777777814
+-- reservation_part:77777777-7777-4777-8777-777777777824
+-- order_partial:   77777777-7777-4777-8777-777777777834
+-- payment_partial: 77777777-7777-4777-8777-777777777844
 
 delete from auth.users
 where id = '77777777-7777-4777-8777-777777777801'::uuid;
@@ -50,6 +54,10 @@ values
 (
   '77777777-7777-4777-8777-777777777813'::uuid, 'rent', 'active',
   'Task7 Rollback Listing', 'task7-rollback-listing', 'Izmir', 11000, 'TRY'
+),
+(
+  '77777777-7777-4777-8777-777777777814'::uuid, 'rent', 'active',
+  'Task7 Partial Terminal Listing', 'task7-partial-terminal-listing', 'Bursa', 10000, 'TRY'
 )
 on conflict (id) do update
 set status = excluded.status,
@@ -80,6 +88,12 @@ values
   '77777777-7777-4777-8777-777777777813'::uuid,
   '77777777-7777-4777-8777-777777777801'::uuid,
   current_date + 25, 6, 1, 'pending'
+),
+(
+  '77777777-7777-4777-8777-777777777824'::uuid,
+  '77777777-7777-4777-8777-777777777814'::uuid,
+  '77777777-7777-4777-8777-777777777801'::uuid,
+  current_date + 30, 6, 1, 'pending'
 );
 
 insert into public.orders (id, reservation_id, user_id, total_amount, currency, status)
@@ -101,6 +115,12 @@ values
   '77777777-7777-4777-8777-777777777823'::uuid,
   '77777777-7777-4777-8777-777777777801'::uuid,
   11000, 'TRY', 'pending'
+),
+(
+  '77777777-7777-4777-8777-777777777834'::uuid,
+  '77777777-7777-4777-8777-777777777824'::uuid,
+  '77777777-7777-4777-8777-777777777801'::uuid,
+  10000, 'TRY', 'pending'
 );
 
 insert into public.payments (id, order_id, user_id, amount, currency, status, provider)
@@ -122,6 +142,12 @@ values
   '77777777-7777-4777-8777-777777777833'::uuid,
   '77777777-7777-4777-8777-777777777801'::uuid,
   11000, 'TRY', 'pending', 'isbank'
+),
+(
+  '77777777-7777-4777-8777-777777777844'::uuid,
+  '77777777-7777-4777-8777-777777777834'::uuid,
+  '77777777-7777-4777-8777-777777777801'::uuid,
+  10000, 'TRY', 'succeeded', 'isbank'
 );
 
 -- TEST 1: success path is atomic and updates all related entities.
@@ -218,7 +244,25 @@ begin
 end;
 $$;
 
--- TEST 4: forced error after payment update rolls back entire transaction.
+-- TEST 4: partial terminal success state is audited as conflict, not idempotent.
+do $$
+declare
+  v_result jsonb;
+begin
+  v_result := public.process_payment_checkout(
+    '77777777-7777-4777-8777-777777777844'::uuid,
+    'isbank_callback_approved',
+    '77777777-7777-4777-8777-777777777844',
+    '{"source":"task7-partial-terminal"}'::jsonb
+  );
+
+  if v_result->>'result' <> 'conflict' then
+    raise exception 'TEST 4 FAILED: expected conflict for partial terminal state, got %', v_result;
+  end if;
+end;
+$$;
+
+-- TEST 5: forced error after payment update rolls back entire transaction.
 do $$
 declare
   v_payment_status public.payment_status;
@@ -233,7 +277,7 @@ begin
       '77777777-7777-4777-8777-777777777843',
       '{"source":"task7-rollback"}'::jsonb
     );
-    raise exception 'TEST 4 FAILED: forced error should raise exception';
+    raise exception 'TEST 5 FAILED: forced error should raise exception';
   exception
     when raise_exception then
       if position('Forced process_payment_checkout failure after payment update' in SQLERRM) = 0 then
@@ -255,7 +299,7 @@ begin
      or v_reservation_status <> 'pending'
      or v_listing_status <> 'active' then
     raise exception
-      'TEST 4 FAILED: rollback mismatch payment=% order=% reservation=% listing=%',
+      'TEST 5 FAILED: rollback mismatch payment=% order=% reservation=% listing=%',
       v_payment_status, v_order_status, v_reservation_status, v_listing_status;
   end if;
 end;
@@ -265,27 +309,32 @@ $$;
 delete from public.payment_events where payment_id in (
   '77777777-7777-4777-8777-777777777841'::uuid,
   '77777777-7777-4777-8777-777777777842'::uuid,
-  '77777777-7777-4777-8777-777777777843'::uuid
+  '77777777-7777-4777-8777-777777777843'::uuid,
+  '77777777-7777-4777-8777-777777777844'::uuid
 );
 delete from public.payments where id in (
   '77777777-7777-4777-8777-777777777841'::uuid,
   '77777777-7777-4777-8777-777777777842'::uuid,
-  '77777777-7777-4777-8777-777777777843'::uuid
+  '77777777-7777-4777-8777-777777777843'::uuid,
+  '77777777-7777-4777-8777-777777777844'::uuid
 );
 delete from public.orders where id in (
   '77777777-7777-4777-8777-777777777831'::uuid,
   '77777777-7777-4777-8777-777777777832'::uuid,
-  '77777777-7777-4777-8777-777777777833'::uuid
+  '77777777-7777-4777-8777-777777777833'::uuid,
+  '77777777-7777-4777-8777-777777777834'::uuid
 );
 delete from public.reservations where id in (
   '77777777-7777-4777-8777-777777777821'::uuid,
   '77777777-7777-4777-8777-777777777822'::uuid,
-  '77777777-7777-4777-8777-777777777823'::uuid
+  '77777777-7777-4777-8777-777777777823'::uuid,
+  '77777777-7777-4777-8777-777777777824'::uuid
 );
 delete from public.listings where id in (
   '77777777-7777-4777-8777-777777777811'::uuid,
   '77777777-7777-4777-8777-777777777812'::uuid,
-  '77777777-7777-4777-8777-777777777813'::uuid
+  '77777777-7777-4777-8777-777777777813'::uuid,
+  '77777777-7777-4777-8777-777777777814'::uuid
 );
 delete from auth.users where id = '77777777-7777-4777-8777-777777777801'::uuid;
 
