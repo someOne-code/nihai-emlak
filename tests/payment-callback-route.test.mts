@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import type { TestContext } from "node:test";
 import test from "node:test";
 
+import {
+  buildIsbankHostedPaymentCallbackKey,
+  sha256Upper,
+} from "../lib/payments/callback.ts";
 import { handlePaymentCallbackPost } from "../lib/payments/callback-route.ts";
 import { buildIsbankSha1Input, sha1Upper } from "../lib/payments/isbank.ts";
 
@@ -167,6 +171,40 @@ test("callback route rejects when oid and payment_id conflict", async (t) => {
     json.error,
     "Payment callback contains conflicting oid and payment_id references",
   );
+});
+
+test("callback route returns 400 when streamed body read fails", async (t) => {
+  setupCallbackRouteEnv(t);
+
+  const response = await handlePaymentCallbackPost(
+    new Request("http://localhost/api/payment/callback", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        "x-isbank-hash": "ABCDEF0123456789ABCDEF0123456789ABCDEF01",
+      },
+      body: new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.error(new Error("stream failed"));
+        },
+      }),
+      duplex: "half",
+    } as RequestInit & { duplex: "half" }),
+    {
+      createSupabaseClient: () => {
+        throw new Error("createSupabaseClient should not be called when body read fails");
+      },
+      sendInngestEvent: async () => {
+        throw new Error("sendInngestEvent should not be called when body read fails");
+      },
+    },
+  );
+
+  assert.equal(response.status, 400);
+
+  const json = await response.json();
+  assert.equal(json.success, false);
+  assert.equal(json.error, "Invalid callback payload");
 });
 
 test("callback route does not persist duplicate receipt when checkout processing fails", async (t) => {
@@ -470,6 +508,19 @@ test("callback route accepts signed failed callbacks and records failure state",
   assert.equal(processCheckoutArgs?.p_payment_id, paymentId);
   assert.equal(sentEvents.length, 1);
   assert.equal(sentEvents[0]?.name, "payment/callback.received");
+  assert.deepEqual(sentEvents[0]?.data, {
+    provider: "isbank",
+    verified: true,
+    checkout: "failed",
+    paymentId,
+    payloadHash: sha256Upper(rawBody),
+    eventKey: buildIsbankHostedPaymentCallbackKey(
+      callbackPayload,
+      providedHash,
+      sha256Upper(rawBody),
+    ),
+  });
+  assert.equal(Object.hasOwn(sentEvents[0]?.data ?? {}, "payload"), false);
 
   const json = await response.json();
   assert.equal(json.success, true);

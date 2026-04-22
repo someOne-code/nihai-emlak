@@ -73,6 +73,180 @@ test("checkout init rejects untrusted origin before auth", async (t) => {
   assert.equal(payload.error, "Checkout init Origin is not trusted");
 });
 
+test("checkout init accepts preview origin when VERCEL_URL matches request host", async (t) => {
+  setupCheckoutInitEnv(t, {
+    nextPublicSiteUrl: "https://nihaiemlak.com",
+    siteUrl: "https://nihaiemlak.com",
+    vercelUrl: "nihai-emlak-git-phase3-umut.vercel.app",
+  });
+
+  const orderId = "44444444-4444-4444-8444-444444444444";
+  const userId = "55555555-5555-4555-8555-555555555555";
+  const paymentId = "66666666-6666-4666-8666-666666666666";
+
+  const response = await handleCheckoutInitPost(
+    new Request("https://nihai-emlak-git-phase3-umut.vercel.app/api/checkout/init", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "https://nihai-emlak-git-phase3-umut.vercel.app",
+      },
+      body: JSON.stringify({ orderId }),
+    }),
+    createDependencies({
+      getOrder: () => ({
+        id: orderId,
+        total_amount: 1250,
+        currency: "TRY",
+        status: "pending",
+      }),
+      getPendingPayment: () => ({
+        id: paymentId,
+        order_id: orderId,
+        amount: "1250.00",
+        currency: "TRY",
+        status: "pending",
+        provider_ref: paymentId,
+      }),
+      insertPayment: () => {
+        throw new Error("insert should not be called when pending payment exists");
+      },
+      userId,
+    }),
+  );
+
+  assert.equal(response.status, 200);
+
+  const payload = await response.json();
+  assert.equal(payload.success, true);
+  assert.equal(payload.data.payment.id, paymentId);
+});
+
+test("checkout init accepts trusted origin behind proxy even when request host differs", async (t) => {
+  setupCheckoutInitEnv(t, {
+    nextPublicSiteUrl: "https://nihaiemlak.com",
+    siteUrl: "https://nihaiemlak.com",
+    vercelUrl: "nihai-emlak-git-phase3-umut.vercel.app",
+  });
+
+  const orderId = "47474747-4747-4747-8747-474747474747";
+  const userId = "58585858-5858-4858-8858-585858585858";
+  const paymentId = "69696969-6969-4969-8969-696969696969";
+
+  const response = await handleCheckoutInitPost(
+    new Request("http://127.0.0.1:3000/api/checkout/init", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "https://nihai-emlak-git-phase3-umut.vercel.app",
+      },
+      body: JSON.stringify({ orderId }),
+    }),
+    createDependencies({
+      getOrder: () => ({
+        id: orderId,
+        total_amount: 1250,
+        currency: "TRY",
+        status: "pending",
+      }),
+      getPendingPayment: () => ({
+        id: paymentId,
+        order_id: orderId,
+        amount: "1250.00",
+        currency: "TRY",
+        status: "pending",
+        provider_ref: paymentId,
+      }),
+      insertPayment: () => {
+        throw new Error("insert should not be called when pending payment exists");
+      },
+      userId,
+    }),
+  );
+
+  assert.equal(response.status, 200);
+
+  const payload = await response.json();
+  assert.equal(payload.success, true);
+  assert.equal(payload.data.payment.id, paymentId);
+});
+
+test("checkout init builds return URLs from VERCEL_URL when site URLs are unset", async (t) => {
+  setupCheckoutInitEnv(t, {
+    vercelUrl: "nihai-emlak-preview.vercel.app",
+  });
+
+  delete process.env.SITE_URL;
+  delete process.env.NEXT_PUBLIC_SITE_URL;
+
+  const orderId = "81818181-8181-4181-8181-818181818181";
+  const userId = "82828282-8282-4282-8282-828282828282";
+  const paymentId = "83838383-8383-4383-8383-838383838383";
+
+  const response = await handleCheckoutInitPost(
+    new Request("https://nihai-emlak-preview.vercel.app/api/checkout/init", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "https://nihai-emlak-preview.vercel.app",
+      },
+      body: JSON.stringify({ orderId }),
+    }),
+    createDependencies({
+      getOrder: () => ({
+        id: orderId,
+        total_amount: 1250,
+        currency: "TRY",
+        status: "pending",
+      }),
+      getPendingPayment: () => ({
+        id: paymentId,
+        order_id: orderId,
+        amount: "1250.00",
+        currency: "TRY",
+        status: "pending",
+        provider_ref: paymentId,
+      }),
+      insertPayment: () => {
+        throw new Error("insert should not be called when pending payment exists");
+      },
+      userId,
+    }),
+  );
+
+  assert.equal(response.status, 200);
+
+  const payload = await response.json();
+  assert.equal(payload.success, true);
+  assert.equal(payload.data.isbank.okurl, "https://nihai-emlak-preview.vercel.app/checkout/success");
+  assert.equal(payload.data.isbank.failurl, "https://nihai-emlak-preview.vercel.app/checkout/fail");
+});
+
+test("checkout init rejects oversized json before auth", async (t) => {
+  setupCheckoutInitEnv(t);
+
+  const response = await handleCheckoutInitPost(
+    new Request("http://localhost:3000/api/checkout/init", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "http://localhost:3000",
+      },
+      body: JSON.stringify({
+        orderId: "11111111-1111-4111-8111-111111111111",
+        padding: "x".repeat(5000),
+      }),
+    }),
+    createFailingDependencies(),
+  );
+
+  assert.equal(response.status, 413);
+
+  const payload = await response.json();
+  assert.equal(payload.success, false);
+  assert.equal(payload.error, "Checkout init payload is too large");
+});
+
 test("checkout init reuses existing pending isbank payment for same order", async (t) => {
   setupCheckoutInitEnv(t);
 
@@ -137,12 +311,75 @@ test("checkout init reuses existing pending isbank payment for same order", asyn
   );
 });
 
-test("checkout init resolves pending payment after unique violation race", async (t) => {
+test("checkout init creates a pending isbank payment for legacy pending orders", async (t) => {
   setupCheckoutInitEnv(t);
 
   const orderId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
   const userId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
-  const racedPaymentId = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+  const paymentId = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+
+  const state = {
+    paymentSelectCallCount: 0,
+    insertCallCount: 0,
+  };
+
+  const dependencies = createDependencies({
+    getOrder: () => ({
+      id: orderId,
+      total_amount: 999.99,
+      currency: "TRY",
+      status: "pending",
+    }),
+    getPendingPayment: () => {
+      state.paymentSelectCallCount += 1;
+      return null;
+    },
+    insertPayment: () => {
+      state.insertCallCount += 1;
+      return {
+        data: {
+          id: paymentId,
+          order_id: orderId,
+          amount: "999.99",
+          currency: "TRY",
+          status: "pending",
+          provider_ref: paymentId,
+        },
+        error: null,
+      };
+    },
+    userId,
+  });
+
+  const response = await handleCheckoutInitPost(
+    new Request("http://localhost:3000/api/checkout/init", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "http://localhost:3000",
+      },
+      body: JSON.stringify({ orderId }),
+    }),
+    dependencies,
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(state.insertCallCount, 1);
+  assert.equal(state.paymentSelectCallCount, 1);
+
+  const payload = await response.json();
+  assert.equal(payload.success, true);
+  assert.equal(payload.data.payment.id, paymentId);
+  assert.equal(payload.data.payment.providerRef, paymentId);
+  assert.equal(payload.data.isbank.oid, paymentId);
+});
+
+test("checkout init resolves legacy payment creation race via existing pending payment", async (t) => {
+  setupCheckoutInitEnv(t);
+
+  const orderId = "12121212-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const userId = "34343434-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  const racedPaymentId = "56565656-cccc-4ccc-8ccc-cccccccccccc";
 
   const state = {
     paymentSelectCallCount: 0,
@@ -437,13 +674,21 @@ test("checkout init does not rewrite terminal payment during callback race", asy
   assert.equal(payload.error, "Payment is no longer pending for checkout init");
 });
 
-function setupCheckoutInitEnv(t: TestContext) {
+function setupCheckoutInitEnv(
+  t: TestContext,
+  overrides?: {
+    nextPublicSiteUrl?: string;
+    siteUrl?: string;
+    vercelUrl?: string;
+  },
+) {
   const originalEnv = {
     ISBANK_CLIENT_ID: process.env.ISBANK_CLIENT_ID,
     ISBANK_STORE_KEY: process.env.ISBANK_STORE_KEY,
     NODE_ENV: process.env.NODE_ENV,
     NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
     SITE_URL: process.env.SITE_URL,
+    VERCEL_URL: process.env.VERCEL_URL,
   };
 
   t.after(() => {
@@ -452,13 +697,20 @@ function setupCheckoutInitEnv(t: TestContext) {
     process.env.NODE_ENV = originalEnv.NODE_ENV;
     process.env.NEXT_PUBLIC_SITE_URL = originalEnv.NEXT_PUBLIC_SITE_URL;
     process.env.SITE_URL = originalEnv.SITE_URL;
+    process.env.VERCEL_URL = originalEnv.VERCEL_URL;
   });
 
   process.env.ISBANK_CLIENT_ID = "7000679";
   process.env.ISBANK_STORE_KEY = "store-key-123";
   process.env.NODE_ENV = "test";
-  process.env.SITE_URL = "http://localhost:3000";
-  process.env.NEXT_PUBLIC_SITE_URL = "http://localhost:3000";
+  process.env.SITE_URL = overrides?.siteUrl ?? "http://localhost:3000";
+  process.env.NEXT_PUBLIC_SITE_URL = overrides?.nextPublicSiteUrl ?? "http://localhost:3000";
+
+  if (overrides?.vercelUrl) {
+    process.env.VERCEL_URL = overrides.vercelUrl;
+  } else {
+    delete process.env.VERCEL_URL;
+  }
 }
 
 function createFailingDependencies(): CheckoutInitRouteDependencies {

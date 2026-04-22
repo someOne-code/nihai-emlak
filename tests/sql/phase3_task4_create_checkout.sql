@@ -1,5 +1,7 @@
 \set ON_ERROR_STOP on
 
+create extension if not exists dblink;
+
 -- Phase 3 / Task 4: create_checkout must atomically create reservation/order/items/payment.
 
 -- deterministic users
@@ -394,7 +396,159 @@ begin
 end;
 $$;
 
--- TEST 2: failure while writing order_items leaves no partial checkout rows
+-- TEST 2: authenticated users cannot bypass create_checkout with direct transactional inserts
+do $$
+declare
+  v_reservation_id uuid;
+  v_order_id uuid;
+begin
+  select r.id, o.id
+  into v_reservation_id, v_order_id
+  from public.reservations r
+  join public.orders o
+    on o.reservation_id = r.id
+  where r.listing_id = '77777777-7777-4777-8777-777777777761'::uuid
+    and r.user_id = '66666666-7777-4777-8777-777777777762'::uuid
+  order by r.created_at desc
+  limit 1;
+
+  if v_reservation_id is null or v_order_id is null then
+    raise exception 'TEST 2 FAILED: expected checkout rows from TEST 1';
+  end if;
+
+  if has_table_privilege('authenticated', 'public.reservations', 'INSERT')
+     or has_table_privilege('authenticated', 'public.orders', 'INSERT')
+     or has_table_privilege('authenticated', 'public.order_items', 'INSERT')
+     or has_table_privilege('authenticated', 'public.payments', 'INSERT') then
+    raise exception 'TEST 2 FAILED: authenticated must not have direct transactional INSERT privileges';
+  end if;
+
+  begin
+    insert into public.reservations (
+      listing_id,
+      user_id,
+      move_in_date,
+      stay_months,
+      guest_count,
+      status
+    )
+    values (
+      '77777777-7777-4777-8777-777777777761'::uuid,
+      '66666666-7777-4777-8777-777777777762'::uuid,
+      current_date + 15,
+      6,
+      1,
+      'pending'
+    );
+    raise exception 'TEST 2 FAILED: direct reservation insert should be denied';
+  exception
+    when insufficient_privilege then
+      null;
+  end;
+
+  begin
+    insert into public.orders (
+      reservation_id,
+      user_id,
+      total_amount,
+      currency,
+      status
+    )
+    values (
+      v_reservation_id,
+      '66666666-7777-4777-8777-777777777762'::uuid,
+      1,
+      'TRY',
+      'pending'
+    );
+    raise exception 'TEST 2 FAILED: direct order insert should be denied';
+  exception
+    when insufficient_privilege then
+      null;
+  end;
+
+  begin
+    insert into public.order_items (
+      order_id,
+      item_type,
+      label,
+      amount
+    )
+    values (
+      v_order_id,
+      'main_item',
+      'Bypass Kalem',
+      1
+    );
+    raise exception 'TEST 2 FAILED: direct order item insert should be denied';
+  exception
+    when insufficient_privilege then
+      null;
+  end;
+
+  begin
+    insert into public.payments (
+      order_id,
+      user_id,
+      amount,
+      currency,
+      status,
+      provider
+    )
+    values (
+      v_order_id,
+      '66666666-7777-4777-8777-777777777762'::uuid,
+      1,
+      'TRY',
+      'pending',
+      'isbank'
+    );
+    raise exception 'TEST 2 FAILED: direct payment insert should be denied';
+  exception
+    when insufficient_privilege then
+      null;
+  end;
+end;
+$$;
+
+-- TEST 3: past move-in dates are rejected before reservation creation
+do $$
+declare
+  v_reservation_count integer;
+begin
+  begin
+    perform public.create_checkout(
+      '77777777-7777-4777-8777-777777777761'::uuid,
+      current_date - 1,
+      6,
+      1,
+      array['deposit_t4'],
+      array[]::text[],
+      'Gecmis tarih kontrolu'
+    );
+    raise exception 'TEST 3 FAILED: past move-in date should have raised';
+  exception
+    when invalid_parameter_value then
+      if position('p_move_in_date cannot be in the past' in SQLERRM) = 0 then
+        raise;
+      end if;
+  end;
+
+  select count(*)
+  into v_reservation_count
+  from public.reservations
+  where listing_id = '77777777-7777-4777-8777-777777777761'::uuid
+    and user_id = '66666666-7777-4777-8777-777777777762'::uuid
+    and move_in_date = current_date - 1;
+
+  if v_reservation_count <> 0 then
+    raise exception 'TEST 3 FAILED: past-date checkout left reservation rows=%',
+      v_reservation_count;
+  end if;
+end;
+$$;
+
+-- TEST 4: failure while writing order_items leaves no partial checkout rows
 do $$
 declare
   v_reservation_count integer;
@@ -462,16 +616,222 @@ begin
 end;
 $$;
 
--- TEST 3: anonymous clients cannot execute checkout create directly
+-- TEST 5: create_checkout must lock the listing row before creating checkout rows
+do $$
+declare
+  v_reservation_count integer;
+  v_order_count integer;
+  v_payment_count integer;
+  v_connection_name text := 'phase3_create_checkout_lock_holder';
+begin
+  perform dblink_connect(
+    v_connection_name,
+    'host=/var/run/postgresql dbname=postgres user=supabase_admin password=postgres'
+  );
+
+  perform dblink_exec(v_connection_name, 'begin');
+  perform dblink_exec(
+    v_connection_name,
+    $dblink$
+      update public.listings
+      set updated_at = updated_at
+      where id = '77777777-7777-4777-8777-777777777761'::uuid
+    $dblink$
+  );
+
+  perform set_config('lock_timeout', '250ms', true);
+
+  begin
+    perform public.create_checkout(
+      '77777777-7777-4777-8777-777777777761'::uuid,
+      current_date + 60,
+      6,
+      1,
+      array['deposit_t4'],
+      array[]::text[],
+      'Lock kontrolu'
+    );
+    raise exception 'TEST 5 FAILED: create_checkout should block on locked listing row';
+  exception
+    when lock_not_available then
+      null;
+  end;
+
+  select count(*)
+  into v_reservation_count
+  from public.reservations
+  where listing_id = '77777777-7777-4777-8777-777777777761'::uuid
+    and user_id = '66666666-7777-4777-8777-777777777762'::uuid
+    and move_in_date = current_date + 60;
+
+  select count(*)
+  into v_order_count
+  from public.orders o
+  join public.reservations r
+    on r.id = o.reservation_id
+  where r.listing_id = '77777777-7777-4777-8777-777777777761'::uuid
+    and r.user_id = '66666666-7777-4777-8777-777777777762'::uuid
+    and r.move_in_date = current_date + 60;
+
+  select count(*)
+  into v_payment_count
+  from public.payments p
+  join public.orders o
+    on o.id = p.order_id
+  join public.reservations r
+    on r.id = o.reservation_id
+  where r.listing_id = '77777777-7777-4777-8777-777777777761'::uuid
+    and r.user_id = '66666666-7777-4777-8777-777777777762'::uuid
+    and r.move_in_date = current_date + 60;
+
+  if v_reservation_count <> 0 or v_order_count <> 0 or v_payment_count <> 0 then
+    raise exception
+      'TEST 5 FAILED: locked-listing checkout left partial rows reservation=% order=% payment=%',
+      v_reservation_count, v_order_count, v_payment_count;
+  end if;
+
+  perform dblink_exec(v_connection_name, 'rollback');
+  perform dblink_disconnect(v_connection_name);
+exception
+  when others then
+    begin
+      perform dblink_exec(v_connection_name, 'rollback');
+    exception
+      when others then
+        null;
+    end;
+
+    begin
+      perform dblink_disconnect(v_connection_name);
+    exception
+      when others then
+        null;
+    end;
+
+    raise;
+end;
+$$;
+
+-- TEST 6: create_checkout must lock requested main item configuration rows before quoting
+do $$
+declare
+  v_reservation_count integer;
+  v_order_count integer;
+  v_payment_count integer;
+  v_connection_name text := 'phase3_create_checkout_main_item_lock_holder';
+begin
+  perform dblink_connect(
+    v_connection_name,
+    'host=/var/run/postgresql dbname=postgres user=supabase_admin password=postgres'
+  );
+
+  perform dblink_exec(v_connection_name, 'begin');
+  perform dblink_exec(
+    v_connection_name,
+    $dblink$
+      update public.listing_main_item_options
+      set updated_at = updated_at
+      where id = 'bbbbbbbb-7777-4777-8777-777777777761'::uuid
+    $dblink$
+  );
+
+  perform set_config('lock_timeout', '250ms', true);
+
+  begin
+    perform public.create_checkout(
+      '77777777-7777-4777-8777-777777777761'::uuid,
+      current_date + 75,
+      6,
+      1,
+      array['deposit_t4'],
+      array[]::text[],
+      'Main item lock kontrolu'
+    );
+    raise exception 'TEST 6 FAILED: create_checkout should block on locked main item config row';
+  exception
+    when lock_not_available then
+      null;
+  end;
+
+  select count(*)
+  into v_reservation_count
+  from public.reservations
+  where listing_id = '77777777-7777-4777-8777-777777777761'::uuid
+    and user_id = '66666666-7777-4777-8777-777777777762'::uuid
+    and move_in_date = current_date + 75;
+
+  select count(*)
+  into v_order_count
+  from public.orders o
+  join public.reservations r
+    on r.id = o.reservation_id
+  where r.listing_id = '77777777-7777-4777-8777-777777777761'::uuid
+    and r.user_id = '66666666-7777-4777-8777-777777777762'::uuid
+    and r.move_in_date = current_date + 75;
+
+  select count(*)
+  into v_payment_count
+  from public.payments p
+  join public.orders o
+    on o.id = p.order_id
+  join public.reservations r
+    on r.id = o.reservation_id
+  where r.listing_id = '77777777-7777-4777-8777-777777777761'::uuid
+    and r.user_id = '66666666-7777-4777-8777-777777777762'::uuid
+    and r.move_in_date = current_date + 75;
+
+  if v_reservation_count <> 0 or v_order_count <> 0 or v_payment_count <> 0 then
+    raise exception
+      'TEST 6 FAILED: locked-main-item checkout left partial rows reservation=% order=% payment=%',
+      v_reservation_count, v_order_count, v_payment_count;
+  end if;
+
+  perform dblink_exec(v_connection_name, 'rollback');
+  perform dblink_disconnect(v_connection_name);
+exception
+  when others then
+    begin
+      perform dblink_exec(v_connection_name, 'rollback');
+    exception
+      when others then
+        null;
+    end;
+
+    begin
+      perform dblink_disconnect(v_connection_name);
+    exception
+      when others then
+        null;
+    end;
+
+    raise;
+end;
+$$;
+
+-- TEST 7: anonymous clients cannot execute checkout create directly
 reset role;
 do $$
+declare
+  v_public_create_checkout_definer boolean;
 begin
+  select p.prosecdef
+  into v_public_create_checkout_definer
+  from pg_proc p
+  join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'public'
+    and p.proname = 'create_checkout'
+  limit 1;
+
+  if v_public_create_checkout_definer is not true then
+    raise exception 'TEST 7 FAILED: public create_checkout wrapper must be SECURITY DEFINER';
+  end if;
+
   if has_function_privilege(
     'anon',
     'public.create_checkout(uuid, date, integer, integer, text[], text[], text)',
     'EXECUTE'
   ) then
-    raise exception 'TEST 3 FAILED: anon should not be allowed to execute create_checkout';
+    raise exception 'TEST 7 FAILED: anon should not be allowed to execute create_checkout';
   end if;
 
   if not has_function_privilege(
@@ -479,7 +839,31 @@ begin
     'public.create_checkout(uuid, date, integer, integer, text[], text[], text)',
     'EXECUTE'
   ) then
-    raise exception 'TEST 3 FAILED: authenticated should be allowed to execute create_checkout';
+    raise exception 'TEST 7 FAILED: authenticated should be allowed to execute create_checkout';
+  end if;
+
+  if has_function_privilege(
+    'authenticated',
+    'internal.create_checkout(uuid, date, integer, integer, text[], text[], text)',
+    'EXECUTE'
+  ) then
+    raise exception 'TEST 7 FAILED: authenticated should not execute internal create_checkout directly';
+  end if;
+
+  if has_function_privilege(
+    'anon',
+    'internal.create_checkout(uuid, date, integer, integer, text[], text[], text)',
+    'EXECUTE'
+  ) then
+    raise exception 'TEST 7 FAILED: anon should not execute internal create_checkout directly';
+  end if;
+
+  if not has_function_privilege(
+    'service_role',
+    'internal.create_checkout(uuid, date, integer, integer, text[], text[], text)',
+    'EXECUTE'
+  ) then
+    raise exception 'TEST 7 FAILED: service_role should execute internal create_checkout';
   end if;
 end;
 $$;

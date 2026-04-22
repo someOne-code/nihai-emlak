@@ -89,6 +89,7 @@ export function resolveCheckoutInitReturnUrlsFromEnvironment(input: {
   nodeEnv: string | null | undefined;
   siteUrl: string | null | undefined;
   publicSiteUrl: string | null | undefined;
+  vercelUrl?: string | null | undefined;
 }):
   | { ok: true; returnUrls: { okUrl: string; failUrl: string } }
   | { ok: false; status: number; error: string } {
@@ -96,16 +97,22 @@ export function resolveCheckoutInitReturnUrlsFromEnvironment(input: {
   const isNonDevEnvironment = nodeEnv !== "development" && nodeEnv !== "test";
   const hasPrivateSiteUrl = Boolean(asNonEmptyString(input.siteUrl));
   const hasPublicSiteUrl = Boolean(asNonEmptyString(input.publicSiteUrl));
+  const normalizedVercelUrl = normalizeVercelUrl(input.vercelUrl);
+  const hasVercelUrl = Boolean(normalizedVercelUrl);
 
-  if (isNonDevEnvironment && !hasPrivateSiteUrl && !hasPublicSiteUrl) {
+  if (isNonDevEnvironment && !hasPrivateSiteUrl && !hasPublicSiteUrl && !hasVercelUrl) {
     return {
       ok: false,
       status: 500,
-      error: "SITE_URL or NEXT_PUBLIC_SITE_URL must be configured outside development/test",
+      error: "SITE_URL, NEXT_PUBLIC_SITE_URL, or VERCEL_URL must be configured outside development/test",
     };
   }
 
-  const configuredSiteUrl = hasPrivateSiteUrl ? input.siteUrl : input.publicSiteUrl;
+  const configuredSiteUrl = hasPrivateSiteUrl
+    ? input.siteUrl
+    : hasPublicSiteUrl
+      ? input.publicSiteUrl
+      : normalizedVercelUrl;
 
   try {
     return {
@@ -147,15 +154,24 @@ function normalizeCheckoutSiteUrl(siteUrl: string | null | undefined): string {
   try {
     parsed = new URL(trimmed);
   } catch {
-    throw new Error("SITE_URL/NEXT_PUBLIC_SITE_URL must be an absolute URL");
+    throw new Error("SITE_URL/NEXT_PUBLIC_SITE_URL/VERCEL_URL must be an absolute URL");
   }
 
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    throw new Error("SITE_URL/NEXT_PUBLIC_SITE_URL must use http or https");
+    throw new Error("SITE_URL/NEXT_PUBLIC_SITE_URL/VERCEL_URL must use http or https");
   }
 
   const normalizedPath = parsed.pathname === "/" ? "" : parsed.pathname.replace(/\/+$/, "");
   return `${parsed.origin}${normalizedPath}`;
+}
+
+function normalizeVercelUrl(value: string | null | undefined): string | null {
+  const normalized = asNonEmptyString(value);
+  if (!normalized) {
+    return null;
+  }
+
+  return normalized.includes("://") ? normalized : `https://${normalized}`;
 }
 
 function asNonEmptyString(value: unknown): string | null {

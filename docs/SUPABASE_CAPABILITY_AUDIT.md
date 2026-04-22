@@ -162,6 +162,13 @@ Bu audit sonucunda ilk task sırası şu şekilde sabitlenmiştir:
 - `lib/inngest/functions/payment-callback.ts` uzun arka plan isler icin dogal yerdir; transaction mantigi burada cozulmez.
 - `payload.config.ts` content backend sinirinda kalir.
 
+## Rol Ayrimi Notu
+
+- Uygulama ve backoffice yetki source-of-truth'u `public.profiles.role` alanidir.
+- `auth.users` kimlik ve oturum kaynagidir; uygulama rolu burada tasinmaz.
+- Payload `users.role` alani varsa bu yalnizca CMS/admin access control yardimci alanidir.
+- Reservation, order, payment ve event erisim kararlari Payload role'u ile degil, Supabase Auth + `profiles` + RLS ile verilir.
+
 ## Kaynaklar
 
 - [Supabase Database Functions](https://supabase.com/docs/guides/database/functions)

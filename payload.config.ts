@@ -4,18 +4,20 @@ import { fileURLToPath } from "node:url";
 import { postgresAdapter } from "@payloadcms/db-postgres";
 import { buildConfig } from "payload";
 
-import { resolvePayloadServerURL } from "./payload/server-url";
-import { Users } from "./payload/collections/Users";
+import { resolvePayloadServerURL } from "./payload/server-url.ts";
+import { Users } from "./payload/collections/Users.ts";
+import { backfillLegacyUserRolesMigration } from "./payload/migrations/backfill-legacy-user-roles.ts";
 
 const filename = fileURLToPath(import.meta.url);
 const dirname = path.dirname(filename);
 
 const databaseURI = process.env.DATABASE_URI;
 const payloadSecret = process.env.PAYLOAD_SECRET;
-const publicServerURL = resolvePayloadServerURL({
+export const payloadServerURL = resolvePayloadServerURL({
   nodeEnv: process.env.NODE_ENV,
   publicSiteUrl: process.env.NEXT_PUBLIC_SITE_URL,
   siteUrl: process.env.SITE_URL,
+  vercelUrl: process.env.VERCEL_URL,
 });
 const isTest = process.env.NODE_ENV === "test";
 
@@ -38,10 +40,11 @@ if (isTest && !payloadSecret) {
 const resolvedDatabaseURI =
   databaseURI ?? "postgres://postgres:postgres@127.0.0.1:5432/postgres";
 const resolvedPayloadSecret = payloadSecret ?? "test-only-payload-secret";
+export const payloadProdMigrations = [backfillLegacyUserRolesMigration];
 
 export default buildConfig({
   secret: resolvedPayloadSecret,
-  serverURL: publicServerURL,
+  serverURL: payloadServerURL,
   admin: {
     user: Users.slug,
     importMap: {
@@ -52,6 +55,7 @@ export default buildConfig({
     pool: {
       connectionString: resolvedDatabaseURI,
     },
+    prodMigrations: payloadProdMigrations,
     schemaName: "payload",
   }),
   collections: [Users],

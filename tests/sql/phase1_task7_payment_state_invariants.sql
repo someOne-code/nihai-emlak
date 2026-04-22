@@ -4,15 +4,21 @@
 
 -- Deterministic ids
 -- user:             77777777-7777-4777-8777-777777777901
+-- other_user:       77777777-7777-4777-8777-777777777902
 -- listing_failed:   77777777-7777-4777-8777-777777777911
 -- listing_provider: 77777777-7777-4777-8777-777777777912
 -- listing_oid:      77777777-7777-4777-8777-777777777913
+-- listing_owner:    77777777-7777-4777-8777-777777777914
+-- listing_amount:   77777777-7777-4777-8777-777777777915
 -- reservation_*:    77777777-7777-4777-8777-77777777792x
 -- order_*:          77777777-7777-4777-8777-77777777793x
 -- payment_*:        77777777-7777-4777-8777-77777777794x
 
 delete from auth.users
-where id = '77777777-7777-4777-8777-777777777901'::uuid;
+where id in (
+  '77777777-7777-4777-8777-777777777901'::uuid,
+  '77777777-7777-4777-8777-777777777902'::uuid
+);
 
 insert into auth.users (
   instance_id, id, aud, role, email,
@@ -29,6 +35,15 @@ values (
   jsonb_build_object('provider', 'email', 'providers', jsonb_build_array('email')),
   jsonb_build_object('full_name', 'Task7 Hardening User'),
   now(), now(), '', '', '', ''
+),
+(
+  '00000000-0000-0000-0000-000000000000',
+  '77777777-7777-4777-8777-777777777902'::uuid,
+  'authenticated', 'authenticated', 'task7-hardening-other@example.com',
+  crypt('test-password', gen_salt('bf')), now(),
+  jsonb_build_object('provider', 'email', 'providers', jsonb_build_array('email')),
+  jsonb_build_object('full_name', 'Task7 Hardening Other User'),
+  now(), now(), '', '', '', ''
 );
 
 insert into public.listings (id, type, status, title, slug, city, price, currency)
@@ -44,6 +59,14 @@ values
 (
   '77777777-7777-4777-8777-777777777913'::uuid, 'rent', 'active',
   'Task7 Invariant Oid Listing', 'task7-invariant-oid-listing', 'Izmir', 11000, 'TRY'
+),
+(
+  '77777777-7777-4777-8777-777777777914'::uuid, 'rent', 'active',
+  'Task7 Invariant Owner Listing', 'task7-invariant-owner-listing', 'Istanbul', 13000, 'TRY'
+),
+(
+  '77777777-7777-4777-8777-777777777915'::uuid, 'rent', 'active',
+  'Task7 Invariant Amount Listing', 'task7-invariant-amount-listing', 'Istanbul', 14000, 'TRY'
 )
 on conflict (id) do update
 set status = excluded.status,
@@ -74,6 +97,18 @@ values
   '77777777-7777-4777-8777-777777777913'::uuid,
   '77777777-7777-4777-8777-777777777901'::uuid,
   current_date + 25, 6, 1, 'pending'
+),
+(
+  '77777777-7777-4777-8777-777777777924'::uuid,
+  '77777777-7777-4777-8777-777777777914'::uuid,
+  '77777777-7777-4777-8777-777777777901'::uuid,
+  current_date + 25, 6, 1, 'pending'
+),
+(
+  '77777777-7777-4777-8777-777777777925'::uuid,
+  '77777777-7777-4777-8777-777777777915'::uuid,
+  '77777777-7777-4777-8777-777777777901'::uuid,
+  current_date + 25, 6, 1, 'pending'
 );
 
 insert into public.orders (id, reservation_id, user_id, total_amount, currency, status)
@@ -95,6 +130,18 @@ values
   '77777777-7777-4777-8777-777777777923'::uuid,
   '77777777-7777-4777-8777-777777777901'::uuid,
   11000, 'TRY', 'pending'
+),
+(
+  '77777777-7777-4777-8777-777777777934'::uuid,
+  '77777777-7777-4777-8777-777777777924'::uuid,
+  '77777777-7777-4777-8777-777777777901'::uuid,
+  13000, 'TRY', 'pending'
+),
+(
+  '77777777-7777-4777-8777-777777777935'::uuid,
+  '77777777-7777-4777-8777-777777777925'::uuid,
+  '77777777-7777-4777-8777-777777777901'::uuid,
+  14000, 'TRY', 'pending'
 );
 
 insert into public.payments (id, order_id, user_id, amount, currency, status, provider, provider_ref)
@@ -116,6 +163,18 @@ values
   '77777777-7777-4777-8777-777777777933'::uuid,
   '77777777-7777-4777-8777-777777777901'::uuid,
   11000, 'TRY', 'pending', 'isbank', null
+),
+(
+  '77777777-7777-4777-8777-777777777944'::uuid,
+  '77777777-7777-4777-8777-777777777934'::uuid,
+  '77777777-7777-4777-8777-777777777902'::uuid,
+  13000, 'TRY', 'pending', 'isbank', null
+),
+(
+  '77777777-7777-4777-8777-777777777945'::uuid,
+  '77777777-7777-4777-8777-777777777935'::uuid,
+  '77777777-7777-4777-8777-777777777901'::uuid,
+  999, 'TRY', 'pending', 'isbank', null
 );
 
 -- TEST 1: terminal payment statuses must not transition to succeeded.
@@ -198,32 +257,85 @@ begin
 end;
 $$;
 
+-- TEST 4: payment/order/reservation ownership mismatch must fail closed.
+do $$
+begin
+  begin
+    perform public.process_payment_checkout(
+      '77777777-7777-4777-8777-777777777944'::uuid,
+      'isbank_callback_approved',
+      '77777777-7777-4777-8777-777777777944',
+      '{"source":"task7-invariant-owner"}'::jsonb
+    );
+    raise exception 'TEST 4 FAILED: ownership mismatch should raise exception';
+  exception
+    when sqlstate '22023' then
+      if position('payment ownership invariant violated' in SQLERRM) = 0 then
+        raise;
+      end if;
+  end;
+end;
+$$;
+
+-- TEST 5: payment amount/currency must match the parent order before state transition.
+do $$
+begin
+  begin
+    perform public.process_payment_checkout(
+      '77777777-7777-4777-8777-777777777945'::uuid,
+      'isbank_callback_approved',
+      '77777777-7777-4777-8777-777777777945',
+      '{"source":"task7-invariant-amount"}'::jsonb
+    );
+    raise exception 'TEST 5 FAILED: amount mismatch should raise exception';
+  exception
+    when sqlstate '22023' then
+      if position('payment amount invariant violated' in SQLERRM) = 0 then
+        raise;
+      end if;
+  end;
+end;
+$$;
+
 -- Cleanup
 delete from public.payment_events where payment_id in (
   '77777777-7777-4777-8777-777777777941'::uuid,
   '77777777-7777-4777-8777-777777777942'::uuid,
-  '77777777-7777-4777-8777-777777777943'::uuid
+  '77777777-7777-4777-8777-777777777943'::uuid,
+  '77777777-7777-4777-8777-777777777944'::uuid,
+  '77777777-7777-4777-8777-777777777945'::uuid
 );
 delete from public.payments where id in (
   '77777777-7777-4777-8777-777777777941'::uuid,
   '77777777-7777-4777-8777-777777777942'::uuid,
-  '77777777-7777-4777-8777-777777777943'::uuid
+  '77777777-7777-4777-8777-777777777943'::uuid,
+  '77777777-7777-4777-8777-777777777944'::uuid,
+  '77777777-7777-4777-8777-777777777945'::uuid
 );
 delete from public.orders where id in (
   '77777777-7777-4777-8777-777777777931'::uuid,
   '77777777-7777-4777-8777-777777777932'::uuid,
-  '77777777-7777-4777-8777-777777777933'::uuid
+  '77777777-7777-4777-8777-777777777933'::uuid,
+  '77777777-7777-4777-8777-777777777934'::uuid,
+  '77777777-7777-4777-8777-777777777935'::uuid
 );
 delete from public.reservations where id in (
   '77777777-7777-4777-8777-777777777921'::uuid,
   '77777777-7777-4777-8777-777777777922'::uuid,
-  '77777777-7777-4777-8777-777777777923'::uuid
+  '77777777-7777-4777-8777-777777777923'::uuid,
+  '77777777-7777-4777-8777-777777777924'::uuid,
+  '77777777-7777-4777-8777-777777777925'::uuid
 );
 delete from public.listings where id in (
   '77777777-7777-4777-8777-777777777911'::uuid,
   '77777777-7777-4777-8777-777777777912'::uuid,
-  '77777777-7777-4777-8777-777777777913'::uuid
+  '77777777-7777-4777-8777-777777777913'::uuid,
+  '77777777-7777-4777-8777-777777777914'::uuid,
+  '77777777-7777-4777-8777-777777777915'::uuid
 );
-delete from auth.users where id = '77777777-7777-4777-8777-777777777901'::uuid;
+delete from auth.users where id in (
+  '77777777-7777-4777-8777-777777777901'::uuid,
+  '77777777-7777-4777-8777-777777777902'::uuid
+);
 
 select 'phase1_task7_payment_state_invariants_ok' as result;

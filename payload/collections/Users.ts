@@ -1,5 +1,7 @@
 import type { CollectionConfig } from "payload";
 
+const PAYLOAD_EDITOR_ROLE_ENABLED = false;
+
 type PayloadUserAccessArgs = {
   req: {
     user?: {
@@ -54,7 +56,7 @@ export const Users = {
     {
       name: "role",
       type: "select",
-      defaultValue: "editor",
+      defaultValue: "admin",
       required: true,
       access: {
         update: canManagePayloadUsers,
@@ -64,10 +66,14 @@ export const Users = {
           label: "Admin",
           value: "admin",
         },
-        {
-          label: "Editor",
-          value: "editor",
-        },
+        ...(PAYLOAD_EDITOR_ROLE_ENABLED
+          ? [
+              {
+                label: "Editor",
+                value: "editor",
+              },
+            ]
+          : []),
       ],
     },
   ],
@@ -76,6 +82,10 @@ export const Users = {
 function canAccessOwnPayloadUser(args: PayloadUserAccessArgs): boolean | OwnUserWhere {
   if (isPayloadAdmin(args.req.user)) {
     return true;
+  }
+
+  if (args.req.user?.collection !== "users") {
+    return false;
   }
 
   const userId = args.req.user?.id;
@@ -91,5 +101,6 @@ function canAccessOwnPayloadUser(args: PayloadUserAccessArgs): boolean | OwnUser
 }
 
 function isPayloadAdmin(user: PayloadUserAccessArgs["req"]["user"]): boolean {
-  return user?.collection === "users" && user.role === "admin";
+  // Legacy Payload users predate the explicit role field; only persisted null keeps admin access during backfill.
+  return user?.collection === "users" && (user.role === "admin" || user.role === null);
 }

@@ -349,8 +349,10 @@ export async function handlePaymentCallbackPost(
     data: {
       provider: "isbank",
       verified: true,
-      payload,
       checkout: checkoutResult.result,
+      paymentId: checkoutResult.paymentId,
+      payloadHash,
+      eventKey: receiptInput.eventKey,
     },
   });
 

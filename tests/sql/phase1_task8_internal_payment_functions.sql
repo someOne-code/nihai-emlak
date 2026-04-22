@@ -120,4 +120,104 @@ begin
 end;
 $$;
 
+do $$
+begin
+  if has_function_privilege(
+    'anon',
+    'public.register_payment_callback_receipt(text, text, text, text)',
+    'EXECUTE'
+  ) then
+    raise exception 'anon must not execute public.register_payment_callback_receipt';
+  end if;
+
+  if has_function_privilege(
+    'authenticated',
+    'public.register_payment_callback_receipt(text, text, text, text)',
+    'EXECUTE'
+  ) then
+    raise exception 'authenticated must not execute public.register_payment_callback_receipt';
+  end if;
+
+  if not has_function_privilege(
+    'service_role',
+    'public.register_payment_callback_receipt(text, text, text, text)',
+    'EXECUTE'
+  ) then
+    raise exception 'service_role must execute public.register_payment_callback_receipt';
+  end if;
+
+  if has_function_privilege(
+    'anon',
+    'public.process_payment_checkout(uuid, text, text, jsonb)',
+    'EXECUTE'
+  ) then
+    raise exception 'anon must not execute public.process_payment_checkout';
+  end if;
+
+  if has_function_privilege(
+    'authenticated',
+    'public.process_payment_checkout(uuid, text, text, jsonb)',
+    'EXECUTE'
+  ) then
+    raise exception 'authenticated must not execute public.process_payment_checkout';
+  end if;
+
+  if not has_function_privilege(
+    'service_role',
+    'public.process_payment_checkout(uuid, text, text, jsonb)',
+    'EXECUTE'
+  ) then
+    raise exception 'service_role must execute public.process_payment_checkout';
+  end if;
+
+  if has_function_privilege(
+    'anon',
+    'internal.register_payment_callback_receipt(text, text, text, text)',
+    'EXECUTE'
+  ) then
+    raise exception 'anon must not execute internal.register_payment_callback_receipt';
+  end if;
+
+  if has_function_privilege(
+    'authenticated',
+    'internal.register_payment_callback_receipt(text, text, text, text)',
+    'EXECUTE'
+  ) then
+    raise exception 'authenticated must not execute internal.register_payment_callback_receipt';
+  end if;
+
+  if not has_function_privilege(
+    'service_role',
+    'internal.register_payment_callback_receipt(text, text, text, text)',
+    'EXECUTE'
+  ) then
+    raise exception 'service_role must execute internal.register_payment_callback_receipt';
+  end if;
+
+  if has_function_privilege(
+    'anon',
+    'internal.process_payment_checkout(uuid, text, text, jsonb)',
+    'EXECUTE'
+  ) then
+    raise exception 'anon must not execute internal.process_payment_checkout';
+  end if;
+
+  if has_function_privilege(
+    'authenticated',
+    'internal.process_payment_checkout(uuid, text, text, jsonb)',
+    'EXECUTE'
+  ) then
+    raise exception 'authenticated must not execute internal.process_payment_checkout';
+  end if;
+
+  if not has_function_privilege(
+    'service_role',
+    'internal.process_payment_checkout(uuid, text, text, jsonb)',
+    'EXECUTE'
+  ) then
+    raise exception 'service_role must execute internal.process_payment_checkout';
+  end if;
+end;
+$$;
+
 select 'phase1_task8_internal_payment_functions_ok' as result;

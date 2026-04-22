@@ -10,6 +10,7 @@ const metadataBaseUrl = resolvePayloadServerURL({
   nodeEnv: process.env.NODE_ENV,
   publicSiteUrl: process.env.NEXT_PUBLIC_SITE_URL,
   siteUrl: process.env.SITE_URL,
+  vercelUrl: process.env.VERCEL_URL,
 });
 
 export const metadata: Metadata = {

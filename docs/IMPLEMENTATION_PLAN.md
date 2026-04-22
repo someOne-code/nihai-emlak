@@ -117,6 +117,11 @@ Bu revizyonda özellikle şu kararlar netleştirildi:
 - Gerekli yerlerde sade SQL view/function eklenebilir.
 - Yetkilendirme mantığı mümkün olduğunca uygulama kodundan çıkarılıp DB seviyesine taşınır.
 - Detaylı authorization ve veri sahipliği kontrolü `proxy.ts` içinde değil, RLS ve gerekli DB helper function'larında çözülür.
+- Rol sınırı notu:
+  - ürün/backoffice role source-of-truth'u `public.profiles.role` alanıdır
+  - `auth.users` yalnızca kimlik ve oturum kaynağıdır
+  - Payload içindeki `users.role`, varsa yalnızca CMS/admin access control yardımcı alanıdır
+  - reservation/order/payment yetkisi Payload role'una bağlanmaz; Supabase Auth + `profiles` + RLS ile çözülür
 - Faz kapısı:
   - own-data ve admin behavior önce test ile tanımlanır
   - RLS değişiklikleri SQL testleriyle doğrulanmadan merge edilmez

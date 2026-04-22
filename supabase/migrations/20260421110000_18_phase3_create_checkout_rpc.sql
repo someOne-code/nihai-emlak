@@ -33,6 +33,7 @@ set search_path = ''
 as $$
 declare
   v_user_id uuid;
+  v_listing public.listings%rowtype;
   v_note text;
   v_quote jsonb;
   v_reservation_id uuid;
@@ -64,11 +65,43 @@ begin
     raise exception 'p_guest_count must be a positive integer' using errcode = '22023';
   end if;
 
+  select *
+  into v_listing
+  from public.listings
+  where id = p_listing_id
+  for update;
+
+  if not found then
+    raise exception 'listing is not available for checkout: %', p_listing_id using errcode = 'P0002';
+  end if;
+
+  if v_listing.status <> 'active' or v_listing.type <> 'rent' then
+    raise exception 'listing is not available for checkout: %', p_listing_id using errcode = 'P0002';
+  end if;
+
   v_note := nullif(btrim(coalesce(p_note, '')), '');
 
   if v_note is not null and char_length(v_note) > 1000 then
     raise exception 'p_note is too long' using errcode = '22023';
   end if;
+
+  perform 1
+  from public.listing_main_item_options lmo
+  join public.main_item_catalog mic
+    on mic.id = lmo.main_item_id
+  join unnest(coalesce(p_main_item_codes, array[]::text[])) as requested(code)
+    on lower(btrim(mic.code)) = lower(btrim(requested.code))
+  where lmo.listing_id = p_listing_id
+  for share of lmo, mic;
+
+  perform 1
+  from public.listing_service_options lso
+  join public.service_catalog sc
+    on sc.id = lso.service_id
+  join unnest(coalesce(p_service_item_codes, array[]::text[])) as requested(code)
+    on lower(btrim(sc.code)) = lower(btrim(requested.code))
+  where lso.listing_id = p_listing_id
+  for share of lso, sc;
 
   v_quote := public.calculate_checkout_quote(
     p_listing_id,

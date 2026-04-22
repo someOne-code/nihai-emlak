@@ -58,6 +58,11 @@ type PaymentWriteClient = {
   from: (table: "payments") => {
     select: (columns: string) => SupabaseQueryBuilder;
     update?: (values: Record<string, unknown>) => SupabaseUpdateQueryBuilder;
+    insert?: (values: Record<string, unknown>) => {
+      select: (columns: string) => {
+        single: () => Promise<SupabaseSingleResponse>;
+      };
+    };
   };
 };
 
@@ -81,6 +86,9 @@ type PendingPaymentRow = {
   currency: string;
   providerRef: string;
 };
+
+const MAX_CHECKOUT_INIT_BODY_BYTES = 4 * 1024;
+
 type PaymentLifecycleStatus =
   | "pending"
   | "succeeded"
@@ -157,6 +165,7 @@ export async function handleCheckoutInitPost(
     nodeEnv: process.env.NODE_ENV,
     siteUrl: process.env.SITE_URL,
     publicSiteUrl: process.env.NEXT_PUBLIC_SITE_URL,
+    vercelUrl: process.env.VERCEL_URL,
   });
   if (!returnUrlResult.ok) {
     return Response.json(
@@ -223,68 +232,23 @@ export async function handleCheckoutInitPost(
 
   let payment = existingPendingPaymentResult.payment;
   if (!payment) {
-    const paymentInsertBuilder = supabase.from("payments").insert?.({
-        amount: order.totalAmount,
-        currency: order.currency,
-        order_id: order.id,
-        provider: "isbank",
-        status: "pending",
-        user_id: userId,
-      });
-
-    if (!paymentInsertBuilder) {
+    const legacyPaymentResult = await createLegacyPendingIsbankPayment(
+      dependencies.createServiceRoleSupabaseClient,
+      supabase,
+      order,
+      userId,
+    );
+    if (!legacyPaymentResult.ok) {
       return Response.json(
         {
           success: false,
-          error: "Failed to create pending payment for checkout init",
+          error: legacyPaymentResult.error,
         },
-        { status: 500 },
+        { status: legacyPaymentResult.status },
       );
     }
 
-    const paymentInsert = await paymentInsertBuilder
-      .select("id,order_id,amount,currency,status,provider_ref")
-      .single();
-
-    if (paymentInsert.error) {
-      if (!isPendingIsbankPaymentUniqueViolation(paymentInsert.error)) {
-        return Response.json(
-          {
-            success: false,
-            error: "Failed to create pending payment for checkout init",
-          },
-          { status: 500 },
-        );
-      }
-
-      const retryPendingPaymentResult = await getExistingPendingIsbankPayment(
-        supabase,
-        order.id,
-        userId,
-      );
-      if (!retryPendingPaymentResult.ok || !retryPendingPaymentResult.payment) {
-        return Response.json(
-          {
-            success: false,
-            error: "Failed to resolve existing pending payment for checkout init",
-          },
-          { status: 409 },
-        );
-      }
-
-      payment = retryPendingPaymentResult.payment;
-    } else {
-      payment = parsePendingPaymentRow(paymentInsert.data);
-      if (!payment) {
-        return Response.json(
-          {
-            success: false,
-            error: "Invalid pending payment row returned from database",
-          },
-          { status: 500 },
-        );
-      }
-    }
+    payment = legacyPaymentResult.payment;
   }
 
   const reconciledPaymentResult = await reconcilePendingPaymentWithOrder(
@@ -349,9 +313,9 @@ function validateCheckoutInitRequestEnvelope(
     };
   }
 
-  const expectedOrigin = resolveTrustedCheckoutOriginFromEnvironment();
-  if (!expectedOrigin.ok) {
-    return expectedOrigin;
+  const trustedOriginsResult = resolveTrustedCheckoutOriginsFromEnvironment();
+  if (!trustedOriginsResult.ok) {
+    return trustedOriginsResult;
   }
 
   const originHeader = request.headers.get("origin");
@@ -372,7 +336,7 @@ function validateCheckoutInitRequestEnvelope(
     };
   }
 
-  if (requestOrigin !== expectedOrigin.origin) {
+  if (!trustedOriginsResult.origins.includes(requestOrigin)) {
     return {
       ok: false,
       status: 403,
@@ -380,27 +344,21 @@ function validateCheckoutInitRequestEnvelope(
     };
   }
 
-  const urlOrigin = normalizeRequestUrlOrigin(request.url);
-  if (urlOrigin && urlOrigin !== expectedOrigin.origin) {
-    return {
-      ok: false,
-      status: 403,
-      error: "Checkout init Host is not trusted",
-    };
-  }
-
   return { ok: true };
 }
 
-function resolveTrustedCheckoutOriginFromEnvironment():
-  | { ok: true; origin: string }
+function resolveTrustedCheckoutOriginsFromEnvironment():
+  | { ok: true; origins: string[] }
   | { ok: false; status: number; error: string } {
   const nodeEnv = typeof process.env.NODE_ENV === "string" ? process.env.NODE_ENV.toLowerCase() : "";
   const isNonDevEnvironment = nodeEnv !== "development" && nodeEnv !== "test";
-  const siteUrl = asNonEmptyString(process.env.SITE_URL)
-    ?? asNonEmptyString(process.env.NEXT_PUBLIC_SITE_URL);
+  const configuredOrigins = [
+    asNonEmptyString(process.env.SITE_URL),
+    asNonEmptyString(process.env.NEXT_PUBLIC_SITE_URL),
+    normalizeVercelUrl(process.env.VERCEL_URL),
+  ].filter((value): value is string => value !== null);
 
-  if (!siteUrl) {
+  if (configuredOrigins.length === 0) {
     if (isNonDevEnvironment) {
       return {
         ok: false,
@@ -411,22 +369,29 @@ function resolveTrustedCheckoutOriginFromEnvironment():
 
     return {
       ok: true,
-      origin: "http://localhost:3000",
+      origins: ["http://localhost:3000"],
     };
   }
 
-  const origin = normalizeHttpOrigin(siteUrl);
-  if (!origin) {
-    return {
-      ok: false,
-      status: 500,
-      error: "Checkout trusted origin configuration is invalid",
-    };
+  const trustedOrigins: string[] = [];
+  for (const configuredOrigin of configuredOrigins) {
+    const normalizedOrigin = normalizeHttpOrigin(configuredOrigin);
+    if (!normalizedOrigin) {
+      return {
+        ok: false,
+        status: 500,
+        error: "Checkout trusted origin configuration is invalid",
+      };
+    }
+
+    if (!trustedOrigins.includes(normalizedOrigin)) {
+      trustedOrigins.push(normalizedOrigin);
+    }
   }
 
   return {
     ok: true,
-    origin,
+    origins: trustedOrigins,
   };
 }
 
@@ -571,6 +536,90 @@ async function reconcilePendingPaymentWithOrder(
   };
 }
 
+async function createLegacyPendingIsbankPayment(
+  createServiceRoleSupabaseClient: () => Promise<unknown>,
+  supabase: SupabaseClient,
+  order: OrderRow,
+  userId: string,
+): Promise<
+  | { ok: true; payment: PendingPaymentRow }
+  | { ok: false; status: number; error: string }
+> {
+  let serviceRoleSupabase: PaymentWriteClient;
+  try {
+    serviceRoleSupabase = (await createServiceRoleSupabaseClient()) as PaymentWriteClient;
+  } catch {
+    return {
+      ok: false,
+      status: 500,
+      error: "Failed to create pending payment for checkout init",
+    };
+  }
+
+  const paymentInsertBuilder = serviceRoleSupabase.from("payments").insert?.({
+    amount: order.totalAmount,
+    currency: order.currency,
+    order_id: order.id,
+    provider: "isbank",
+    status: "pending",
+    user_id: userId,
+  });
+
+  if (!paymentInsertBuilder) {
+    return {
+      ok: false,
+      status: 500,
+      error: "Failed to create pending payment for checkout init",
+    };
+  }
+
+  const paymentInsert = await paymentInsertBuilder
+    .select("id,order_id,amount,currency,status,provider_ref")
+    .single();
+
+  if (paymentInsert.error) {
+    if (!isPendingIsbankPaymentUniqueViolation(paymentInsert.error)) {
+      return {
+        ok: false,
+        status: 500,
+        error: "Failed to create pending payment for checkout init",
+      };
+    }
+
+    const retryPendingPaymentResult = await getExistingPendingIsbankPayment(
+      supabase,
+      order.id,
+      userId,
+    );
+    if (!retryPendingPaymentResult.ok || !retryPendingPaymentResult.payment) {
+      return {
+        ok: false,
+        status: 409,
+        error: "Failed to resolve existing pending payment for checkout init",
+      };
+    }
+
+    return {
+      ok: true,
+      payment: retryPendingPaymentResult.payment,
+    };
+  }
+
+  const payment = parsePendingPaymentRow(paymentInsert.data);
+  if (!payment) {
+    return {
+      ok: false,
+      status: 500,
+      error: "Invalid pending payment row returned from database",
+    };
+  }
+
+  return {
+    ok: true,
+    payment,
+  };
+}
+
 async function getPaymentStatusForCheckoutInit(
   supabase: PaymentWriteClient,
   paymentId: string,
@@ -613,8 +662,13 @@ async function readCheckoutInitRequestBody(
   | { ok: true; body: CheckoutInitRequestBody }
   | { ok: false; status: number; error: string }
 > {
+  const rawBodyResult = await readCheckoutInitRawBody(request);
+  if (!rawBodyResult.ok) {
+    return rawBodyResult;
+  }
+
   try {
-    const payload = await request.json();
+    const payload = JSON.parse(rawBodyResult.rawBody) as unknown;
     return parseCheckoutInitRequestBody(payload);
   } catch {
     return {
@@ -739,6 +793,15 @@ function asNonEmptyString(value: unknown): string | null {
   return value.trim();
 }
 
+function normalizeVercelUrl(value: string | null | undefined): string | null {
+  const normalized = asNonEmptyString(value);
+  if (!normalized) {
+    return null;
+  }
+
+  return normalized.includes("://") ? normalized : `https://${normalized}`;
+}
+
 function isJsonContentType(value: string | null): boolean {
   return value?.toLowerCase().split(";")[0]?.trim() === "application/json";
 }
@@ -762,12 +825,69 @@ function normalizeHttpOrigin(value: string): string | null {
   return parsed.origin;
 }
 
-function normalizeRequestUrlOrigin(value: string): string | null {
-  try {
-    return normalizeHttpOrigin(new URL(value).origin);
-  } catch {
-    return null;
+async function readCheckoutInitRawBody(
+  request: Request,
+): Promise<
+  | { ok: true; rawBody: string }
+  | { ok: false; status: number; error: string }
+> {
+  if (!request.body) {
+    return {
+      ok: true,
+      rawBody: "",
+    };
   }
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let byteLength = 0;
+
+  try {
+    while (true) {
+      const readResult = await reader.read();
+      if (readResult.done) {
+        break;
+      }
+
+      byteLength += readResult.value.byteLength;
+      if (byteLength > MAX_CHECKOUT_INIT_BODY_BYTES) {
+        await reader.cancel();
+        return {
+          ok: false,
+          status: 413,
+          error: "Checkout init payload is too large",
+        };
+      }
+
+      chunks.push(readResult.value);
+    }
+  } catch {
+    return {
+      ok: false,
+      status: 400,
+      error: "Invalid JSON request body",
+    };
+  } finally {
+    reader.releaseLock();
+  }
+
+  const rawBody = new TextDecoder().decode(concatUint8Arrays(chunks, byteLength));
+  return {
+    ok: true,
+    rawBody,
+  };
+}
+
+function concatUint8Arrays(chunks: Uint8Array[], byteLength: number): Uint8Array {
+  const combined = new Uint8Array(byteLength);
+  let offset = 0;
+
+  for (const chunk of chunks) {
+    combined.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  return combined;
 }
 
 function asPaymentLifecycleStatus(value: unknown): PaymentLifecycleStatus | null {

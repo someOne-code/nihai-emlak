@@ -2,11 +2,16 @@ export type ResolvePayloadServerURLInput = {
   nodeEnv: string | null | undefined;
   publicSiteUrl: string | null | undefined;
   siteUrl: string | null | undefined;
+  vercelUrl?: string | null | undefined;
 };
 
 export function resolvePayloadServerURL(input: ResolvePayloadServerURLInput): string {
   const nodeEnv = typeof input.nodeEnv === "string" ? input.nodeEnv.toLowerCase() : "";
-  const configuredURL = asNonEmptyString(input.siteUrl) ?? asNonEmptyString(input.publicSiteUrl);
+  const configuredURL = (
+    asNonEmptyString(input.siteUrl)
+    ?? asNonEmptyString(input.publicSiteUrl)
+    ?? normalizeVercelUrl(input.vercelUrl)
+  );
   const isDevOrTest = nodeEnv === "development" || nodeEnv === "test";
 
   if (!configuredURL) {
@@ -45,4 +50,13 @@ function asNonEmptyString(value: unknown): string | null {
   }
 
   return value.trim();
+}
+
+function normalizeVercelUrl(value: string | null | undefined): string | null {
+  const normalized = asNonEmptyString(value);
+  if (!normalized) {
+    return null;
+  }
+
+  return normalized.includes("://") ? normalized : `https://${normalized}`;
 }

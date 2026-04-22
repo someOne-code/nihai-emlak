@@ -152,7 +152,7 @@ test("resolveCheckoutInitReturnUrlsFromEnvironment accepts NEXT_PUBLIC_SITE_URL 
   assert.equal(result.returnUrls.failUrl, "https://public.example.com/checkout/fail");
 });
 
-test("resolveCheckoutInitReturnUrlsFromEnvironment requires SITE_URL or NEXT_PUBLIC_SITE_URL outside dev/test", () => {
+test("resolveCheckoutInitReturnUrlsFromEnvironment requires SITE_URL, NEXT_PUBLIC_SITE_URL, or VERCEL_URL outside dev/test", () => {
   const result = resolveCheckoutInitReturnUrlsFromEnvironment({
     nodeEnv: "production",
     siteUrl: undefined,
@@ -167,8 +167,25 @@ test("resolveCheckoutInitReturnUrlsFromEnvironment requires SITE_URL or NEXT_PUB
   assert.equal(result.status, 500);
   assert.equal(
     result.error,
-    "SITE_URL or NEXT_PUBLIC_SITE_URL must be configured outside development/test",
+    "SITE_URL, NEXT_PUBLIC_SITE_URL, or VERCEL_URL must be configured outside development/test",
   );
+});
+
+test("resolveCheckoutInitReturnUrlsFromEnvironment falls back to VERCEL_URL outside dev/test", () => {
+  const result = resolveCheckoutInitReturnUrlsFromEnvironment({
+    nodeEnv: "production",
+    siteUrl: undefined,
+    publicSiteUrl: undefined,
+    vercelUrl: "nihai-emlak-preview.vercel.app",
+  });
+
+  assert.equal(result.ok, true);
+  if (!result.ok) {
+    throw new Error("Expected VERCEL_URL fallback to succeed");
+  }
+
+  assert.equal(result.returnUrls.okUrl, "https://nihai-emlak-preview.vercel.app/checkout/success");
+  assert.equal(result.returnUrls.failUrl, "https://nihai-emlak-preview.vercel.app/checkout/fail");
 });
 
 test("resolveCheckoutInitReturnUrlsFromEnvironment fails closed on invalid configured URL", () => {
