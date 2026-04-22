@@ -233,6 +233,12 @@ Bitti kriteri:
 - stale/terminal payment rewrite edilmez
 - mevcut checkout init testleri regresyon olarak yesil kalir
 
+Not:
+- Faz 3 zorunlu kapsami icinde `checkout/init` ince route/helper olarak kalabilir.
+- Daha sert bir race hardening ihtiyaci dogarsa, Gorev 6 sonrasinda ayri bir takip isi olarak `internal.prepare_checkout_init_payment(...)` benzeri bir DB function/RPC dusunulebilir.
+- Bu takip isinde amac, `order` ve `payment` satirlarini lock + revalidate ederek yalnizca halen `pending` durumda olan payment icin init hazirlamak olur.
+- Is Bankasi hosted checkout payload uretimi yine uygulama katmanindaki helper/route tarafinda kalir; DB function yalnizca guvenli pending payment hazirlama sorumlulugunu alir.
+
 ### Gorev 7: Checkout sozlesmesini dokumante et
 
 - Frontend ve admin ekipleri icin contract dokumani eklenir veya mevcut README bolumu guncellenir.
