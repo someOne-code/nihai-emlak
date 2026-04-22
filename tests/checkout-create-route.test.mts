@@ -219,6 +219,29 @@ test("checkout create maps unavailable listing RPC errors to 409", async (t) => 
   assert.equal(payload.error, "Listing is not available for checkout");
 });
 
+test("checkout create maps inactive listing RPC errors to 409", async (t) => {
+  setupCheckoutCreateEnv(t);
+
+  const response = await handleCheckoutCreatePost(
+    createJsonRequest(validCheckoutCreatePayload),
+    createDependencies({
+      rpc: () => ({
+        data: null,
+        error: {
+          code: "P0002",
+          message: "listing is not available for checkout: inactive listing",
+        },
+      }),
+    }),
+  );
+
+  assert.equal(response.status, 409);
+
+  const payload = await response.json();
+  assert.equal(payload.success, false);
+  assert.equal(payload.error, "Listing is not available for checkout");
+});
+
 test("checkout create maps item configuration RPC errors to 400", async (t) => {
   setupCheckoutCreateEnv(t);
 
