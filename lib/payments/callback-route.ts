@@ -79,7 +79,7 @@ type PreparedPaymentCallbackResult =
 type PaymentSnapshotResult =
   | { ok: true; payment: PaymentContractSnapshot }
   | { ok: false; status: number; error: string };
-type SupabaseClientError = { message: string };
+type SupabaseClientError = { code?: string; message: string };
 type SupabaseRpcResponse = { data: unknown; error: SupabaseClientError | null };
 type PaymentLookupResponse = {
   data: Record<string, unknown> | null;
@@ -665,11 +665,17 @@ async function resolvePaymentIdForCallback(
     .select("id")
     .eq("provider", input.provider)
     .eq("provider_ref", paymentIdHint)
-    .order("created_at", { ascending: false })
-    .limit(1)
     .maybeSingle();
 
   if (byProviderRef.error) {
+    if (isMultipleRowsSupabaseError(byProviderRef.error)) {
+      return {
+        ok: false,
+        status: 409,
+        error: "Payment callback reference matches multiple payment records",
+      };
+    }
+
     return {
       ok: false,
       status: 500,
@@ -904,6 +910,14 @@ function asOptionalNonEmptyString(value: unknown): string | null {
   }
 
   return asNonEmptyString(value);
+}
+
+function isMultipleRowsSupabaseError(error: SupabaseClientError | null): boolean {
+  if (!error?.message) {
+    return false;
+  }
+
+  return error.message.toLowerCase().includes("multiple");
 }
 
 function asFiniteNonNegativeNumber(value: unknown): number | null {

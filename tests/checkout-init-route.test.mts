@@ -658,6 +658,113 @@ test("checkout init revalidates order total against refreshed pending payment", 
   assert.equal(payload.error, "Pending payment no longer matches order total");
 });
 
+test("checkout init rejects refreshed pending payment rebound to another order", async (t) => {
+  setupCheckoutInitEnv(t);
+
+  const orderId = "abababab-abab-4bab-8bab-abababababab";
+  const reboundOrderId = "bcbcbcbc-bcbc-4cbc-8cbc-bcbcbcbcbcbc";
+  const userId = "cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdcd";
+  const paymentId = "efefefef-efef-4fef-8fef-efefefefefef";
+
+  const dependencies = createDependencies({
+    getOrder: () => ({
+      id: orderId,
+      total_amount: 1250,
+      currency: "TRY",
+      status: "pending",
+    }),
+    getPendingPayment: () => ({
+      id: paymentId,
+      order_id: orderId,
+      amount: "1250.00",
+      currency: "TRY",
+      status: "pending",
+      provider_ref: paymentId,
+    }),
+    getPaymentById: () => ({
+      id: paymentId,
+      order_id: reboundOrderId,
+      amount: "1250.00",
+      currency: "TRY",
+      status: "pending",
+      provider_ref: paymentId,
+    }),
+    insertPayment: () => {
+      throw new Error("insert should not be called when pending payment exists");
+    },
+    userId,
+  });
+
+  const response = await handleCheckoutInitPost(
+    new Request("http://localhost:3000/api/checkout/init", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "http://localhost:3000",
+      },
+      body: JSON.stringify({ orderId }),
+    }),
+    dependencies,
+  );
+
+  assert.equal(response.status, 409);
+
+  const payload = await response.json();
+  assert.equal(payload.success, false);
+  assert.equal(payload.error, "Pending payment no longer belongs to order");
+});
+
+test("checkout init fails closed when multiple pending isbank payments exist for an order", async (t) => {
+  setupCheckoutInitEnv(t);
+
+  const orderId = "9a9a9a9a-9a9a-4a9a-8a9a-9a9a9a9a9a9a";
+  const userId = "8b8b8b8b-8b8b-4b8b-8b8b-8b8b8b8b8b8b";
+
+  const dependencies = createDependencies({
+    getOrder: () => ({
+      id: orderId,
+      total_amount: 1250,
+      currency: "TRY",
+      status: "pending",
+    }),
+    getPendingPayment: () => {
+      throw new Error("default payment lookup should not run");
+    },
+    createServerPaymentsClient: () => ({
+      select: () =>
+        createQueryBuilder(() => ({
+          data: null,
+          error: {
+            code: "PGRST116",
+            message: "JSON object requested, multiple rows returned",
+          },
+        })),
+    }),
+    insertPayment: () => {
+      throw new Error("insert should not be called when lookup is ambiguous");
+    },
+    userId,
+  });
+
+  const response = await handleCheckoutInitPost(
+    new Request("http://localhost:3000/api/checkout/init", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "http://localhost:3000",
+      },
+      body: JSON.stringify({ orderId }),
+    }),
+    dependencies,
+  );
+
+  assert.equal(response.status, 409);
+
+  const payload = await response.json();
+  assert.equal(payload.success, false);
+  assert.equal(payload.error, "Checkout init found multiple pending payments for order");
+});
+
 test("checkout init never rewrites mismatched payment rows through service-role reconciliation", async (t) => {
   setupCheckoutInitEnv(t);
 
@@ -1018,9 +1125,9 @@ function createDependencies(input: {
 function createQueryBuilder(
   executeMaybeSingle: (
     filters: Array<{ column: string; value: string }>,
-  ) => Promise<{ data: unknown; error: { message?: string } | null }> | {
+  ) => Promise<{ data: unknown; error: { code?: string; message?: string } | null }> | {
     data: unknown;
-    error: { message?: string } | null;
+    error: { code?: string; message?: string } | null;
   },
 ) {
   const filters: Array<{ column: string; value: string }> = [];

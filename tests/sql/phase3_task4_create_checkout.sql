@@ -419,6 +419,97 @@ begin
 end;
 $$;
 
+-- TEST 1C: concurrent pending-reservation conflicts map to listing unavailable
+reset role;
+
+alter index public.reservations_single_pending_per_listing_idx
+  rename to phase3_t4_pending_guard_idx;
+
+create or replace function public.phase3_t4_force_pending_reservation_conflict()
+returns trigger
+language plpgsql
+as $$
+begin
+  if pg_trigger_depth() > 1 then
+    return new;
+  end if;
+
+  if new.listing_id = '77777777-7777-4777-8777-777777777762'::uuid
+     and new.status = 'pending'
+     and new.note = '__phase3_t4_conflict__' then
+    insert into public.reservations (
+      listing_id,
+      user_id,
+      move_in_date,
+      stay_months,
+      guest_count,
+      note,
+      status
+    )
+    values (
+      new.listing_id,
+      new.user_id,
+      new.move_in_date,
+      new.stay_months,
+      new.guest_count,
+      '__phase3_t4_conflict_injected__',
+      'pending'
+    );
+  end if;
+
+  return new;
+end;
+$$;
+
+create trigger trg_phase3_t4_force_pending_reservation_conflict
+before insert on public.reservations
+for each row
+execute function public.phase3_t4_force_pending_reservation_conflict();
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', '66666666-7777-4777-8777-777777777762', false);
+select set_config('request.jwt.claim.role', 'authenticated', false);
+
+do $$
+begin
+  begin
+    perform public.create_checkout(
+      '77777777-7777-4777-8777-777777777762'::uuid,
+      current_date + 44,
+      6,
+      1,
+      array['dup_one_t4'],
+      array[]::text[],
+      '__phase3_t4_conflict__'
+    );
+    raise exception 'TEST 1C FAILED: expected concurrent conflict to map to listing unavailable';
+  exception
+    when sqlstate 'P0002' then
+      if position('listing is not available for checkout' in SQLERRM) = 0 then
+        raise;
+      end if;
+  end;
+end;
+$$;
+
+reset role;
+
+drop trigger if exists trg_phase3_t4_force_pending_reservation_conflict
+on public.reservations;
+
+drop function if exists public.phase3_t4_force_pending_reservation_conflict();
+
+alter index public.phase3_t4_pending_guard_idx
+  rename to reservations_single_pending_per_listing_idx;
+
+delete from public.reservations
+where listing_id = '77777777-7777-4777-8777-777777777762'::uuid
+  and note in ('__phase3_t4_conflict__', '__phase3_t4_conflict_injected__');
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', '66666666-7777-4777-8777-777777777762', false);
+select set_config('request.jwt.claim.role', 'authenticated', false);
+
 -- TEST 2: authenticated users cannot bypass create_checkout with direct transactional inserts
 do $$
 declare

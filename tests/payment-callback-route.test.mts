@@ -989,6 +989,74 @@ test("callback route rejects when payment provider_ref does not match signed oid
   assert.equal(json.error, "Payment callback contract validation failed");
 });
 
+test("callback route fails closed when provider_ref matches multiple payments", async (t) => {
+  const callbackClientId = setupCallbackRouteEnv(t);
+  const providerRef = "legacy-isbank-ref-123";
+  const callbackPayload = {
+    clientid: callbackClientId,
+    oid: providerRef,
+    amount: "1250.00",
+    currency: "TRY",
+    okurl: "https://example.com/ok",
+    failurl: "https://example.com/fail",
+    txnType: "Auth",
+    instalment: "0",
+    rnd: "rnd-123",
+    ProcReturnCode: "00",
+    Response: "Approved",
+  };
+
+  const providedHash = sha1Upper(
+    buildIsbankSha1Input(callbackPayload, process.env.ISBANK_STORE_KEY),
+  );
+  const rawBody = new URLSearchParams(callbackPayload).toString();
+
+  let processCheckoutCalled = false;
+  let registerReceiptCalled = false;
+
+  const response = await handlePaymentCallbackPost(
+    new Request("http://localhost/api/payment/callback", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        "x-isbank-hash": providedHash,
+      },
+      body: rawBody,
+    }),
+    {
+      createSupabaseClient: (_url, key) => {
+        assert.equal(key, "service-key");
+        return {
+          from: buildPaymentsTableMock({
+            providerRefLookupError: {
+              code: "PGRST116",
+              message: "JSON object requested, multiple rows returned",
+            },
+          }),
+          rpc: async (functionName: string) => {
+            if (functionName === "register_payment_callback_receipt") {
+              registerReceiptCalled = true;
+              return { data: true, error: null };
+            }
+
+            processCheckoutCalled = true;
+            return { data: { result: "succeeded" }, error: null };
+          },
+        };
+      },
+      sendInngestEvent: async () => {},
+    },
+  );
+
+  assert.equal(response.status, 409);
+  assert.equal(processCheckoutCalled, false);
+  assert.equal(registerReceiptCalled, false);
+
+  const json = await response.json();
+  assert.equal(json.success, false);
+  assert.equal(json.error, "Payment callback reference matches multiple payment records");
+});
+
 function setupCallbackRouteEnv(
   t: TestContext,
   options?: { isbankClientId?: string },
@@ -1025,6 +1093,7 @@ function buildPaymentsTableMock(input: {
   receiptStillExists?: boolean;
   paymentRowsById?: Record<string, PaymentRow>;
   providerRefToPaymentId?: Record<string, string>;
+  providerRefLookupError?: { code?: string; message: string } | null;
 }) {
   return (table: "payment_callback_receipts" | "payments") => {
     if (table === "payment_callback_receipts") {
@@ -1082,6 +1151,13 @@ function buildPaymentsTableMock(input: {
 
             const providerRef = filters.provider_ref;
             if (providerRef) {
+              if (input.providerRefLookupError) {
+                return {
+                  data: null,
+                  error: input.providerRefLookupError,
+                };
+              }
+
               const paymentId = input.providerRefToPaymentId?.[providerRef] ?? null;
               return {
                 data: paymentId ? { id: paymentId } : null,

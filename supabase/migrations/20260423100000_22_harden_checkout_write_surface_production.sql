@@ -73,6 +73,7 @@ declare
   v_payment_provider_ref text;
   v_total_amount numeric(12, 2);
   v_currency text;
+  v_constraint_name text;
 begin
   v_user_id := auth.uid();
 
@@ -183,10 +184,15 @@ begin
     returning id into v_reservation_id;
   exception
     when unique_violation then
-      if position('reservations_single_pending_per_listing_idx' in sqlerrm) > 0 then
-        raise exception 'listing is not available for checkout: %', p_listing_id using errcode = 'P0002';
-      end if;
-      raise;
+      get stacked diagnostics v_constraint_name = CONSTRAINT_NAME;
+
+      raise exception 'listing is not available for checkout: %', p_listing_id
+        using
+          errcode = 'P0002',
+          detail = format(
+            'reservation insert conflicted on constraint %s',
+            coalesce(nullif(v_constraint_name, ''), 'unknown')
+          );
   end;
 
   insert into public.orders (

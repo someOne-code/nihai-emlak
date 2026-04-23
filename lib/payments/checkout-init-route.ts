@@ -309,11 +309,17 @@ async function getExistingPendingIsbankPayment(
     .eq("user_id", userId)
     .eq("provider", "isbank")
     .eq("status", "pending")
-    .order("created_at", { ascending: false })
-    .limit(1)
     .maybeSingle();
 
   if (pendingPaymentSelect.error) {
+    if (isMultipleRowsSupabaseError(pendingPaymentSelect.error)) {
+      return {
+        ok: false,
+        status: 409,
+        error: "Checkout init found multiple pending payments for order",
+      };
+    }
+
     return {
       ok: false,
       status: 500,
@@ -365,6 +371,16 @@ async function reconcilePendingPaymentWithOrder(
   );
   if (!refreshedPaymentResult.ok) {
     return refreshedPaymentResult;
+  }
+
+  if (
+    refreshedPaymentResult.payment.orderId !== order.id
+  ) {
+    return {
+      ok: false,
+      status: 409,
+      error: "Pending payment no longer belongs to order",
+    };
   }
 
   if (
@@ -600,6 +616,14 @@ function asUuid(value: unknown): string | null {
   }
 
   return normalized;
+}
+
+function isMultipleRowsSupabaseError(error: SupabaseError | null): boolean {
+  if (!error?.message) {
+    return false;
+  }
+
+  return error.message.toLowerCase().includes("multiple");
 }
 
 function asNonEmptyString(value: unknown): string | null {
