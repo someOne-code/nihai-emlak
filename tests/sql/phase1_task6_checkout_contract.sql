@@ -132,11 +132,12 @@ declare
   v_id uuid := 'aaaaaaaa-0001-0001-0001-000000000001'::uuid;
 begin
   delete from public.order_items where id = v_id;
-  insert into public.order_items (id, order_id, item_type, label, amount)
+  insert into public.order_items (id, order_id, item_type, code, label, amount)
   values (
     v_id,
     '22222222-bbbb-bbbb-bbbb-bbbbbbbbbbbb'::uuid,
     'main_item',
+    'kapora_t6',
     'Kapora',
     25000
   );
@@ -152,11 +153,12 @@ declare
   v_id uuid := 'aaaaaaaa-0001-0001-0001-000000000002'::uuid;
 begin
   delete from public.order_items where id = v_id;
-  insert into public.order_items (id, order_id, item_type, label, amount)
+  insert into public.order_items (id, order_id, item_type, code, label, amount)
   values (
     v_id,
     '22222222-bbbb-bbbb-bbbb-bbbbbbbbbbbb'::uuid,
     'main_item',
+    'depozito_t6',
     'Depozito',
     5000
   );
@@ -164,22 +166,23 @@ end;
 $$;
 
 -- ============================================================
--- TEST 3: Duplicate same main_item label MUST FAIL
+-- TEST 3: Duplicate same main_item code MUST FAIL
 -- Scenario: Ahmet sepete ikinci "Kapora" eklemeye çalışıyor →
 --           UNIQUE index engeller
 -- ============================================================
 do $$
 begin
   begin
-    insert into public.order_items (id, order_id, item_type, label, amount)
+    insert into public.order_items (id, order_id, item_type, code, label, amount)
     values (
       extensions.gen_random_uuid(),
       '22222222-bbbb-bbbb-bbbb-bbbbbbbbbbbb'::uuid,
       'main_item',
+      'kapora_t6',
       'Kapora',  -- duplicate!
       25000
     );
-    raise exception 'TEST 3 FAILED: Duplicate main_item label should have been rejected';
+    raise exception 'TEST 3 FAILED: Duplicate main_item code should have been rejected';
   exception
     when unique_violation then null;  -- expected
   end;

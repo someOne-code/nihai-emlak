@@ -91,22 +91,21 @@ export function resolveCheckoutInitReturnUrlsFromEnvironment(input: {
   siteUrl: string | null | undefined;
   publicSiteUrl: string | null | undefined;
   vercelUrl?: string | null | undefined;
-}):
+}): 
   | { ok: true; returnUrls: { okUrl: string; failUrl: string } }
   | { ok: false; status: number; error: string } {
   const nodeEnv = typeof input.nodeEnv === "string" ? input.nodeEnv.toLowerCase() : "";
-  const isNonDevEnvironment = nodeEnv !== "development" && nodeEnv !== "test";
+  const isDevOrTest = nodeEnv === "development" || nodeEnv === "test";
   const hasPrivateSiteUrl = Boolean(asNonEmptyString(input.siteUrl));
   const hasPublicSiteUrl = Boolean(asNonEmptyString(input.publicSiteUrl));
   const normalizedVercelUrl = normalizeVercelUrl(input.vercelUrl);
-  const hasVercelUrl = Boolean(normalizedVercelUrl);
   const normalizedPreferredOrigin = normalizeHttpOrigin(input.preferredOrigin);
 
-  if (isNonDevEnvironment && !hasPrivateSiteUrl && !hasPublicSiteUrl && !hasVercelUrl) {
+  if (!isDevOrTest && !hasPrivateSiteUrl && !hasPublicSiteUrl) {
     return {
       ok: false,
       status: 500,
-      error: "SITE_URL, NEXT_PUBLIC_SITE_URL, or VERCEL_URL must be configured outside development/test",
+      error: "SITE_URL or NEXT_PUBLIC_SITE_URL must be configured outside development/test",
     };
   }
 
@@ -114,15 +113,15 @@ export function resolveCheckoutInitReturnUrlsFromEnvironment(input: {
     ? input.siteUrl
     : hasPublicSiteUrl
       ? input.publicSiteUrl
-      : normalizedVercelUrl;
+      : normalizedVercelUrl ?? "http://localhost:3000";
   const configuredOrigins = [
     normalizeHttpOrigin(input.siteUrl),
     normalizeHttpOrigin(input.publicSiteUrl),
-    normalizeHttpOrigin(normalizedVercelUrl),
+    ...(isDevOrTest ? [normalizeHttpOrigin(normalizedVercelUrl)] : []),
   ].filter((value): value is string => value !== null);
   const selectedOrigin = normalizedPreferredOrigin && (
     configuredOrigins.includes(normalizedPreferredOrigin)
-    || (!isNonDevEnvironment && configuredOrigins.length === 0)
+    || (isDevOrTest && configuredOrigins.length === 0)
   )
     ? normalizedPreferredOrigin
     : configuredSiteUrl;
@@ -160,18 +159,18 @@ function normalizeStoreKey(storeKey: string): string {
 function normalizeCheckoutSiteUrl(siteUrl: string | null | undefined): string {
   const trimmed = typeof siteUrl === "string" ? siteUrl.trim() : "";
   if (trimmed.length === 0) {
-    return "http://localhost:3000";
+    throw new Error("SITE_URL or NEXT_PUBLIC_SITE_URL must be configured");
   }
 
   let parsed: URL;
   try {
     parsed = new URL(trimmed);
   } catch {
-    throw new Error("SITE_URL/NEXT_PUBLIC_SITE_URL/VERCEL_URL must be an absolute URL");
+    throw new Error("SITE_URL/NEXT_PUBLIC_SITE_URL must be an absolute URL");
   }
 
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    throw new Error("SITE_URL/NEXT_PUBLIC_SITE_URL/VERCEL_URL must use http or https");
+    throw new Error("SITE_URL/NEXT_PUBLIC_SITE_URL must use http or https");
   }
 
   const normalizedPath = parsed.pathname === "/" ? "" : parsed.pathname.replace(/\/+$/, "");

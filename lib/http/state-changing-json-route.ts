@@ -122,15 +122,15 @@ function resolveTrustedOriginsFromEnvironment():
   | { ok: true; origins: string[] }
   | { ok: false; status: number; error: string } {
   const nodeEnv = typeof process.env.NODE_ENV === "string" ? process.env.NODE_ENV.toLowerCase() : "";
-  const isNonDevEnvironment = nodeEnv !== "development" && nodeEnv !== "test";
+  const isDevOrTest = nodeEnv === "development" || nodeEnv === "test";
   const configuredOrigins = [
     asNonEmptyString(process.env.SITE_URL),
     asNonEmptyString(process.env.NEXT_PUBLIC_SITE_URL),
-    normalizeVercelUrl(process.env.VERCEL_URL),
+    ...(isDevOrTest ? [normalizeVercelUrl(process.env.VERCEL_URL)] : []),
   ].filter((value): value is string => value !== null);
 
   if (configuredOrigins.length === 0) {
-    if (isNonDevEnvironment) {
+    if (!isDevOrTest) {
       return {
         ok: false,
         status: 500,

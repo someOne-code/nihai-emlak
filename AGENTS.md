@@ -28,13 +28,14 @@
 - Use these docs as the repo map:
   - `README.md`: quick orientation
   - `IMPLEMENTATION_PLAN.md`: phase order
-  - `PHASE_1_2_TASKS.md`: daily execution list for current backend work (task selection)
+  - `PHASE_1_2_TASKS.md`: Phase 1 + Phase 2 task history and earlier backend work
+  - `PHASE_3_TASKS.md`: daily execution list for current checkout backend work
   - `BACKEND_PHASE_1.md`: backend engineering blueprint and phase limitations
   - `SUPABASE_CAPABILITY_AUDIT.md`: Supabase-first decision matrix (pre-implementation layer check)
   - `PROJECT_PLAN.md`: business/domain context
 - Do not reopen architecture debates that are already settled in these docs unless the user asks to revise them.
 - Execution order for daily work is:
-  1. select task from `PHASE_1_2_TASKS.md`
+  1. select task from the active phase task document (`PHASE_3_TASKS.md` while Phase 3 is active)
   2. run a quick layer decision check in `SUPABASE_CAPABILITY_AUDIT.md`
   3. write or revise the test first
   4. implement the minimum code to satisfy the test
@@ -68,6 +69,16 @@
 - **Private Schemas:** Keep sensitive internal logic and `SECURITY DEFINER` functions in private schemas (e.g., `private`, `internal`, or `vault`) rather than the `public` schema to prevent accidental API exposure.
 - **Principle of Least Privilege:** Never use `service_role` for client-side requests. Limit its use to necessary server-side orchestration (e.g., Inngest, Edge Functions) where RLS bypass is explicitly required.
 - **Audit Trails:** Critical state changes and external callbacks (e.g., payments) must be logged in dedicated event tables for auditability.
+
+## Production Readiness
+
+- Before launch, remove or explicitly justify any compatibility path that silently repairs bad state instead of rejecting it. Missing rows, amount drift, ownership drift, partial terminal states, and other invariant violations must fail closed and be audited.
+- Before launch, remove or disable test-only hooks and sentinels from production migrations, RPCs, and route logic. Do not leave special error triggers or rollback probes in the live schema.
+- Before launch, fail closed on missing production configuration. Required auth, URL, payment, and origin env vars must stop startup or return a hard error in production; do not skip auth/session protection because setup is incomplete.
+- Before launch, keep production origin policy canonical. `localhost`, preview hosts, and non-canonical fallbacks are development conveniences and must not become implicit production defaults for absolute URLs, payment return URLs, or trusted origins unless the deploy strategy explicitly requires them.
+- Before launch, do not leave privileged write surfaces duplicated. If a Next.js route is the authoritative boundary for a state-changing flow, direct client-executable RPC or table-write paths that bypass route-level guards must be revoked or explicitly documented as intentional.
+- For Phase 3 checkout create, the intentional model is: `POST /api/checkout` is a thin boundary for auth, origin, body parsing, and validator behavior; the authenticated user-context DB/RPC remains the authoritative create path for pricing, eligibility, ownership, and atomic writes. Do not replace this with default `service_role` route orchestration unless the architecture docs are explicitly revised.
+- Before launch, remove oversell tolerance from checkout flows. The system must prevent multiple concurrent pending checkout/payment attempts for the same inventory unit, not merely detect conflict after a later callback.
 
 ## Change Discipline
 
@@ -118,6 +129,6 @@
 
 ## Current Execution Mode
 
-- Current execution focus is Phase 1 + Phase 2 backend work.
-- Use `PHASE_1_2_TASKS.md` as the daily task board.
+- Current execution focus is Phase 3 checkout backend contract work.
+- Use `PHASE_3_TASKS.md` as the daily task board.
 - Before implementing a selected task, use `SUPABASE_CAPABILITY_AUDIT.md` for a quick layer decision check (Supabase native vs thin custom vs external system).

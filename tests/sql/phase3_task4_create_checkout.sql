@@ -396,6 +396,29 @@ begin
 end;
 $$;
 
+-- TEST 1B: same listing cannot open a second pending checkout while one is already pending
+do $$
+begin
+  begin
+    perform public.create_checkout(
+      '77777777-7777-4777-8777-777777777761'::uuid,
+      current_date + 31,
+      6,
+      1,
+      array['deposit_t4'],
+      array[]::text[],
+      'Ikinci pending checkout denemesi'
+    );
+    raise exception 'TEST 1B FAILED: second pending checkout should have been rejected';
+  exception
+    when sqlstate 'P0002' then
+      if position('listing is not available for checkout' in SQLERRM) = 0 then
+        raise;
+      end if;
+  end;
+end;
+$$;
+
 -- TEST 2: authenticated users cannot bypass create_checkout with direct transactional inserts
 do $$
 declare
@@ -548,29 +571,37 @@ begin
 end;
 $$;
 
--- TEST 4: failure while writing order_items leaves no partial checkout rows
+-- TEST 4: same display label with different main item codes remains a valid checkout
 do $$
 declare
+  v_result jsonb;
+  v_reservation_id uuid;
+  v_order_id uuid;
   v_reservation_count integer;
   v_order_count integer;
   v_payment_count integer;
   v_order_item_count integer;
+  v_duplicate_label_count integer;
+  v_code_count integer;
+  v_item_sum numeric(12, 2);
 begin
-  begin
-    perform public.create_checkout(
-      '77777777-7777-4777-8777-777777777762'::uuid,
-      current_date + 45,
-      6,
-      1,
-      array['dup_one_t4', 'dup_two_t4'],
-      array[]::text[],
-      'Rollback kontrolu'
-    );
-    raise exception 'TEST 2 FAILED: duplicate order item labels should have raised';
-  exception
-    when unique_violation then
-      null;
-  end;
+  v_result := public.create_checkout(
+    '77777777-7777-4777-8777-777777777762'::uuid,
+    current_date + 45,
+    6,
+    1,
+    array['dup_one_t4', 'dup_two_t4'],
+    array[]::text[],
+    'Ayni etiket farkli kod kontrolu'
+  );
+
+  if v_result->>'result' <> 'created' then
+    raise exception 'TEST 4 FAILED: expected created result for duplicate labels with distinct codes, got %',
+      v_result;
+  end if;
+
+  v_reservation_id := (v_result->>'reservation_id')::uuid;
+  v_order_id := (v_result->>'order_id')::uuid;
 
   select count(*)
   into v_reservation_count
@@ -605,16 +636,93 @@ begin
     on r.id = o.reservation_id
   where r.listing_id = '77777777-7777-4777-8777-777777777762'::uuid;
 
-  if v_reservation_count <> 0
-     or v_order_count <> 0
-     or v_payment_count <> 0
-     or v_order_item_count <> 0 then
+  select count(*), coalesce(sum(amount), 0)
+  into v_duplicate_label_count, v_item_sum
+  from public.order_items
+  where order_id = v_order_id
+    and item_type = 'main_item'
+    and label = 'Ayni Etiket';
+
+  select count(*)
+  into v_code_count
+  from public.order_items
+  where order_id = v_order_id
+    and item_type = 'main_item'
+    and code in ('dup_one_t4', 'dup_two_t4');
+
+  if v_reservation_count <> 1
+     or v_order_count <> 1
+     or v_payment_count <> 1
+     or v_order_item_count <> 2
+     or v_duplicate_label_count <> 2
+     or v_code_count <> 2
+     or v_item_sum <> 3000 then
     raise exception
-      'TEST 2 FAILED: partial rows remain reservation=% order=% payment=% item=%',
-      v_reservation_count, v_order_count, v_payment_count, v_order_item_count;
+      'TEST 4 FAILED: duplicate-label checkout mismatch reservation=% order=% payment=% item=% label_count=% code_count=% sum=%',
+      v_reservation_count,
+      v_order_count,
+      v_payment_count,
+      v_order_item_count,
+      v_duplicate_label_count,
+      v_code_count,
+      v_item_sum;
   end if;
+
+  delete from public.payments
+  where order_id = v_order_id;
+
+  delete from public.order_items
+  where order_id = v_order_id;
+
+  delete from public.orders
+  where id = v_order_id;
+
+  delete from public.reservations
+  where id = v_reservation_id;
 end;
 $$;
+
+reset role;
+
+delete from public.payments
+where order_id in (
+  select o.id
+  from public.orders o
+  join public.reservations r
+    on r.id = o.reservation_id
+  where r.listing_id = '77777777-7777-4777-8777-777777777762'::uuid
+    and r.user_id = '66666666-7777-4777-8777-777777777762'::uuid
+    and r.move_in_date = current_date + 45
+);
+
+delete from public.order_items
+where order_id in (
+  select o.id
+  from public.orders o
+  join public.reservations r
+    on r.id = o.reservation_id
+  where r.listing_id = '77777777-7777-4777-8777-777777777762'::uuid
+    and r.user_id = '66666666-7777-4777-8777-777777777762'::uuid
+    and r.move_in_date = current_date + 45
+);
+
+delete from public.orders
+where reservation_id in (
+  select id
+  from public.reservations
+  where listing_id = '77777777-7777-4777-8777-777777777762'::uuid
+    and user_id = '66666666-7777-4777-8777-777777777762'::uuid
+    and move_in_date = current_date + 45
+);
+
+delete from public.reservations
+where listing_id = '77777777-7777-4777-8777-777777777762'::uuid
+  and user_id = '66666666-7777-4777-8777-777777777762'::uuid
+  and move_in_date = current_date + 45;
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', '66666666-7777-4777-8777-777777777762', false);
+select set_config('request.jwt.claim.role', 'authenticated', false);
 
 -- TEST 5: create_checkout must lock the listing row before creating checkout rows
 do $$
@@ -635,7 +743,7 @@ begin
     $dblink$
       update public.listings
       set updated_at = updated_at
-      where id = '77777777-7777-4777-8777-777777777761'::uuid
+      where id = '77777777-7777-4777-8777-777777777762'::uuid
     $dblink$
   );
 
@@ -643,11 +751,11 @@ begin
 
   begin
     perform public.create_checkout(
-      '77777777-7777-4777-8777-777777777761'::uuid,
+      '77777777-7777-4777-8777-777777777762'::uuid,
       current_date + 60,
       6,
       1,
-      array['deposit_t4'],
+      array['dup_one_t4'],
       array[]::text[],
       'Lock kontrolu'
     );
@@ -660,7 +768,7 @@ begin
   select count(*)
   into v_reservation_count
   from public.reservations
-  where listing_id = '77777777-7777-4777-8777-777777777761'::uuid
+  where listing_id = '77777777-7777-4777-8777-777777777762'::uuid
     and user_id = '66666666-7777-4777-8777-777777777762'::uuid
     and move_in_date = current_date + 60;
 
@@ -669,7 +777,7 @@ begin
   from public.orders o
   join public.reservations r
     on r.id = o.reservation_id
-  where r.listing_id = '77777777-7777-4777-8777-777777777761'::uuid
+  where r.listing_id = '77777777-7777-4777-8777-777777777762'::uuid
     and r.user_id = '66666666-7777-4777-8777-777777777762'::uuid
     and r.move_in_date = current_date + 60;
 
@@ -680,7 +788,7 @@ begin
     on o.id = p.order_id
   join public.reservations r
     on r.id = o.reservation_id
-  where r.listing_id = '77777777-7777-4777-8777-777777777761'::uuid
+  where r.listing_id = '77777777-7777-4777-8777-777777777762'::uuid
     and r.user_id = '66666666-7777-4777-8777-777777777762'::uuid
     and r.move_in_date = current_date + 60;
 
@@ -731,7 +839,7 @@ begin
     $dblink$
       update public.listing_main_item_options
       set updated_at = updated_at
-      where id = 'bbbbbbbb-7777-4777-8777-777777777761'::uuid
+      where id = 'bbbbbbbb-7777-4777-8777-777777777763'::uuid
     $dblink$
   );
 
@@ -739,11 +847,11 @@ begin
 
   begin
     perform public.create_checkout(
-      '77777777-7777-4777-8777-777777777761'::uuid,
+      '77777777-7777-4777-8777-777777777762'::uuid,
       current_date + 75,
       6,
       1,
-      array['deposit_t4'],
+      array['dup_one_t4'],
       array[]::text[],
       'Main item lock kontrolu'
     );
@@ -756,7 +864,7 @@ begin
   select count(*)
   into v_reservation_count
   from public.reservations
-  where listing_id = '77777777-7777-4777-8777-777777777761'::uuid
+  where listing_id = '77777777-7777-4777-8777-777777777762'::uuid
     and user_id = '66666666-7777-4777-8777-777777777762'::uuid
     and move_in_date = current_date + 75;
 
@@ -765,7 +873,7 @@ begin
   from public.orders o
   join public.reservations r
     on r.id = o.reservation_id
-  where r.listing_id = '77777777-7777-4777-8777-777777777761'::uuid
+  where r.listing_id = '77777777-7777-4777-8777-777777777762'::uuid
     and r.user_id = '66666666-7777-4777-8777-777777777762'::uuid
     and r.move_in_date = current_date + 75;
 
@@ -776,7 +884,7 @@ begin
     on o.id = p.order_id
   join public.reservations r
     on r.id = o.reservation_id
-  where r.listing_id = '77777777-7777-4777-8777-777777777761'::uuid
+  where r.listing_id = '77777777-7777-4777-8777-777777777762'::uuid
     and r.user_id = '66666666-7777-4777-8777-777777777762'::uuid
     and r.move_in_date = current_date + 75;
 

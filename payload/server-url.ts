@@ -7,12 +7,12 @@ export type ResolvePayloadServerURLInput = {
 
 export function resolvePayloadServerURL(input: ResolvePayloadServerURLInput): string {
   const nodeEnv = typeof input.nodeEnv === "string" ? input.nodeEnv.toLowerCase() : "";
+  const isDevOrTest = nodeEnv === "development" || nodeEnv === "test";
   const configuredURL = (
     asNonEmptyString(input.siteUrl)
     ?? asNonEmptyString(input.publicSiteUrl)
-    ?? normalizeVercelUrl(input.vercelUrl)
+    ?? (isDevOrTest ? normalizeVercelUrl(input.vercelUrl) : null)
   );
-  const isDevOrTest = nodeEnv === "development" || nodeEnv === "test";
 
   if (!configuredURL) {
     if (isDevOrTest) {

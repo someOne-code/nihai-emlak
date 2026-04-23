@@ -270,10 +270,28 @@ declare
   v_reservation_status public.reservation_status;
   v_listing_status public.listing_status;
 begin
+  create or replace function public.phase1_task7_force_order_update_failure()
+  returns trigger
+  language plpgsql
+  as $trigger$
+  begin
+    if new.id = '77777777-7777-4777-8777-777777777833'::uuid then
+      raise exception 'Forced process_payment_checkout failure after payment update';
+    end if;
+
+    return new;
+  end;
+  $trigger$;
+
+  create trigger phase1_task7_force_order_update_failure
+  before update on public.orders
+  for each row
+  execute function public.phase1_task7_force_order_update_failure();
+
   begin
     perform public.process_payment_checkout(
       '77777777-7777-4777-8777-777777777843'::uuid,
-      '__force_error_after_payment_update__',
+      'isbank_callback_approved',
       '77777777-7777-4777-8777-777777777843',
       '{"source":"task7-rollback"}'::jsonb
     );
@@ -284,6 +302,9 @@ begin
         raise;
       end if;
   end;
+
+  drop trigger if exists phase1_task7_force_order_update_failure on public.orders;
+  drop function if exists public.phase1_task7_force_order_update_failure();
 
   select status into v_payment_status
   from public.payments where id = '77777777-7777-4777-8777-777777777843'::uuid;

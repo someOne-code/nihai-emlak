@@ -48,15 +48,17 @@ test("Payload server URL prefers private SITE_URL and normalizes to origin", () 
   assert.equal(result, "https://admin.example.com");
 });
 
-test("Payload server URL falls back to VERCEL_URL in production", () => {
-  const result = resolvePayloadServerURL({
-    nodeEnv: "production",
-    publicSiteUrl: undefined,
-    siteUrl: undefined,
-    vercelUrl: "nihai-emlak-preview.vercel.app",
-  });
-
-  assert.equal(result, "https://nihai-emlak-preview.vercel.app");
+test("Payload server URL rejects VERCEL_URL-only bootstrap in production", () => {
+  assert.throws(
+    () =>
+      resolvePayloadServerURL({
+        nodeEnv: "production",
+        publicSiteUrl: undefined,
+        siteUrl: undefined,
+        vercelUrl: "nihai-emlak-preview.vercel.app",
+      }),
+    /SITE_URL or NEXT_PUBLIC_SITE_URL must be configured outside development\/test/,
+  );
 });
 
 test("Payload config passes VERCEL_URL into server URL bootstrap", async (t) => {

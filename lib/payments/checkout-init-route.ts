@@ -51,11 +51,6 @@ type SupabaseClient = {
   from: (table: "orders" | "payments") => {
     select: (columns: string) => SupabaseQueryBuilder;
     update?: (values: Record<string, unknown>) => SupabaseUpdateQueryBuilder;
-    insert?: (values: Record<string, unknown>) => {
-      select: (columns: string) => {
-        single: () => Promise<SupabaseSingleResponse>;
-      };
-    };
   };
 };
 
@@ -63,11 +58,6 @@ type PaymentWriteClient = {
   from: (table: "payments") => {
     select: (columns: string) => SupabaseQueryBuilder;
     update?: (values: Record<string, unknown>) => SupabaseUpdateQueryBuilder;
-    insert?: (values: Record<string, unknown>) => {
-      select: (columns: string) => {
-        single: () => Promise<SupabaseSingleResponse>;
-      };
-    };
   };
 };
 
@@ -244,23 +234,13 @@ export async function handleCheckoutInitPost(
 
   let payment = existingPendingPaymentResult.payment;
   if (!payment) {
-    const legacyPaymentResult = await createLegacyPendingIsbankPayment(
-      dependencies.createServiceRoleSupabaseClient,
-      supabase,
-      order,
-      userId,
+    return Response.json(
+      {
+        success: false,
+        error: "Checkout init requires an existing pending payment",
+      },
+      { status: 409 },
     );
-    if (!legacyPaymentResult.ok) {
-      return Response.json(
-        {
-          success: false,
-          error: legacyPaymentResult.error,
-        },
-        { status: legacyPaymentResult.status },
-      );
-    }
-
-    payment = legacyPaymentResult.payment;
   }
 
   const reconciledPaymentResult = await reconcilePendingPaymentWithOrder(
@@ -371,85 +351,15 @@ async function reconcilePendingPaymentWithOrder(
   | { ok: true; payment: PendingPaymentRow }
   | { ok: false; status: number; error: string }
 > {
-  if (payment.amount === order.totalAmount && payment.currency === order.currency) {
-    return refreshPendingPaymentForCheckoutInit(createServiceRoleSupabaseClient, payment.id);
-  }
-
-  let supabase: PaymentWriteClient;
-  try {
-    supabase = (await createServiceRoleSupabaseClient()) as PaymentWriteClient;
-  } catch {
+  if (payment.amount !== order.totalAmount || payment.currency !== order.currency) {
     return {
       ok: false,
-      status: 500,
-      error: "Failed to create payment reconciliation client",
+      status: 409,
+      error: "Pending payment no longer matches order total",
     };
   }
 
-  const paymentUpdateBuilder = supabase.from("payments").update?.({
-    amount: order.totalAmount,
-    currency: order.currency,
-  });
-
-  if (!paymentUpdateBuilder) {
-    return {
-      ok: false,
-      status: 500,
-      error: "Failed to update pending payment for checkout init",
-    };
-  }
-
-  const paymentUpdate = await paymentUpdateBuilder
-    .eq("id", payment.id)
-    .eq("status", "pending")
-    .select("id,order_id,amount,currency,status,provider_ref")
-    .maybeSingle();
-
-  if (paymentUpdate.error) {
-    return {
-      ok: false,
-      status: 500,
-      error: "Failed to update pending payment for checkout init",
-    };
-  }
-
-  if (!paymentUpdate.data) {
-    const currentPaymentResult = await getPaymentStatusForCheckoutInit(
-      supabase,
-      payment.id,
-    );
-    if (!currentPaymentResult.ok) {
-      return currentPaymentResult;
-    }
-
-    if (currentPaymentResult.payment.status !== "pending") {
-      return {
-        ok: false,
-        status: 409,
-        error: "Payment is no longer pending for checkout init",
-      };
-    }
-
-    return {
-      ok: false,
-      status: 500,
-      error: "Failed to update pending payment for checkout init",
-    };
-  }
-
-  const refreshedPayment = parsePendingPaymentRow(paymentUpdate.data);
-  if (!refreshedPayment) {
-    return {
-      ok: false,
-      status: 500,
-      error: "Invalid pending payment row returned from database",
-    };
-  }
-
-  return {
-    ok: true,
-    payment: refreshedPayment,
-  };
+  return refreshPendingPaymentForCheckoutInit(createServiceRoleSupabaseClient, payment.id);
 }
 
 async function refreshPendingPaymentForCheckoutInit(
@@ -521,90 +431,6 @@ async function refreshPendingPaymentForCheckoutInit(
   return {
     ok: true,
     payment: refreshedPayment,
-  };
-}
-
-async function createLegacyPendingIsbankPayment(
-  createServiceRoleSupabaseClient: () => Promise<unknown>,
-  supabase: SupabaseClient,
-  order: OrderRow,
-  userId: string,
-): Promise<
-  | { ok: true; payment: PendingPaymentRow }
-  | { ok: false; status: number; error: string }
-> {
-  let serviceRoleSupabase: PaymentWriteClient;
-  try {
-    serviceRoleSupabase = (await createServiceRoleSupabaseClient()) as PaymentWriteClient;
-  } catch {
-    return {
-      ok: false,
-      status: 500,
-      error: "Failed to create pending payment for checkout init",
-    };
-  }
-
-  const paymentInsertBuilder = serviceRoleSupabase.from("payments").insert?.({
-    amount: order.totalAmount,
-    currency: order.currency,
-    order_id: order.id,
-    provider: "isbank",
-    status: "pending",
-    user_id: userId,
-  });
-
-  if (!paymentInsertBuilder) {
-    return {
-      ok: false,
-      status: 500,
-      error: "Failed to create pending payment for checkout init",
-    };
-  }
-
-  const paymentInsert = await paymentInsertBuilder
-    .select("id,order_id,amount,currency,status,provider_ref")
-    .single();
-
-  if (paymentInsert.error) {
-    if (!isPendingIsbankPaymentUniqueViolation(paymentInsert.error)) {
-      return {
-        ok: false,
-        status: 500,
-        error: "Failed to create pending payment for checkout init",
-      };
-    }
-
-    const retryPendingPaymentResult = await getExistingPendingIsbankPayment(
-      supabase,
-      order.id,
-      userId,
-    );
-    if (!retryPendingPaymentResult.ok || !retryPendingPaymentResult.payment) {
-      return {
-        ok: false,
-        status: 409,
-        error: "Failed to resolve existing pending payment for checkout init",
-      };
-    }
-
-    return {
-      ok: true,
-      payment: retryPendingPaymentResult.payment,
-    };
-  }
-
-  const payment = parsePendingPaymentRow(paymentInsert.data);
-  if (!payment) {
-    return {
-      ok: false,
-      status: 500,
-      error: "Invalid pending payment row returned from database",
-    };
-  }
-
-  return {
-    ok: true,
-    payment,
   };
 }
 
@@ -722,16 +548,6 @@ function parsePaymentStatusRow(value: unknown): PaymentStatusRow | null {
   }
 
   return { status };
-}
-
-function isPendingIsbankPaymentUniqueViolation(error: SupabaseError): boolean {
-  const code = asNonEmptyString(error.code);
-  if (code === "23505") {
-    return true;
-  }
-
-  const message = asNonEmptyString(error.message)?.toLowerCase() ?? "";
-  return message.includes("payments_unique_pending_isbank_per_order");
 }
 
 function asAmount(value: unknown): number | null {

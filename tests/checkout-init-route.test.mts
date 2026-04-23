@@ -73,7 +73,134 @@ test("checkout init rejects untrusted origin before auth", async (t) => {
   assert.equal(payload.error, "Checkout init Origin is not trusted");
 });
 
-test("checkout init accepts preview origin when VERCEL_URL matches request host", async (t) => {
+test("checkout init rejects preview origin in production when canonical site URLs are configured", async (t) => {
+  setupCheckoutInitEnv(t, {
+    nodeEnv: "production",
+    nextPublicSiteUrl: "https://nihaiemlak.com",
+    siteUrl: "https://nihaiemlak.com",
+    vercelUrl: "nihai-emlak-git-phase3-umut.vercel.app",
+  });
+
+  const response = await handleCheckoutInitPost(
+    new Request("https://nihai-emlak-git-phase3-umut.vercel.app/api/checkout/init", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "https://nihai-emlak-git-phase3-umut.vercel.app",
+      },
+      body: JSON.stringify({ orderId: "11111111-1111-4111-8111-111111111111" }),
+    }),
+    createFailingDependencies(),
+  );
+
+  assert.equal(response.status, 403);
+
+  const payload = await response.json();
+  assert.equal(payload.success, false);
+  assert.equal(payload.error, "Checkout init Origin is not trusted");
+});
+
+test("checkout init rejects unauthenticated requests", async (t) => {
+  setupCheckoutInitEnv(t);
+
+  const response = await handleCheckoutInitPost(
+    new Request("http://localhost:3000/api/checkout/init", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "http://localhost:3000",
+      },
+      body: JSON.stringify({ orderId: "11111111-1111-4111-8111-111111111111" }),
+    }),
+    createDependencies({
+      getOrder: () => {
+        throw new Error("order lookup should not run without auth");
+      },
+      getPendingPayment: () => {
+        throw new Error("payment lookup should not run without auth");
+      },
+      insertPayment: () => {
+        throw new Error("insert should not run without auth");
+      },
+      userId: null,
+    }),
+  );
+
+  assert.equal(response.status, 401);
+
+  const payload = await response.json();
+  assert.equal(payload.success, false);
+  assert.equal(payload.error, "Authentication required");
+});
+
+test("checkout init returns not found when order does not belong to authenticated user", async (t) => {
+  setupCheckoutInitEnv(t);
+
+  const response = await handleCheckoutInitPost(
+    new Request("http://localhost:3000/api/checkout/init", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "http://localhost:3000",
+      },
+      body: JSON.stringify({ orderId: "14141414-1414-4414-8414-141414141414" }),
+    }),
+    createDependencies({
+      getOrder: () => null,
+      getPendingPayment: () => {
+        throw new Error("payment lookup should not run when order is missing");
+      },
+      insertPayment: () => {
+        throw new Error("insert should not run when order is missing");
+      },
+      userId: "15151515-1515-4515-8515-151515151515",
+    }),
+  );
+
+  assert.equal(response.status, 404);
+
+  const payload = await response.json();
+  assert.equal(payload.success, false);
+  assert.equal(payload.error, "Order not found");
+});
+
+test("checkout init rejects non-pending orders", async (t) => {
+  setupCheckoutInitEnv(t);
+
+  const response = await handleCheckoutInitPost(
+    new Request("http://localhost:3000/api/checkout/init", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "http://localhost:3000",
+      },
+      body: JSON.stringify({ orderId: "16161616-1616-4616-8616-161616161616" }),
+    }),
+    createDependencies({
+      getOrder: () => ({
+        id: "16161616-1616-4616-8616-161616161616",
+        total_amount: 1250,
+        currency: "TRY",
+        status: "completed",
+      }),
+      getPendingPayment: () => {
+        throw new Error("payment lookup should not run for non-pending orders");
+      },
+      insertPayment: () => {
+        throw new Error("insert should not run for non-pending orders");
+      },
+      userId: "17171717-1717-4717-8717-171717171717",
+    }),
+  );
+
+  assert.equal(response.status, 409);
+
+  const payload = await response.json();
+  assert.equal(payload.success, false);
+  assert.equal(payload.error, "Only pending orders can be initialized for payment");
+});
+
+test("checkout init accepts preview origin in test mode when VERCEL_URL matches request host", async (t) => {
   setupCheckoutInitEnv(t, {
     nextPublicSiteUrl: "https://nihaiemlak.com",
     siteUrl: "https://nihaiemlak.com",
@@ -195,7 +322,7 @@ test("checkout init accepts trusted origin behind proxy even when request host d
   assert.equal(payload.data.payment.id, paymentId);
 });
 
-test("checkout init builds return URLs from VERCEL_URL when site URLs are unset", async (t) => {
+test("checkout init builds return URLs from VERCEL_URL when site URLs are unset in test mode", async (t) => {
   setupCheckoutInitEnv(t, {
     vercelUrl: "nihai-emlak-preview.vercel.app",
   });
@@ -351,17 +478,11 @@ test("checkout init reuses existing pending isbank payment for same order", asyn
   );
 });
 
-test("checkout init creates a pending isbank payment for legacy pending orders", async (t) => {
+test("checkout init rejects pending orders without an existing pending isbank payment", async (t) => {
   setupCheckoutInitEnv(t);
 
   const orderId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
   const userId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
-  const paymentId = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
-
-  const state = {
-    paymentSelectCallCount: 0,
-    insertCallCount: 0,
-  };
 
   const dependencies = createDependencies({
     getOrder: () => ({
@@ -370,32 +491,10 @@ test("checkout init creates a pending isbank payment for legacy pending orders",
       currency: "TRY",
       status: "pending",
     }),
-    getPendingPayment: () => {
-      state.paymentSelectCallCount += 1;
-      return null;
-    },
+    getPendingPayment: () => null,
     insertPayment: () => {
-      state.insertCallCount += 1;
-      return {
-        data: {
-          id: paymentId,
-          order_id: orderId,
-          amount: "999.99",
-          currency: "TRY",
-          status: "pending",
-          provider_ref: paymentId,
-        },
-        error: null,
-      };
+      throw new Error("checkout init must not create pending payments");
     },
-    getPaymentById: () => ({
-      id: paymentId,
-      order_id: orderId,
-      amount: "999.99",
-      currency: "TRY",
-      status: "pending",
-      provider_ref: paymentId,
-    }),
     userId,
   });
 
@@ -411,28 +510,18 @@ test("checkout init creates a pending isbank payment for legacy pending orders",
     dependencies,
   );
 
-  assert.equal(response.status, 200);
-  assert.equal(state.insertCallCount, 1);
-  assert.equal(state.paymentSelectCallCount, 1);
+  assert.equal(response.status, 409);
 
   const payload = await response.json();
-  assert.equal(payload.success, true);
-  assert.equal(payload.data.payment.id, paymentId);
-  assert.equal(payload.data.payment.providerRef, paymentId);
-  assert.equal(payload.data.isbank.oid, paymentId);
+  assert.equal(payload.success, false);
+  assert.equal(payload.error, "Checkout init requires an existing pending payment");
 });
 
-test("checkout init resolves legacy payment creation race via existing pending payment", async (t) => {
+test("checkout init does not recover missing pending payment by creating or racing a new one", async (t) => {
   setupCheckoutInitEnv(t);
 
   const orderId = "12121212-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
   const userId = "34343434-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
-  const racedPaymentId = "56565656-cccc-4ccc-8ccc-cccccccccccc";
-
-  const state = {
-    paymentSelectCallCount: 0,
-    insertCallCount: 0,
-  };
 
   const dependencies = createDependencies({
     getOrder: () => ({
@@ -441,39 +530,9 @@ test("checkout init resolves legacy payment creation race via existing pending p
       currency: "TRY",
       status: "pending",
     }),
-    getPendingPayment: () => {
-      state.paymentSelectCallCount += 1;
-      if (state.paymentSelectCallCount === 1) {
-        return null;
-      }
-
-      return {
-        id: racedPaymentId,
-        order_id: orderId,
-        amount: "999.99",
-        currency: "TRY",
-        status: "pending",
-        provider_ref: racedPaymentId,
-      };
-    },
-    getPaymentById: () => ({
-      id: racedPaymentId,
-      order_id: orderId,
-      amount: "999.99",
-      currency: "TRY",
-      status: "pending",
-      provider_ref: racedPaymentId,
-    }),
+    getPendingPayment: () => null,
     insertPayment: () => {
-      state.insertCallCount += 1;
-      return {
-        data: null,
-        error: {
-          code: "23505",
-          message:
-            'duplicate key value violates unique constraint "payments_unique_pending_isbank_per_order"',
-        },
-      };
+      throw new Error("checkout init must not create pending payments");
     },
     userId,
   });
@@ -490,27 +549,19 @@ test("checkout init resolves legacy payment creation race via existing pending p
     dependencies,
   );
 
-  assert.equal(response.status, 200);
-  assert.equal(state.insertCallCount, 1);
-  assert.equal(state.paymentSelectCallCount, 2);
+  assert.equal(response.status, 409);
 
   const payload = await response.json();
-  assert.equal(payload.success, true);
-  assert.equal(payload.data.payment.id, racedPaymentId);
-  assert.equal(payload.data.payment.providerRef, racedPaymentId);
-  assert.equal(payload.data.isbank.oid, racedPaymentId);
+  assert.equal(payload.success, false);
+  assert.equal(payload.error, "Checkout init requires an existing pending payment");
 });
 
-test("checkout init refreshes reused pending payment when order total changes", async (t) => {
+test("checkout init rejects reused pending payment when order total drifts from the order", async (t) => {
   setupCheckoutInitEnv(t);
 
   const orderId = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
   const userId = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
   const existingPaymentId = "ffffffff-ffff-4fff-8fff-ffffffffffff";
-
-  const state = {
-    serviceRoleUpdatePayloads: [] as Record<string, unknown>[],
-  };
 
   const dependencies = createDependencies({
     getOrder: () => ({
@@ -530,20 +581,6 @@ test("checkout init refreshes reused pending payment when order total changes", 
     insertPayment: () => {
       throw new Error("insert should not be called when pending payment exists");
     },
-    updatePayment: (payload) => {
-      state.serviceRoleUpdatePayloads.push(payload);
-      return {
-        data: {
-          id: existingPaymentId,
-          order_id: orderId,
-          amount: "1500.00",
-          currency: "USD",
-          status: "pending",
-          provider_ref: existingPaymentId,
-        },
-        error: null,
-      };
-    },
     userId,
   });
 
@@ -559,31 +596,21 @@ test("checkout init refreshes reused pending payment when order total changes", 
     dependencies,
   );
 
-  assert.equal(response.status, 200);
-  assert.equal(state.serviceRoleUpdatePayloads.length, 1);
-  assert.deepEqual(state.serviceRoleUpdatePayloads[0], {
-    amount: 1500,
-    currency: "USD",
-  });
+  assert.equal(response.status, 409);
 
   const payload = await response.json();
-  assert.equal(payload.success, true);
-  assert.equal(payload.data.payment.id, existingPaymentId);
-  assert.equal(payload.data.payment.amount, 1500);
-  assert.equal(payload.data.payment.currency, "USD");
-  assert.equal(payload.data.isbank.amount, "1500.00");
-  assert.equal(payload.data.isbank.currency, "USD");
+  assert.equal(payload.success, false);
+  assert.equal(payload.error, "Pending payment no longer matches order total");
 });
 
-test("checkout init refreshes mismatched payment through service-role client", async (t) => {
+test("checkout init never rewrites mismatched payment rows through service-role reconciliation", async (t) => {
   setupCheckoutInitEnv(t);
 
   const orderId = "78787878-7878-4878-8878-787878787878";
   const userId = "89898989-8989-4898-8898-898989898989";
   const paymentId = "90909090-9090-4090-8090-909090909090";
 
-  let serverScopedUpdateAttempted = false;
-  let serviceRoleUpdateCount = 0;
+  let serviceRoleUpdateAttempted = false;
 
   const dependencies = createDependencies({
     getOrder: () => ({
@@ -603,42 +630,9 @@ test("checkout init refreshes mismatched payment through service-role client", a
     insertPayment: () => {
       throw new Error("insert should not be called when pending payment exists");
     },
-    createServerPaymentsClient: () => ({
-      select: () =>
-        createQueryBuilder(() => ({
-          data: {
-            id: paymentId,
-            order_id: orderId,
-            amount: "1250.00",
-            currency: "TRY",
-            status: "pending",
-            provider_ref: paymentId,
-          },
-          error: null,
-        })),
-      update: () => {
-        serverScopedUpdateAttempted = true;
-        throw new Error("server-scoped client must not update payments");
-      },
-      insert: () => ({
-        select: () => ({
-          single: async () => ({ data: null, error: null }),
-        }),
-      }),
-    }),
     updatePayment: () => {
-      serviceRoleUpdateCount += 1;
-      return {
-        data: {
-          id: paymentId,
-          order_id: orderId,
-          amount: "1750.00",
-          currency: "EUR",
-          status: "pending",
-          provider_ref: paymentId,
-        },
-        error: null,
-      };
+      serviceRoleUpdateAttempted = true;
+      throw new Error("service-role update should not run for mismatched payments");
     },
     userId,
   });
@@ -655,9 +649,12 @@ test("checkout init refreshes mismatched payment through service-role client", a
     dependencies,
   );
 
-  assert.equal(response.status, 200);
-  assert.equal(serverScopedUpdateAttempted, false);
-  assert.equal(serviceRoleUpdateCount, 1);
+  assert.equal(response.status, 409);
+  assert.equal(serviceRoleUpdateAttempted, false);
+
+  const payload = await response.json();
+  assert.equal(payload.success, false);
+  assert.equal(payload.error, "Pending payment no longer matches order total");
 });
 
 test("checkout init does not rewrite terminal payment during callback race", async (t) => {
@@ -720,14 +717,11 @@ test("checkout init does not rewrite terminal payment during callback race", asy
   );
 
   assert.equal(response.status, 409);
-  assert.deepEqual(state.updateFilters, [
-    { column: "id", value: paymentId },
-    { column: "status", value: "pending" },
-  ]);
+  assert.deepEqual(state.updateFilters, []);
 
   const payload = await response.json();
   assert.equal(payload.success, false);
-  assert.equal(payload.error, "Payment is no longer pending for checkout init");
+  assert.equal(payload.error, "Pending payment no longer matches order total");
 });
 
 test("checkout init does not emit hosted checkout when matching payment became terminal", async (t) => {
@@ -788,6 +782,7 @@ test("checkout init does not emit hosted checkout when matching payment became t
 function setupCheckoutInitEnv(
   t: TestContext,
   overrides?: {
+    nodeEnv?: string;
     nextPublicSiteUrl?: string;
     siteUrl?: string;
     vercelUrl?: string;
@@ -813,7 +808,7 @@ function setupCheckoutInitEnv(
 
   process.env.ISBANK_CLIENT_ID = "7000679";
   process.env.ISBANK_STORE_KEY = "store-key-123";
-  process.env.NODE_ENV = "test";
+  process.env.NODE_ENV = overrides?.nodeEnv ?? "test";
   process.env.SITE_URL = overrides?.siteUrl ?? "http://localhost:3000";
   process.env.NEXT_PUBLIC_SITE_URL = overrides?.nextPublicSiteUrl ?? "http://localhost:3000";
 
@@ -871,7 +866,7 @@ function createDependencies(input: {
     error: { code?: string; message?: string } | null;
   };
   getPaymentById?: (paymentId: string) => Record<string, unknown> | null;
-  userId: string;
+  userId: string | null;
 }): CheckoutInitRouteDependencies {
   const createDefaultPaymentsClient = () => ({
     select: () =>
@@ -936,9 +931,11 @@ function createDependencies(input: {
       auth: {
         getUser: async () => ({
           data: {
-            user: {
-              id: input.userId,
-            },
+            user: input.userId === null
+              ? null
+              : {
+                  id: input.userId,
+                },
           },
           error: null,
         }),

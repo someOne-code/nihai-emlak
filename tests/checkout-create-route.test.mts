@@ -194,6 +194,40 @@ test("checkout create sends normalized checkout intent to create_checkout RPC", 
       },
     },
   });
+  assert.equal("isbank" in payload.data, false);
+});
+
+test("checkout create returns summary only and does not inline hosted checkout payload", async (t) => {
+  setupCheckoutCreateEnv(t);
+
+  const response = await handleCheckoutCreatePost(
+    createJsonRequest(validCheckoutCreatePayload),
+    createDependencies({
+      rpc: () => ({
+        data: {
+          result: "created",
+          reservation_id: "25252525-2525-4252-8252-252525252525",
+          order_id: "26262626-2626-4262-8262-262626262626",
+          payment_id: "27272727-2727-4272-8272-272727272727",
+          listing_id: "28282828-2828-4282-8282-282828282828",
+          total_amount: "2100.00",
+          currency: "TRY",
+          payment_status: "pending",
+          isbank: {
+            oid: "should-be-ignored",
+          },
+        },
+        error: null,
+      }),
+    }),
+  );
+
+  assert.equal(response.status, 201);
+
+  const payload = await response.json();
+  assert.equal(payload.success, true);
+  assert.equal("isbank" in payload.data, false);
+  assert.deepEqual(Object.keys(payload.data).sort(), ["listing", "order", "payment", "reservation"]);
 });
 
 test("checkout create maps unavailable listing RPC errors to 409", async (t) => {

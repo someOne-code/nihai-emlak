@@ -167,11 +167,11 @@ test("resolveCheckoutInitReturnUrlsFromEnvironment requires SITE_URL, NEXT_PUBLI
   assert.equal(result.status, 500);
   assert.equal(
     result.error,
-    "SITE_URL, NEXT_PUBLIC_SITE_URL, or VERCEL_URL must be configured outside development/test",
+    "SITE_URL or NEXT_PUBLIC_SITE_URL must be configured outside development/test",
   );
 });
 
-test("resolveCheckoutInitReturnUrlsFromEnvironment falls back to VERCEL_URL outside dev/test", () => {
+test("resolveCheckoutInitReturnUrlsFromEnvironment rejects VERCEL_URL-only configuration in production", () => {
   const result = resolveCheckoutInitReturnUrlsFromEnvironment({
     nodeEnv: "production",
     siteUrl: undefined,
@@ -179,16 +179,19 @@ test("resolveCheckoutInitReturnUrlsFromEnvironment falls back to VERCEL_URL outs
     vercelUrl: "nihai-emlak-preview.vercel.app",
   });
 
-  assert.equal(result.ok, true);
-  if (!result.ok) {
-    throw new Error("Expected VERCEL_URL fallback to succeed");
+  assert.equal(result.ok, false);
+  if (result.ok) {
+    throw new Error("Expected production VERCEL_URL-only configuration to fail closed");
   }
 
-  assert.equal(result.returnUrls.okUrl, "https://nihai-emlak-preview.vercel.app/checkout/success");
-  assert.equal(result.returnUrls.failUrl, "https://nihai-emlak-preview.vercel.app/checkout/fail");
+  assert.equal(result.status, 500);
+  assert.equal(
+    result.error,
+    "SITE_URL or NEXT_PUBLIC_SITE_URL must be configured outside development/test",
+  );
 });
 
-test("resolveCheckoutInitReturnUrlsFromEnvironment prefers accepted preview origin over canonical site URL", () => {
+test("resolveCheckoutInitReturnUrlsFromEnvironment keeps canonical site URL in production even when preferred origin is preview", () => {
   const result = resolveCheckoutInitReturnUrlsFromEnvironment({
     nodeEnv: "production",
     siteUrl: "https://nihaiemlak.com",
@@ -199,11 +202,11 @@ test("resolveCheckoutInitReturnUrlsFromEnvironment prefers accepted preview orig
 
   assert.equal(result.ok, true);
   if (!result.ok) {
-    throw new Error("Expected preferred preview origin to succeed");
+    throw new Error("Expected canonical production site URL to succeed");
   }
 
-  assert.equal(result.returnUrls.okUrl, "https://nihai-emlak-preview.vercel.app/checkout/success");
-  assert.equal(result.returnUrls.failUrl, "https://nihai-emlak-preview.vercel.app/checkout/fail");
+  assert.equal(result.returnUrls.okUrl, "https://nihaiemlak.com/checkout/success");
+  assert.equal(result.returnUrls.failUrl, "https://nihaiemlak.com/checkout/fail");
 });
 
 test("resolveCheckoutInitReturnUrlsFromEnvironment fails closed on invalid configured URL", () => {

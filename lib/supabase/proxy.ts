@@ -3,16 +3,23 @@ import { randomUUID } from "node:crypto";
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { buildContentSecurityPolicy } from "../security/csp";
-import { hasEnvVars } from "../utils";
+import { resolveSupabaseProxyEnvMode } from "../utils";
 
 export async function updateSession(request: NextRequest) {
   const nonce = createNonce();
 
   let supabaseResponse = createResponseWithSecurityHeaders(request, nonce);
 
-  // If the env vars are not set, skip proxy check. You can remove this
-  // once you setup the project.
-  if (!hasEnvVars) {
+  const proxyEnvMode = resolveSupabaseProxyEnvMode({
+    nodeEnv: process.env.NODE_ENV,
+    supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    supabasePublishableKey: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+  });
+  if (!proxyEnvMode.ok) {
+    return new NextResponse(proxyEnvMode.error, { status: 500 });
+  }
+
+  if (proxyEnvMode.shouldBypassProxyAuth) {
     return supabaseResponse;
   }
 
