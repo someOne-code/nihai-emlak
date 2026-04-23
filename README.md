@@ -63,6 +63,7 @@ Hizli repo haritasi:
 - `docs/PHASE_3_TASKS.md`: guncel checkout backend gorev panosu
 - `docs/PHASE_1_2_TASKS.md`: Faz 1 + Faz 2 gorev gecmisi ve erken backend referansi
 - `docs/SUPABASE_CAPABILITY_AUDIT.md`: katman karar matrisi
+- `docs/CHECKOUT_CONTRACT.md`: Phase 3 frontend/backend checkout API sozlesmesi
 - `docs/PROJECT_PLAN.md`: is ve domain baglami
 - `docs/BACKEND_PHASE_1.md`: erken faz referans notu
 - `docs/WORKSPACE_HEALTH_CHECKLIST.md`: yeni gorev oncesi hizli kontrol listesi
@@ -149,6 +150,7 @@ Ornek degerler icin `.env.example` dosyasina bak.
 - Ilk backend implementasyon listesi: `docs/BACKEND_PHASE_1.md`
 - Faz bazli uygulama sirasi: `docs/IMPLEMENTATION_PLAN.md`
 - Faz 3 checkout gorev listesi: `docs/PHASE_3_TASKS.md`
+- Phase 3 checkout API sozlesmesi: `docs/CHECKOUT_CONTRACT.md`
 - Faz 1-2 somut gorev listesi: `docs/PHASE_1_2_TASKS.md`
 - Workspace kontrol listesi: `docs/WORKSPACE_HEALTH_CHECKLIST.md`
 
