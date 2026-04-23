@@ -169,6 +169,9 @@ Bu revizyonda özellikle şu kararlar netleştirildi:
   - bu güncellemeler callback kodunda ayrı ayrı sorgular halinde çalıştırılmaz
   - function tek statement/transaction sınırında çalışır
   - function içinde manuel `BEGIN/COMMIT` yazılmaz
+- Yetki kuralı:
+  - `reservations`, `orders`, `payments`, `listings` state transition'ları direct admin tablo `UPDATE` ile değil, explicit DB workflow/RPC ile yürütülür
+  - backoffice manuel işlem ihtiyacı varsa bu ihtiyaç ayrı isimli admin workflow function'ları ile çözülür
 - Çakışma kuralı:
   - ödeme başlatmak listing’i kapatmaz
   - function ilgili sipariş ve listing satırlarını `SELECT ... FOR UPDATE` ile kilitli okuyarak karar verir
@@ -176,6 +179,9 @@ Bu revizyonda özellikle şu kararlar netleştirildi:
   - listing zaten pasifse function bunu `conflict` sonucu olarak döner
   - callback katmanı bu durumda refund/conflict akışını başlatır
 - Callback sonrası e-posta, bildirim, CRM benzeri uzun işler atomik DB function içine alınmaz; gerekli olursa başarı sonrası asenkron event olarak tetiklenir.
+- Admin read modeli:
+  - reservation/order/payment/event verisi okunabilir halde sunulur
+  - manuel operasyon butonları gerekiyorsa bu butonlar doğrudan tablo yazmaz; yetkili route veya RPC üzerinden kontrollü transition çağırır
 - Faz kapısı:
   - invalid signature, duplicate callback, idempotency, conflict ve partial update senaryoları önce test ile yazılır
   - callback route ve DB function bu testler yeşile dönmeden tamamlanmış kabul edilmez
@@ -192,6 +198,41 @@ Bu revizyonda özellikle şu kararlar netleştirildi:
 - Öncelik sırası:
   - önce Supabase view/RPC
   - yetmezse ince route handler
+- Admin operasyon sınırı:
+  - backoffice ekranları kritik state değişiklikleri için doğrudan tablo `UPDATE` yapmaz
+  - manuel süreç adımları explicit admin workflow RPC/function üzerinden yürütülür
+
+### Faz 5.5: Admin operasyon workflow'ları
+- Amaç:
+  - gerçek hayattaki belge kontrolü, cayma, manuel iptal ve yeniden aktif etme ihtiyaçlarını authoritative DB sınırını bozmadan çözmek
+- Tasarım kuralı:
+  - her operasyon tek isimli workflow function/RPC olur
+  - function state transition, sahiplik/invariant kontrolü ve audit log yazımını birlikte yapar
+  - admin panel veya route bu function'ları çağırır; doğrudan tablo state'i yazmaz
+- İlk backlog:
+  - `admin_confirm_reservation`
+  - `admin_cancel_reservation`
+  - `admin_reopen_listing`
+- `admin_confirm_reservation`
+  - kullanım: ödeme sonrası gerçek dünya belge/kontrat süreci tamamlandığında operasyonel onay
+  - guard: yalnızca izinli önceki state'lerden çağrılır; ilgili `reservation/order/payment/listing` tutarlılığı doğrulanır
+  - sonuç: reservation/order uygun final state'e geçer; listing pasif kalır; audit/event kaydı yazılır
+- `admin_cancel_reservation`
+  - kullanım: müşteri caydı, belge süreci başarısız oldu veya manuel iptal gerekiyor
+  - guard: terminal state çakışmaları engellenir; iptal sebebi/açıklaması zorunlu tutulabilir
+  - sonuç: reservation/order uygun cancel state'ine geçer; gerekiyorsa ayrı refund/conflict akışı tetiklenir; audit/event kaydı yazılır
+- `admin_reopen_listing`
+  - kullanım: iptal veya başarısız süreç sonrası ilanın yeniden yayına alınması
+  - guard: aktif reservation, tamamlanmış order veya açık pending checkout varken çağrı reddedilir
+  - sonuç: listing tekrar `active` olur; reopen işlemi audit/event kaydıyla izlenir
+- TDD sırası:
+  - önce SQL test matrisi yazılır
+  - ilk implementasyon önceliği `admin_cancel_reservation` olur
+  - sonra `admin_reopen_listing`
+  - en son `admin_confirm_reservation`
+- Neden bu sıra:
+  - iptal ve yeniden açma akışları inventory bütünlüğü açısından en yüksek operasyonel riski taşır
+  - confirm akışı callback sonrası doğal finalizasyonla daha yakın çalışır; cancel/reopen daha fazla manuel hata riski taşır
 
 ### Faz 6: Content backend
 - Payload içerik backend’i olarak kalır.

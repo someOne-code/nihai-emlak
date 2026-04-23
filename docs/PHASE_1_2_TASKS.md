@@ -158,14 +158,18 @@ Bitti kriteri:
 - Erken aşamada zorunlu olmayan `SECURITY DEFINER` helper’ları hemen yazma
 - Önce sade role tabanlı RLS kur:
   - admin tüm kritik tabloları okuyabilir
-  - admin gerekli tablolarda güncelleyebilir
+  - admin operasyonel süreci yönetebilmelidir, ancak transaction-kritik tabloların authoritative durumu doğrudan tablo `UPDATE` ile yönetilmez
 - Eğer sade RLS’de performans veya tekrar problemi çıkarsa sonraki task olarak `get_user_role()` helper’ı eklenir
-- Bu task’ta amaç, backoffice’in en azından read/update yapabilmesidir; tam optimizasyon değildir
+- Bu task’ın erken-aşama amacı backoffice okuma görünürlüğünü açmaktır; manuel operasyon adımları ilerleyen fazlarda explicit DB workflow/RPC ile modellenir
 
 Bitti kriteri:
 - admin rolündeki kullanıcı `profiles`, `listings`, `reservations`, `orders`, `payments`, `payment_events` üzerinde gerekli okuma erişimine sahiptir
 - normal kullanıcı aynı verilere erişemez
 - admin ve non-admin ayrımı testlerle doğrulanır
+
+Not:
+- Phase 3 launch-hardening kararı ile birlikte `reservations/orders/payments/listings` için doğrudan admin tablo `UPDATE` yetkisi authoritative model olmaktan çıkarılmıştır.
+- Backoffice tarafında "tamamlandı", "iptal", "yeniden aktif" gibi manuel süreç adımları gerekiyorsa bunlar ayrı isimli DB workflow/RPC üzerinden, invariant ve audit log koruyacak şekilde eklenmelidir.
 
 ### Görev 6: Checkout veri kontratını ve DB hazırlığını sabitle
 - Henüz tam API implementasyonu yapmadan önce DB tarafını checkout’a hazırla

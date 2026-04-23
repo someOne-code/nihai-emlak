@@ -122,22 +122,17 @@ do $$
 declare
   v_status text;
 begin
-  update public.reservations
-  set status = 'cancelled'
-  where id = '11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa'::uuid;
+  if has_table_privilege('authenticated', 'public.reservations', 'UPDATE') then
+    raise exception 'Admin should not retain direct UPDATE privilege on reservations';
+  end if;
 
   select status into v_status
   from public.reservations
   where id = '11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa'::uuid;
 
-  if v_status is null or v_status <> 'cancelled' then
-    raise exception 'Admin should be able to update reservation status, got %', v_status;
+  if v_status is null or v_status <> 'pending' then
+    raise exception 'Admin should NOT be able to update reservation status directly, got %', v_status;
   end if;
-
-  -- restore for next tests
-  update public.reservations
-  set status = 'pending'
-  where id = '11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa'::uuid;
 end;
 $$;
 
@@ -156,22 +151,17 @@ do $$
 declare
   v_status text;
 begin
-  update public.orders
-  set status = 'completed'
-  where id = '22222222-bbbb-bbbb-bbbb-bbbbbbbbbbbb'::uuid;
+  if has_table_privilege('authenticated', 'public.orders', 'UPDATE') then
+    raise exception 'Admin should not retain direct UPDATE privilege on orders';
+  end if;
 
   select status::text into v_status
   from public.orders
   where id = '22222222-bbbb-bbbb-bbbb-bbbbbbbbbbbb'::uuid;
 
-  if v_status is null or v_status <> 'completed' then
-    raise exception 'Admin should be able to update order status, got %', v_status;
+  if v_status is null or v_status <> 'pending' then
+    raise exception 'Admin should NOT be able to update order status directly, got %', v_status;
   end if;
-
-  -- restore
-  update public.orders
-  set status = 'pending'
-  where id = '22222222-bbbb-bbbb-bbbb-bbbbbbbbbbbb'::uuid;
 end;
 $$;
 
@@ -190,22 +180,17 @@ do $$
 declare
   v_status text;
 begin
-  update public.payments
-  set status = 'succeeded'
-  where id = '55555555-eeee-eeee-eeee-eeeeeeeeeeee'::uuid;
+  if has_table_privilege('authenticated', 'public.payments', 'UPDATE') then
+    raise exception 'Admin should not retain direct UPDATE privilege on payments';
+  end if;
 
   select status::text into v_status
   from public.payments
   where id = '55555555-eeee-eeee-eeee-eeeeeeeeeeee'::uuid;
 
-  if v_status is null or v_status <> 'succeeded' then
-    raise exception 'Admin should be able to update payment status, got %', v_status;
+  if v_status is null or v_status <> 'pending' then
+    raise exception 'Admin should NOT be able to update payment status directly, got %', v_status;
   end if;
-
-  -- restore
-  update public.payments
-  set status = 'pending'
-  where id = '55555555-eeee-eeee-eeee-eeeeeeeeeeee'::uuid;
 end;
 $$;
 
@@ -224,11 +209,10 @@ do $$
 declare
   v_status text;
 begin
-  update public.reservations
-  set status = 'cancelled'
-  where id = '11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa'::uuid;
+  if has_table_privilege('authenticated', 'public.reservations', 'UPDATE') then
+    raise exception 'Normal user should not retain direct UPDATE privilege on reservations';
+  end if;
 
-  -- Should still be 'pending' because RLS blocked the update
   select status::text into v_status
   from public.reservations
   where id = '11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa'::uuid;
@@ -271,9 +255,9 @@ do $$
 declare
   v_status text;
 begin
-  update public.orders
-  set status = 'completed'
-  where id = '22222222-bbbb-bbbb-bbbb-bbbbbbbbbbbb'::uuid;
+  if has_table_privilege('authenticated', 'public.orders', 'UPDATE') then
+    raise exception 'Normal user should not retain direct UPDATE privilege on orders';
+  end if;
 
   select status::text into v_status
   from public.orders
@@ -301,9 +285,9 @@ do $$
 declare
   v_status text;
 begin
-  update public.payments
-  set status = 'succeeded'
-  where id = '55555555-eeee-eeee-eeee-eeeeeeeeeeee'::uuid;
+  if has_table_privilege('authenticated', 'public.payments', 'UPDATE') then
+    raise exception 'Normal user should not retain direct UPDATE privilege on payments';
+  end if;
 
   select status::text into v_status
   from public.payments
@@ -330,9 +314,9 @@ do $$
 declare
   v_status text;
 begin
-  update public.reservations
-  set status = 'confirmed'
-  where id = '11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa'::uuid;
+  if has_table_privilege('authenticated', 'public.reservations', 'UPDATE') then
+    raise exception 'Normal user should not retain direct UPDATE privilege on reservations';
+  end if;
 
   select status::text into v_status
   from public.reservations

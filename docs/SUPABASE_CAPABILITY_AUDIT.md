@@ -63,6 +63,7 @@ Bu audit, [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) icindeki Faz 0.5'in
 - **Uygulama:** `listings` public read, admin/backoffice için view veya RPC
 - **Neden:** Okuma tarafında PostgREST ve RPC yeterli ise ek API katmanı yazmak gereksizdir.
 - **Ne yapmayacağız:** Her listeleme ve detay için otomatik olarak ayrı Next API route yazmayacağız.
+- **Yetki sınırı:** Admin/backoffice okuma yüzeyi doğrudan table/view/RPC olabilir; ancak transaction-kritik state değişiklikleri (`reservations/orders/payments/listings`) direct tablo `UPDATE` grant’i ile değil explicit workflow/RPC ile yapılmalıdır.
 
 ### 6. Checkout ve Fiyat Hesabı
 
@@ -87,6 +88,7 @@ Bu audit, [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) icindeki Faz 0.5'in
 - **Uygulama:** `payments`, `payment_events`, `orders`, `reservations`, `listings` güncellemesi tek function içinde
 - **Neden:** State transition veri yoğun ve transaction kritik.
 - **Ne yapmayacağız:** Callback handler içinde birden fazla bağımsız update zinciri çalıştırmayacağız.
+- **Admin/backoffice uzantısı:** Ödeme sonrası manuel tamamlama, iptal veya yeniden açma gibi operasyonlar gerekirse aynı veri bütünlüğü kurallarını koruyan ayrı DB workflow/RPC ile modellenmelidir; direct tablo `UPDATE` aynı authoritative sınırın alternatifi değildir.
 
 ### 9. Edge Function Kullanım Sınırı
 
