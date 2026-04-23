@@ -77,6 +77,30 @@ test("admin cancel route rejects non-admin users before RPC", async (t) => {
   assert.equal(payload.error, "Admin role required");
 });
 
+test("admin workflow route fails closed when profile lookup fails", async (t) => {
+  setupAdminWorkflowEnv(t);
+
+  const response = await handleAdminCancelReservationPost(
+    createJsonRequest({ reason: "customer_withdrew" }),
+    createDependencies({
+      profileError: {
+        code: "57014",
+        message: "statement timeout",
+      },
+      rpc: () => {
+        throw new Error("rpc should not run when profile lookup fails");
+      },
+    }),
+    { reservationId: "11111111-1111-4111-8111-111111111111" },
+  );
+
+  assert.equal(response.status, 500);
+
+  const payload = await response.json();
+  assert.equal(payload.success, false);
+  assert.equal(payload.error, "Admin profile lookup failed");
+});
+
 test("admin cancel route validates reservation id and request body", async (t) => {
   setupAdminWorkflowEnv(t);
 
@@ -368,6 +392,7 @@ function createFailingDependencies(): AdminWorkflowRouteDependencies {
 function createDependencies(options: {
   userId?: string | null;
   getProfileRole?: () => string | null;
+  profileError?: { code?: string | null; message?: string | null } | null;
   rpc: (
     functionName: string,
     args: Record<string, unknown>,
@@ -389,10 +414,12 @@ function createDependencies(options: {
         select: () => ({
           eq: () => ({
             maybeSingle: async () => ({
-              data: {
-                role: options.getProfileRole?.() ?? "admin",
-              },
-              error: null,
+              data: options.profileError
+                ? null
+                : {
+                    role: options.getProfileRole?.() ?? "admin",
+                  },
+              error: options.profileError ?? null,
             }),
           }),
         }),

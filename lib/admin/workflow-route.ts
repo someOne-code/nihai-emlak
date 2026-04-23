@@ -182,8 +182,15 @@ async function guardAdminWorkflowRequest(
     .eq("id", userResult.data.user.id)
     .maybeSingle();
 
+  if (profileResult.error) {
+    return {
+      ok: false,
+      response: jsonError("Admin profile lookup failed", 500),
+    };
+  }
+
   const role = asNonEmptyString((profileResult.data as Record<string, unknown> | null)?.role ?? null);
-  if (profileResult.error || role !== "admin") {
+  if (role !== "admin") {
     return {
       ok: false,
       response: jsonError("Admin role required", 403),

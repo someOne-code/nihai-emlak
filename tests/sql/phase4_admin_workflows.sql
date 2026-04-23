@@ -627,6 +627,7 @@ declare
   v_order_status text;
   v_payment_status text;
   v_listing_status text;
+  v_snapshot jsonb;
 begin
   begin
     perform public.admin_confirm_reservation(
@@ -653,6 +654,14 @@ begin
   select status::text into v_listing_status
   from public.listings
   where id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd003'::uuid;
+
+  v_snapshot := public.get_admin_reservation_workflow_snapshot(
+    'eeeeeeee-ffff-4fff-8fff-fffffffff003'::uuid
+  );
+
+  if v_snapshot #>> '{eligibility,can_confirm}' <> 'false' then
+    raise exception 'TEST 6A FAILED: partial terminal drift should not be confirmable, got %', v_snapshot;
+  end if;
 
   if v_reservation_status <> 'pending'
      or v_order_status <> 'completed'

@@ -774,11 +774,9 @@ begin
     and v_reservation.status not in ('cancelled', 'expired')
     and v_order.status not in ('cancelled', 'failed', 'conflict')
     and v_other_occupant_count = 0
-    and not (
-      v_reservation.status = 'confirmed'
-      and v_order.status = 'completed'
-      and v_listing.status = 'passive'
-    )
+    and v_reservation.status <> 'confirmed'
+    and v_order.status <> 'completed'
+    and v_listing.status <> 'passive'
   );
 
   return jsonb_build_object(
