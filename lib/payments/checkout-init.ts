@@ -109,27 +109,29 @@ export function resolveCheckoutInitReturnUrlsFromEnvironment(input: {
     };
   }
 
-  const configuredSiteUrl = hasPrivateSiteUrl
-    ? input.siteUrl
-    : hasPublicSiteUrl
-      ? input.publicSiteUrl
-      : normalizedVercelUrl ?? "http://localhost:3000";
+  const configuredSiteUrl = (
+    hasPrivateSiteUrl
+      ? input.siteUrl
+      : hasPublicSiteUrl
+        ? input.publicSiteUrl
+        : normalizedVercelUrl ?? "http://localhost:3000"
+  ) as string;
   const configuredOrigins = [
     normalizeHttpOrigin(input.siteUrl),
     normalizeHttpOrigin(input.publicSiteUrl),
     ...(isDevOrTest ? [normalizeHttpOrigin(normalizedVercelUrl)] : []),
   ].filter((value): value is string => value !== null);
-  const selectedOrigin = normalizedPreferredOrigin && (
+  const selectedSiteUrl = normalizedPreferredOrigin && (
     configuredOrigins.includes(normalizedPreferredOrigin)
     || (isDevOrTest && configuredOrigins.length === 0)
   )
-    ? normalizedPreferredOrigin
+    ? applyTrustedOriginToConfiguredSiteUrl(configuredSiteUrl, normalizedPreferredOrigin)
     : configuredSiteUrl;
 
   try {
     return {
       ok: true,
-      returnUrls: buildCheckoutReturnUrls(selectedOrigin),
+      returnUrls: buildCheckoutReturnUrls(selectedSiteUrl),
     };
   } catch {
     return {
@@ -208,6 +210,17 @@ function normalizeHttpOrigin(value: string | null | undefined): string | null {
   }
 
   return parsed.origin;
+}
+
+function applyTrustedOriginToConfiguredSiteUrl(
+  configuredSiteUrl: string,
+  trustedOrigin: string,
+): string {
+  const configured = new URL(normalizeCheckoutSiteUrl(configuredSiteUrl));
+  const trusted = new URL(trustedOrigin);
+  configured.protocol = trusted.protocol;
+  configured.host = trusted.host;
+  return configured.toString();
 }
 
 function asNonEmptyString(value: unknown): string | null {

@@ -209,6 +209,23 @@ test("resolveCheckoutInitReturnUrlsFromEnvironment keeps canonical site URL in p
   assert.equal(result.returnUrls.failUrl, "https://nihaiemlak.com/checkout/fail");
 });
 
+test("resolveCheckoutInitReturnUrlsFromEnvironment preserves configured base path for trusted origin", () => {
+  const result = resolveCheckoutInitReturnUrlsFromEnvironment({
+    nodeEnv: "production",
+    siteUrl: "https://nihaiemlak.com/app",
+    publicSiteUrl: "https://nihaiemlak.com/app",
+    preferredOrigin: "https://nihaiemlak.com",
+  });
+
+  assert.equal(result.ok, true);
+  if (!result.ok) {
+    throw new Error("Expected trusted origin with base path to succeed");
+  }
+
+  assert.equal(result.returnUrls.okUrl, "https://nihaiemlak.com/app/checkout/success");
+  assert.equal(result.returnUrls.failUrl, "https://nihaiemlak.com/app/checkout/fail");
+});
+
 test("resolveCheckoutInitReturnUrlsFromEnvironment fails closed on invalid configured URL", () => {
   const result = resolveCheckoutInitReturnUrlsFromEnvironment({
     nodeEnv: "production",

@@ -359,7 +359,26 @@ async function reconcilePendingPaymentWithOrder(
     };
   }
 
-  return refreshPendingPaymentForCheckoutInit(createServiceRoleSupabaseClient, payment.id);
+  const refreshedPaymentResult = await refreshPendingPaymentForCheckoutInit(
+    createServiceRoleSupabaseClient,
+    payment.id,
+  );
+  if (!refreshedPaymentResult.ok) {
+    return refreshedPaymentResult;
+  }
+
+  if (
+    refreshedPaymentResult.payment.amount !== order.totalAmount
+    || refreshedPaymentResult.payment.currency !== order.currency
+  ) {
+    return {
+      ok: false,
+      status: 409,
+      error: "Pending payment no longer matches order total",
+    };
+  }
+
+  return refreshedPaymentResult;
 }
 
 async function refreshPendingPaymentForCheckoutInit(
