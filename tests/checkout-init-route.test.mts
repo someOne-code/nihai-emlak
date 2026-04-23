@@ -765,6 +765,57 @@ test("checkout init fails closed when multiple pending isbank payments exist for
   assert.equal(payload.error, "Checkout init found multiple pending payments for order");
 });
 
+test("checkout init treats PGRST116 as duplicate pending payment even without english message text", async (t) => {
+  setupCheckoutInitEnv(t);
+
+  const orderId = "7a7a7a7a-7a7a-4a7a-8a7a-7a7a7a7a7a7a";
+  const userId = "6b6b6b6b-6b6b-4b6b-8b6b-6b6b6b6b6b6b";
+
+  const dependencies = createDependencies({
+    getOrder: () => ({
+      id: orderId,
+      total_amount: 1250,
+      currency: "TRY",
+      status: "pending",
+    }),
+    getPendingPayment: () => {
+      throw new Error("default payment lookup should not run");
+    },
+    createServerPaymentsClient: () => ({
+      select: () =>
+        createQueryBuilder(() => ({
+          data: null,
+          error: {
+            code: "PGRST116",
+            message: "singular response conflict",
+          },
+        })),
+    }),
+    insertPayment: () => {
+      throw new Error("insert should not be called when lookup is ambiguous");
+    },
+    userId,
+  });
+
+  const response = await handleCheckoutInitPost(
+    new Request("http://localhost:3000/api/checkout/init", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "http://localhost:3000",
+      },
+      body: JSON.stringify({ orderId }),
+    }),
+    dependencies,
+  );
+
+  assert.equal(response.status, 409);
+
+  const payload = await response.json();
+  assert.equal(payload.success, false);
+  assert.equal(payload.error, "Checkout init found multiple pending payments for order");
+});
+
 test("checkout init never rewrites mismatched payment rows through service-role reconciliation", async (t) => {
   setupCheckoutInitEnv(t);
 

@@ -422,9 +422,6 @@ $$;
 -- TEST 1C: concurrent pending-reservation conflicts map to listing unavailable
 reset role;
 
-alter index public.reservations_single_pending_per_listing_idx
-  rename to phase3_t4_pending_guard_idx;
-
 create or replace function public.phase3_t4_force_pending_reservation_conflict()
 returns trigger
 language plpgsql
@@ -499,12 +496,68 @@ on public.reservations;
 
 drop function if exists public.phase3_t4_force_pending_reservation_conflict();
 
-alter index public.phase3_t4_pending_guard_idx
-  rename to reservations_single_pending_per_listing_idx;
-
 delete from public.reservations
 where listing_id = '77777777-7777-4777-8777-777777777762'::uuid
   and note in ('__phase3_t4_conflict__', '__phase3_t4_conflict_injected__');
+
+-- TEST 1D: unrelated reservation unique violations are not masked as listing-unavailable conflicts
+reset role;
+
+create unique index phase3_t4_reservations_note_unique_idx
+  on public.reservations (note)
+  where note = '__phase3_t4_other_unique__';
+
+insert into public.reservations (
+  listing_id,
+  user_id,
+  move_in_date,
+  stay_months,
+  guest_count,
+  note,
+  status
+)
+values (
+  '77777777-7777-4777-8777-777777777762'::uuid,
+  '66666666-7777-4777-8777-777777777762'::uuid,
+  current_date + 46,
+  6,
+  1,
+  '__phase3_t4_other_unique__',
+  'cancelled'
+);
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', '66666666-7777-4777-8777-777777777762', false);
+select set_config('request.jwt.claim.role', 'authenticated', false);
+
+do $$
+begin
+  begin
+    perform public.create_checkout(
+      '77777777-7777-4777-8777-777777777762'::uuid,
+      current_date + 47,
+      6,
+      1,
+      array['dup_one_t4'],
+      array[]::text[],
+      '__phase3_t4_other_unique__'
+    );
+    raise exception 'TEST 1D FAILED: unrelated reservation unique violation should surface as raw unique_violation';
+  exception
+    when unique_violation then
+      null;
+    when sqlstate 'P0002' then
+      raise exception 'TEST 1D FAILED: unrelated reservation unique violation was incorrectly mapped to listing unavailable';
+  end;
+end;
+$$;
+
+reset role;
+
+drop index if exists public.phase3_t4_reservations_note_unique_idx;
+
+delete from public.reservations
+where note = '__phase3_t4_other_unique__';
 
 set role authenticated;
 select set_config('request.jwt.claim.sub', '66666666-7777-4777-8777-777777777762', false);

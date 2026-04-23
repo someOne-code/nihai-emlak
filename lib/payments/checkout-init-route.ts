@@ -619,11 +619,15 @@ function asUuid(value: unknown): string | null {
 }
 
 function isMultipleRowsSupabaseError(error: SupabaseError | null): boolean {
-  if (!error?.message) {
+  if (!error) {
     return false;
   }
 
-  return error.message.toLowerCase().includes("multiple");
+  if (error.code === "PGRST116") {
+    return true;
+  }
+
+  return error.message?.toLowerCase().includes("multiple rows") ?? false;
 }
 
 function asNonEmptyString(value: unknown): string | null {

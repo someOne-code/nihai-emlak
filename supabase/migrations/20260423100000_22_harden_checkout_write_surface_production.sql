@@ -186,13 +186,17 @@ begin
     when unique_violation then
       get stacked diagnostics v_constraint_name = CONSTRAINT_NAME;
 
-      raise exception 'listing is not available for checkout: %', p_listing_id
-        using
-          errcode = 'P0002',
-          detail = format(
-            'reservation insert conflicted on constraint %s',
-            coalesce(nullif(v_constraint_name, ''), 'unknown')
-          );
+      if v_constraint_name = 'reservations_single_pending_per_listing_idx' then
+        raise exception 'listing is not available for checkout: %', p_listing_id
+          using
+            errcode = 'P0002',
+            detail = format(
+              'reservation insert conflicted on constraint %s',
+              v_constraint_name
+            );
+      end if;
+
+      raise;
   end;
 
   insert into public.orders (

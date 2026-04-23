@@ -1057,6 +1057,61 @@ test("callback route fails closed when provider_ref matches multiple payments", 
   assert.equal(json.error, "Payment callback reference matches multiple payment records");
 });
 
+test("callback route treats PGRST116 as duplicate provider_ref without relying on english message text", async (t) => {
+  const callbackClientId = setupCallbackRouteEnv(t);
+  const providerRef = "legacy-isbank-ref-code-only";
+  const callbackPayload = {
+    clientid: callbackClientId,
+    oid: providerRef,
+    amount: "1250.00",
+    currency: "TRY",
+    okurl: "https://example.com/ok",
+    failurl: "https://example.com/fail",
+    txnType: "Auth",
+    instalment: "0",
+    rnd: "rnd-123",
+    ProcReturnCode: "00",
+    Response: "Approved",
+  };
+
+  const providedHash = sha1Upper(
+    buildIsbankSha1Input(callbackPayload, process.env.ISBANK_STORE_KEY),
+  );
+  const rawBody = new URLSearchParams(callbackPayload).toString();
+
+  const response = await handlePaymentCallbackPost(
+    new Request("http://localhost/api/payment/callback", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        "x-isbank-hash": providedHash,
+      },
+      body: rawBody,
+    }),
+    {
+      createSupabaseClient: (_url, key) => {
+        assert.equal(key, "service-key");
+        return {
+          from: buildPaymentsTableMock({
+            providerRefLookupError: {
+              code: "PGRST116",
+              message: "singular response conflict",
+            },
+          }),
+          rpc: async () => ({ data: { result: "succeeded" }, error: null }),
+        };
+      },
+      sendInngestEvent: async () => {},
+    },
+  );
+
+  assert.equal(response.status, 409);
+
+  const json = await response.json();
+  assert.equal(json.success, false);
+  assert.equal(json.error, "Payment callback reference matches multiple payment records");
+});
+
 function setupCallbackRouteEnv(
   t: TestContext,
   options?: { isbankClientId?: string },
