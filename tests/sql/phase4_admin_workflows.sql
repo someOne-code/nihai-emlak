@@ -550,7 +550,7 @@ $$;
 reset role;
 
 -- ============================================================
--- TEST 6: admin confirm reservation finalizes succeeded payment repair
+-- TEST 6: admin confirm reservation finalizes succeeded payment
 -- ============================================================
 set role authenticated;
 select set_config('request.jwt.claim.sub', 'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb001', false);
@@ -601,6 +601,226 @@ end;
 $$;
 
 reset role;
+
+-- ============================================================
+-- TEST 6A: admin confirm rejects partial terminal drift
+-- ============================================================
+update public.reservations
+set
+  status = 'pending',
+  updated_at = now()
+where id = 'eeeeeeee-ffff-4fff-8fff-fffffffff003'::uuid;
+
+update public.listings
+set
+  status = 'active',
+  updated_at = now()
+where id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd003'::uuid;
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', 'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb001', false);
+select set_config('request.jwt.claim.role', 'authenticated', false);
+
+do $$
+declare
+  v_reservation_status text;
+  v_order_status text;
+  v_payment_status text;
+  v_listing_status text;
+begin
+  begin
+    perform public.admin_confirm_reservation(
+      'eeeeeeee-ffff-4fff-8fff-fffffffff003'::uuid,
+      'should_fail_partial_terminal_drift'
+    );
+    raise exception 'TEST 6A FAILED: confirm should reject partial terminal drift';
+  exception
+    when sqlstate 'P0004' then null;
+  end;
+
+  select status::text into v_reservation_status
+  from public.reservations
+  where id = 'eeeeeeee-ffff-4fff-8fff-fffffffff003'::uuid;
+
+  select status::text into v_order_status
+  from public.orders
+  where id = '11111111-2222-4222-8222-222222222003'::uuid;
+
+  select status::text into v_payment_status
+  from public.payments
+  where id = '33333333-4444-4444-8444-444444444003'::uuid;
+
+  select status::text into v_listing_status
+  from public.listings
+  where id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd003'::uuid;
+
+  if v_reservation_status <> 'pending'
+     or v_order_status <> 'completed'
+     or v_payment_status <> 'succeeded'
+     or v_listing_status <> 'active' then
+    raise exception
+      'TEST 6A FAILED: unexpected statuses reservation=% order=% payment=% listing=%',
+      v_reservation_status, v_order_status, v_payment_status, v_listing_status;
+  end if;
+
+end;
+$$;
+
+reset role;
+
+update public.reservations
+set
+  status = 'confirmed',
+  updated_at = now()
+where id = 'eeeeeeee-ffff-4fff-8fff-fffffffff003'::uuid;
+
+update public.listings
+set
+  status = 'passive',
+  updated_at = now()
+where id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd003'::uuid;
+
+-- ============================================================
+-- TEST 6B: admin confirm rejects stale reservation when listing is already occupied
+-- ============================================================
+update public.listings
+set
+  status = 'active',
+  updated_at = now()
+where id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd003'::uuid;
+
+insert into public.reservations (
+  id,
+  listing_id,
+  user_id,
+  move_in_date,
+  stay_months,
+  guest_count,
+  note,
+  status
+)
+values (
+  'eeeeeeee-ffff-4fff-8fff-fffffffff005'::uuid,
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd003'::uuid,
+  'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb002'::uuid,
+  current_date + 21,
+  6,
+  1,
+  'stale pending reservation after other occupant confirmed',
+  'pending'
+);
+
+insert into public.orders (
+  id,
+  reservation_id,
+  user_id,
+  total_amount,
+  currency,
+  status
+)
+values (
+  '11111111-2222-4222-8222-222222222005'::uuid,
+  'eeeeeeee-ffff-4fff-8fff-fffffffff005'::uuid,
+  'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb002'::uuid,
+  28000,
+  'TRY',
+  'pending'
+);
+
+insert into public.payments (
+  id,
+  order_id,
+  user_id,
+  amount,
+  currency,
+  status,
+  provider,
+  provider_ref
+)
+values (
+  '33333333-4444-4444-8444-444444444005'::uuid,
+  '11111111-2222-4222-8222-222222222005'::uuid,
+  'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb002'::uuid,
+  28000,
+  'TRY',
+  'succeeded',
+  'isbank',
+  '33333333-4444-4444-8444-444444444005'
+);
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', 'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb001', false);
+select set_config('request.jwt.claim.role', 'authenticated', false);
+
+do $$
+declare
+  v_reservation_status text;
+  v_order_status text;
+  v_payment_status text;
+  v_listing_status text;
+  v_snapshot jsonb;
+begin
+  begin
+    perform public.admin_confirm_reservation(
+      'eeeeeeee-ffff-4fff-8fff-fffffffff005'::uuid,
+      'should_fail_listing_already_occupied'
+    );
+    raise exception 'TEST 6B FAILED: confirm should reject listing already occupied by another reservation';
+  exception
+    when sqlstate 'P0001' then null;
+  end;
+
+  select status::text into v_reservation_status
+  from public.reservations
+  where id = 'eeeeeeee-ffff-4fff-8fff-fffffffff005'::uuid;
+
+  select status::text into v_order_status
+  from public.orders
+  where id = '11111111-2222-4222-8222-222222222005'::uuid;
+
+  select status::text into v_payment_status
+  from public.payments
+  where id = '33333333-4444-4444-8444-444444444005'::uuid;
+
+  select status::text into v_listing_status
+  from public.listings
+  where id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd003'::uuid;
+
+  v_snapshot := public.get_admin_reservation_workflow_snapshot(
+    'eeeeeeee-ffff-4fff-8fff-fffffffff005'::uuid
+  );
+
+  if v_snapshot #>> '{eligibility,can_confirm}' <> 'false' then
+    raise exception 'TEST 6B FAILED: stale occupied reservation should not be confirmable, got %', v_snapshot;
+  end if;
+
+  if v_reservation_status <> 'pending'
+     or v_order_status <> 'pending'
+     or v_payment_status <> 'succeeded'
+     or v_listing_status <> 'active' then
+    raise exception
+      'TEST 6B FAILED: unexpected statuses reservation=% order=% payment=% listing=%',
+      v_reservation_status, v_order_status, v_payment_status, v_listing_status;
+  end if;
+end;
+$$;
+
+reset role;
+
+delete from public.payments
+where id = '33333333-4444-4444-8444-444444444005'::uuid;
+
+delete from public.orders
+where id = '11111111-2222-4222-8222-222222222005'::uuid;
+
+delete from public.reservations
+where id = 'eeeeeeee-ffff-4fff-8fff-fffffffff005'::uuid;
+
+update public.listings
+set
+  status = 'passive',
+  updated_at = now()
+where id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd003'::uuid;
 
 -- ============================================================
 -- TEST 7: admin confirm rejects non-succeeded payment

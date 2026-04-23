@@ -12,7 +12,7 @@ import {
   backfillLegacyUserRolesMigrationName,
   getBackfillLegacyUserRolesSQL,
 } from "../payload/migrations/backfill-legacy-user-roles.ts";
-import { resolvePayloadServerURL } from "../payload/server-url.ts";
+import { resolvePayloadServerURL, resolvePublicSiteOrigin } from "../payload/server-url.ts";
 
 test("Payload server URL fails closed outside development/test", () => {
   assert.throws(
@@ -46,6 +46,16 @@ test("Payload server URL prefers private SITE_URL and normalizes to origin", () 
   });
 
   assert.equal(result, "https://admin.example.com");
+});
+
+test("Public site origin prefers NEXT_PUBLIC_SITE_URL over private SITE_URL", () => {
+  const result = resolvePublicSiteOrigin({
+    nodeEnv: "production",
+    publicSiteUrl: "https://public.example.com/some/path",
+    siteUrl: "https://admin.example.com",
+  });
+
+  assert.equal(result, "https://public.example.com");
 });
 
 test("Payload server URL rejects VERCEL_URL-only bootstrap in production", () => {

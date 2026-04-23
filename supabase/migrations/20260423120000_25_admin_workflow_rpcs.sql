@@ -173,7 +173,7 @@ begin
   where reservation_id = v_reservation.id;
 
   if v_order_count <> 1 then
-    raise exception 'reservation order invariant violated: %', v_reservation.id using errcode = '22023';
+    raise exception 'reservation order invariant violated: %', v_reservation.id using errcode = 'P0004';
   end if;
 
   select *
@@ -188,7 +188,7 @@ begin
   where order_id = v_order.id;
 
   if v_payment_count <> 1 then
-    raise exception 'order payment invariant violated: %', v_order.id using errcode = '22023';
+    raise exception 'order payment invariant violated: %', v_order.id using errcode = 'P0004';
   end if;
 
   select *
@@ -209,15 +209,15 @@ begin
 
   if v_order.user_id <> v_reservation.user_id
      or v_payment.user_id <> v_reservation.user_id then
-    raise exception 'reservation ownership invariant violated: %', v_reservation.id using errcode = '22023';
+    raise exception 'reservation ownership invariant violated: %', v_reservation.id using errcode = 'P0004';
   end if;
 
   if v_payment.order_id <> v_order.id then
-    raise exception 'payment order invariant violated: %', v_payment.id using errcode = '22023';
+    raise exception 'payment order invariant violated: %', v_payment.id using errcode = 'P0004';
   end if;
 
   if v_listing.status not in ('active', 'passive') then
-    raise exception 'listing status invariant violated: %', v_listing.id using errcode = '22023';
+    raise exception 'listing status invariant violated: %', v_listing.id using errcode = 'P0004';
   end if;
 
   if v_reservation.status in ('cancelled', 'expired') then
@@ -433,6 +433,7 @@ declare
   v_listing public.listings%rowtype;
   v_order_count integer;
   v_payment_count integer;
+  v_other_occupant_count integer;
   v_note text;
   v_event_id uuid;
 begin
@@ -472,7 +473,7 @@ begin
   where reservation_id = v_reservation.id;
 
   if v_order_count <> 1 then
-    raise exception 'reservation order invariant violated: %', v_reservation.id using errcode = '22023';
+    raise exception 'reservation order invariant violated: %', v_reservation.id using errcode = 'P0004';
   end if;
 
   select *
@@ -487,7 +488,7 @@ begin
   where order_id = v_order.id;
 
   if v_payment_count <> 1 then
-    raise exception 'order payment invariant violated: %', v_order.id using errcode = '22023';
+    raise exception 'order payment invariant violated: %', v_order.id using errcode = 'P0004';
   end if;
 
   select *
@@ -508,11 +509,11 @@ begin
 
   if v_order.user_id <> v_reservation.user_id
      or v_payment.user_id <> v_reservation.user_id then
-    raise exception 'reservation ownership invariant violated: %', v_reservation.id using errcode = '22023';
+    raise exception 'reservation ownership invariant violated: %', v_reservation.id using errcode = 'P0004';
   end if;
 
   if v_payment.order_id <> v_order.id then
-    raise exception 'payment order invariant violated: %', v_payment.id using errcode = '22023';
+    raise exception 'payment order invariant violated: %', v_payment.id using errcode = 'P0004';
   end if;
 
   if v_payment.status <> 'succeeded' then
@@ -533,8 +534,31 @@ begin
     raise exception 'reservation is already confirmed: %', v_reservation.id using errcode = 'P0001';
   end if;
 
+  select count(*)
+  into v_other_occupant_count
+  from public.reservations as r
+  join public.orders as o
+    on o.reservation_id = r.id
+  join public.payments as p
+    on p.order_id = o.id
+  where r.listing_id = v_listing.id
+    and r.id <> v_reservation.id
+    and r.status = 'confirmed'
+    and o.status = 'completed'
+    and p.status = 'succeeded';
+
+  if v_other_occupant_count > 0 then
+    raise exception 'listing is already occupied: %', v_listing.id using errcode = 'P0001';
+  end if;
+
+  if v_reservation.status = 'confirmed'
+     or v_order.status = 'completed'
+     or v_listing.status = 'passive' then
+    raise exception 'reservation confirm invariant drift: %', v_reservation.id using errcode = 'P0004';
+  end if;
+
   if v_listing.status not in ('active', 'passive') then
-    raise exception 'listing status invariant violated: %', v_listing.id using errcode = '22023';
+    raise exception 'listing status invariant violated: %', v_listing.id using errcode = 'P0004';
   end if;
 
   update public.orders
@@ -651,6 +675,7 @@ declare
   v_listing public.listings%rowtype;
   v_order_count integer;
   v_payment_count integer;
+  v_other_occupant_count integer;
   v_latest_event jsonb;
   v_can_cancel boolean := false;
   v_can_confirm boolean := false;
@@ -682,7 +707,7 @@ begin
   where reservation_id = v_reservation.id;
 
   if v_order_count <> 1 then
-    raise exception 'reservation order invariant violated: %', v_reservation.id using errcode = '22023';
+    raise exception 'reservation order invariant violated: %', v_reservation.id using errcode = 'P0004';
   end if;
 
   select *
@@ -696,7 +721,7 @@ begin
   where order_id = v_order.id;
 
   if v_payment_count <> 1 then
-    raise exception 'order payment invariant violated: %', v_order.id using errcode = '22023';
+    raise exception 'order payment invariant violated: %', v_order.id using errcode = 'P0004';
   end if;
 
   select *
@@ -731,10 +756,24 @@ begin
     and v_order.status <> 'cancelled'
   );
 
+  select count(*)
+  into v_other_occupant_count
+  from public.reservations as r
+  join public.orders as o
+    on o.reservation_id = r.id
+  join public.payments as p
+    on p.order_id = o.id
+  where r.listing_id = v_listing.id
+    and r.id <> v_reservation.id
+    and r.status = 'confirmed'
+    and o.status = 'completed'
+    and p.status = 'succeeded';
+
   v_can_confirm := (
     v_payment.status = 'succeeded'
     and v_reservation.status not in ('cancelled', 'expired')
     and v_order.status not in ('cancelled', 'failed', 'conflict')
+    and v_other_occupant_count = 0
     and not (
       v_reservation.status = 'confirmed'
       and v_order.status = 'completed'

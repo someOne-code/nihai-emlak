@@ -199,6 +199,61 @@ test("admin confirm route accepts optional note and maps not found/conflict erro
   assert.equal((await conflictResponse.json()).error, "Admin workflow conflict");
 });
 
+test("admin confirm route maps invariant drift separately from validation errors", async (t) => {
+  setupAdminWorkflowEnv(t);
+
+  const legacyInvariantResponse = await handleAdminConfirmReservationPost(
+    createJsonRequest({}),
+    createDependencies({
+      rpc: () => ({
+        data: null,
+        error: {
+          code: "22023",
+          message: "reservation ownership invariant violated: 11111111-1111-4111-8111-111111111111",
+        },
+      }),
+    }),
+    { reservationId: "11111111-1111-4111-8111-111111111111" },
+  );
+
+  assert.equal(legacyInvariantResponse.status, 500);
+  assert.equal((await legacyInvariantResponse.json()).error, "Admin workflow invariant violation");
+
+  const invariantResponse = await handleAdminConfirmReservationPost(
+    createJsonRequest({}),
+    createDependencies({
+      rpc: () => ({
+        data: null,
+        error: {
+          code: "P0004",
+          message: "reservation confirm invariant drift: 11111111-1111-4111-8111-111111111111",
+        },
+      }),
+    }),
+    { reservationId: "11111111-1111-4111-8111-111111111111" },
+  );
+
+  assert.equal(invariantResponse.status, 500);
+  assert.equal((await invariantResponse.json()).error, "Admin workflow invariant violation");
+
+  const validationResponse = await handleAdminConfirmReservationPost(
+    createJsonRequest({}),
+    createDependencies({
+      rpc: () => ({
+        data: null,
+        error: {
+          code: "22023",
+          message: "p_note is too long",
+        },
+      }),
+    }),
+    { reservationId: "11111111-1111-4111-8111-111111111111" },
+  );
+
+  assert.equal(validationResponse.status, 400);
+  assert.equal((await validationResponse.json()).error, "Invalid admin workflow request");
+});
+
 test("admin confirm route calls admin_confirm_reservation RPC and returns summary", async (t) => {
   setupAdminWorkflowEnv(t);
 

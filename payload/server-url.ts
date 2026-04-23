@@ -25,6 +25,26 @@ export function resolvePayloadServerURL(input: ResolvePayloadServerURLInput): st
   return normalizeHttpOrigin(configuredURL);
 }
 
+export function resolvePublicSiteOrigin(input: ResolvePayloadServerURLInput): string {
+  const nodeEnv = typeof input.nodeEnv === "string" ? input.nodeEnv.toLowerCase() : "";
+  const isDevOrTest = nodeEnv === "development" || nodeEnv === "test";
+  const configuredURL = (
+    asNonEmptyString(input.publicSiteUrl)
+    ?? asNonEmptyString(input.siteUrl)
+    ?? (isDevOrTest ? normalizeVercelUrl(input.vercelUrl) : null)
+  );
+
+  if (!configuredURL) {
+    if (isDevOrTest) {
+      return "http://localhost:3000";
+    }
+
+    throw new Error("NEXT_PUBLIC_SITE_URL or SITE_URL must be configured outside development/test");
+  }
+
+  return normalizeHttpOrigin(configuredURL);
+}
+
 function normalizeHttpOrigin(value: string): string {
   let parsed: URL;
   try {

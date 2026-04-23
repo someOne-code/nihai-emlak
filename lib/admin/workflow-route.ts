@@ -331,6 +331,7 @@ function mapAdminWorkflowRpcError(
   notFoundError: string,
 ): [string, number] {
   const code = asNonEmptyString(error.code);
+  const message = asNonEmptyString(error.message);
 
   if (code === "28000") {
     return ["Authentication required", 401];
@@ -348,11 +349,28 @@ function mapAdminWorkflowRpcError(
     return ["Admin workflow conflict", 409];
   }
 
+  if (code === "P0004") {
+    return ["Admin workflow invariant violation", 500];
+  }
+
   if (code === "22023") {
+    if (isAdminWorkflowInvariantMessage(message)) {
+      return ["Admin workflow invariant violation", 500];
+    }
+
     return ["Invalid admin workflow request", 400];
   }
 
   return ["Admin workflow RPC failed", 500];
+}
+
+function isAdminWorkflowInvariantMessage(message: string | null): boolean {
+  const normalizedMessage = message?.trim().toLowerCase() ?? "";
+  if (!normalizedMessage) {
+    return false;
+  }
+
+  return normalizedMessage.includes("invariant");
 }
 
 function parseReservationWorkflowSuccess(value: unknown): {
