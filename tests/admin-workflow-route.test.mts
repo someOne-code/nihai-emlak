@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import type { TestContext } from "node:test";
 import test from "node:test";
 
@@ -99,6 +100,57 @@ test("admin workflow route fails closed when profile lookup fails", async (t) =>
   const payload = await response.json();
   assert.equal(payload.success, false);
   assert.equal(payload.error, "Admin profile lookup failed");
+});
+
+test("admin workflow route trusts private SITE_URL and rejects NEXT_PUBLIC_SITE_URL when both are configured", async (t) => {
+  const previousNodeEnv = process.env.NODE_ENV;
+  const previousSiteUrl = process.env.SITE_URL;
+  const previousPublicSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+  const previousVercelUrl = process.env.VERCEL_URL;
+
+  process.env.NODE_ENV = "production";
+  process.env.SITE_URL = "https://admin.example.com/internal";
+  process.env.NEXT_PUBLIC_SITE_URL = "https://www.example.com";
+  delete process.env.VERCEL_URL;
+
+  t.after(() => {
+    restoreEnv("NODE_ENV", previousNodeEnv);
+    restoreEnv("SITE_URL", previousSiteUrl);
+    restoreEnv("NEXT_PUBLIC_SITE_URL", previousPublicSiteUrl);
+    restoreEnv("VERCEL_URL", previousVercelUrl);
+  });
+
+  const publicOriginResponse = await handleAdminCancelReservationPost(
+    createJsonRequest(
+      { reason: "customer_withdrew" },
+      "https://www.example.com",
+    ),
+    createFailingDependencies(),
+    { reservationId: "11111111-1111-4111-8111-111111111111" },
+  );
+
+  assert.equal(publicOriginResponse.status, 403);
+  assert.equal((await publicOriginResponse.json()).error, "Admin workflow Origin is not trusted");
+
+  const privateOriginResponse = await handleAdminCancelReservationPost(
+    createJsonRequest(
+      { reason: "customer_withdrew" },
+      "https://admin.example.com",
+    ),
+    createDependencies({
+      userId: null,
+      getProfileRole: () => {
+        throw new Error("profile lookup should not run without auth");
+      },
+      rpc: () => {
+        throw new Error("rpc should not run without auth");
+      },
+    }),
+    { reservationId: "11111111-1111-4111-8111-111111111111" },
+  );
+
+  assert.equal(privateOriginResponse.status, 401);
+  assert.equal((await privateOriginResponse.json()).error, "Authentication required");
 });
 
 test("admin cancel route validates reservation id and request body", async (t) => {
@@ -370,12 +422,44 @@ test("admin reopen route validates reason and maps rpc response", async (t) => {
   assert.equal(payload.data.listing.status, "active");
 });
 
-function createJsonRequest(payload: unknown): Request {
+test("admin workflow SQL keeps payment-first lock order aligned with payment callback", () => {
+  const adminWorkflowSql = readFileSync(
+    new URL("../supabase/migrations/20260423120000_25_admin_workflow_rpcs.sql", import.meta.url),
+    "utf8",
+  );
+  const callbackSql = readFileSync(
+    new URL("../supabase/migrations/20260423103000_23_remove_process_payment_test_hook.sql", import.meta.url),
+    "utf8",
+  );
+
+  const callbackLockOrder = extractLockOrder(
+    callbackSql,
+    "internal.process_payment_checkout",
+  );
+
+  assert.deepEqual(callbackLockOrder, [
+    "public.payments",
+    "public.orders",
+    "public.reservations",
+    "public.listings",
+  ]);
+
+  assert.deepEqual(
+    extractLockOrder(adminWorkflowSql, "internal.admin_cancel_reservation"),
+    callbackLockOrder,
+  );
+  assert.deepEqual(
+    extractLockOrder(adminWorkflowSql, "internal.admin_confirm_reservation"),
+    callbackLockOrder,
+  );
+});
+
+function createJsonRequest(payload: unknown, origin = "http://localhost:3000"): Request {
   return new Request("http://localhost:3000/api/admin/workflows/test", {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      origin: "http://localhost:3000",
+      origin,
     },
     body: JSON.stringify(payload),
   });
@@ -456,4 +540,29 @@ function restoreEnv(key: string, value: string | undefined): void {
   }
 
   process.env[key] = value;
+}
+
+function extractLockOrder(sqlText: string, functionName: string): string[] {
+  const functionBodyMatch = sqlText.match(
+    new RegExp(
+      `create\\s+or\\s+replace\\s+function\\s+${escapeRegExp(functionName)}\\([^]*?as\\s+\\$\\$([^]*?)\\$\\$;`,
+      "i",
+    ),
+  );
+
+  assert.ok(functionBodyMatch, `Expected to find function ${functionName}`);
+
+  return functionBodyMatch[1]!
+    .split(";")
+    .map((statement) => statement.trim())
+    .filter((statement) => /for update$/i.test(statement))
+    .map((statement) => {
+      const fromMatch = statement.match(/from\s+(public\.(?:payments|orders|reservations|listings))/i);
+      assert.ok(fromMatch, `Expected lock statement in ${functionName} to include a tracked table`);
+      return fromMatch[1].toLowerCase();
+    });
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

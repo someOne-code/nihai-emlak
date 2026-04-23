@@ -1,6 +1,5 @@
 import {
   readStateChangingJsonRequestPayload,
-  validateStateChangingJsonRequestEnvelope,
   type StateChangingJsonRouteConfig,
 } from "../http/state-changing-json-route.ts";
 
@@ -156,7 +155,7 @@ async function guardAdminWorkflowRequest(
   | { ok: true; supabase: SupabaseClient }
   | { ok: false; response: Response }
 > {
-  const trustedRequestResult = validateStateChangingJsonRequestEnvelope(
+  const trustedRequestResult = validateAdminWorkflowRequestEnvelope(
     request,
     ADMIN_WORKFLOW_JSON_ROUTE_CONFIG,
   );
@@ -200,6 +199,85 @@ async function guardAdminWorkflowRequest(
   return {
     ok: true,
     supabase,
+  };
+}
+
+function validateAdminWorkflowRequestEnvelope(
+  request: Request,
+  config: StateChangingJsonRouteConfig,
+): { ok: true } | { ok: false; status: number; error: string } {
+  if (!isJsonContentType(request.headers.get("content-type"))) {
+    return {
+      ok: false,
+      status: 415,
+      error: `${config.routeLabel} requires application/json`,
+    };
+  }
+
+  const trustedOriginsResult = resolveTrustedAdminWorkflowOriginsFromEnvironment();
+  if (!trustedOriginsResult.ok) {
+    return trustedOriginsResult;
+  }
+
+  const originHeader = request.headers.get("origin");
+  if (!originHeader || originHeader.trim().length === 0) {
+    return {
+      ok: false,
+      status: 403,
+      error: `${config.routeLabel} Origin header is required`,
+    };
+  }
+
+  const requestOrigin = normalizeHttpOrigin(originHeader);
+  if (!requestOrigin || !trustedOriginsResult.origins.includes(requestOrigin)) {
+    return {
+      ok: false,
+      status: 403,
+      error: `${config.routeLabel} Origin is not trusted`,
+    };
+  }
+
+  return { ok: true };
+}
+
+function resolveTrustedAdminWorkflowOriginsFromEnvironment():
+  | { ok: true; origins: string[] }
+  | { ok: false; status: number; error: string } {
+  const nodeEnv = typeof process.env.NODE_ENV === "string" ? process.env.NODE_ENV.toLowerCase() : "";
+  const isDevOrTest = nodeEnv === "development" || nodeEnv === "test";
+  const trustedOrigin = (
+    asNonEmptyString(process.env.SITE_URL)
+    ?? asNonEmptyString(process.env.NEXT_PUBLIC_SITE_URL)
+    ?? (isDevOrTest ? normalizeVercelUrl(process.env.VERCEL_URL) : null)
+  );
+
+  if (!trustedOrigin) {
+    if (!isDevOrTest) {
+      return {
+        ok: false,
+        status: 500,
+        error: "SITE_URL or NEXT_PUBLIC_SITE_URL must be configured outside development/test",
+      };
+    }
+
+    return {
+      ok: true,
+      origins: ["http://localhost:3000"],
+    };
+  }
+
+  const normalizedOrigin = normalizeHttpOrigin(trustedOrigin);
+  if (!normalizedOrigin) {
+    return {
+      ok: false,
+      status: 500,
+      error: "Admin workflow trusted origin configuration is invalid",
+    };
+  }
+
+  return {
+    ok: true,
+    origins: [normalizedOrigin],
   };
 }
 
@@ -523,4 +601,36 @@ function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     value,
   );
+}
+
+function isJsonContentType(value: string | null): boolean {
+  return value?.toLowerCase().split(";")[0]?.trim() === "application/json";
+}
+
+function normalizeHttpOrigin(value: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(value.trim());
+  } catch {
+    return null;
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return null;
+  }
+
+  if (parsed.username || parsed.password) {
+    return null;
+  }
+
+  return parsed.origin;
+}
+
+function normalizeVercelUrl(value: string | null | undefined): string | null {
+  const normalized = asNonEmptyString(value);
+  if (!normalized) {
+    return null;
+  }
+
+  return normalized.includes("://") ? normalized : `https://${normalized}`;
 }

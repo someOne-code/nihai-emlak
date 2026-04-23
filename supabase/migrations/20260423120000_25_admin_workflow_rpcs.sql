@@ -160,8 +160,7 @@ begin
   select *
   into v_reservation
   from public.reservations
-  where id = p_reservation_id
-  for update;
+  where id = p_reservation_id;
 
   if not found then
     raise exception 'reservation not found: %', p_reservation_id using errcode = 'P0002';
@@ -179,8 +178,7 @@ begin
   select *
   into v_order
   from public.orders
-  where reservation_id = v_reservation.id
-  for update;
+  where reservation_id = v_reservation.id;
 
   select count(*)
   into v_payment_count
@@ -194,13 +192,51 @@ begin
   select *
   into v_payment
   from public.payments
-  where order_id = v_order.id
-  for update;
+  where order_id = v_order.id;
 
   select *
   into v_listing
   from public.listings
-  where id = v_reservation.listing_id
+  where id = v_reservation.listing_id;
+
+  if not found then
+    raise exception 'listing not found for reservation: %', v_reservation.id using errcode = 'P0002';
+  end if;
+
+  select *
+  into v_payment
+  from public.payments
+  where id = v_payment.id
+  for update;
+
+  if not found then
+    raise exception 'payment not found for order: %', v_order.id using errcode = 'P0002';
+  end if;
+
+  select *
+  into v_order
+  from public.orders
+  where id = v_order.id
+  for update;
+
+  if not found then
+    raise exception 'order not found for reservation: %', v_reservation.id using errcode = 'P0002';
+  end if;
+
+  select *
+  into v_reservation
+  from public.reservations
+  where id = v_reservation.id
+  for update;
+
+  if not found then
+    raise exception 'reservation not found: %', p_reservation_id using errcode = 'P0002';
+  end if;
+
+  select *
+  into v_listing
+  from public.listings
+  where id = v_listing.id
   for update;
 
   if not found then
@@ -460,8 +496,7 @@ begin
   select *
   into v_reservation
   from public.reservations
-  where id = p_reservation_id
-  for update;
+  where id = p_reservation_id;
 
   if not found then
     raise exception 'reservation not found: %', p_reservation_id using errcode = 'P0002';
@@ -479,8 +514,7 @@ begin
   select *
   into v_order
   from public.orders
-  where reservation_id = v_reservation.id
-  for update;
+  where reservation_id = v_reservation.id;
 
   select count(*)
   into v_payment_count
@@ -494,13 +528,51 @@ begin
   select *
   into v_payment
   from public.payments
-  where order_id = v_order.id
-  for update;
+  where order_id = v_order.id;
 
   select *
   into v_listing
   from public.listings
-  where id = v_reservation.listing_id
+  where id = v_reservation.listing_id;
+
+  if not found then
+    raise exception 'listing not found for reservation: %', v_reservation.id using errcode = 'P0002';
+  end if;
+
+  select *
+  into v_payment
+  from public.payments
+  where id = v_payment.id
+  for update;
+
+  if not found then
+    raise exception 'payment not found for order: %', v_order.id using errcode = 'P0002';
+  end if;
+
+  select *
+  into v_order
+  from public.orders
+  where id = v_order.id
+  for update;
+
+  if not found then
+    raise exception 'order not found for reservation: %', v_reservation.id using errcode = 'P0002';
+  end if;
+
+  select *
+  into v_reservation
+  from public.reservations
+  where id = v_reservation.id
+  for update;
+
+  if not found then
+    raise exception 'reservation not found: %', p_reservation_id using errcode = 'P0002';
+  end if;
+
+  select *
+  into v_listing
+  from public.listings
+  where id = v_listing.id
   for update;
 
   if not found then
@@ -679,6 +751,9 @@ declare
   v_latest_event jsonb;
   v_can_cancel boolean := false;
   v_can_confirm boolean := false;
+  v_has_consistent_ownership boolean := false;
+  v_has_consistent_payment_order_link boolean := false;
+  v_has_valid_listing_status boolean := false;
 begin
   if auth.uid() is null then
     raise exception 'authenticated admin is required' using errcode = '28000';
@@ -751,8 +826,18 @@ begin
   order by e.created_at desc
   limit 1;
 
+  v_has_consistent_ownership := (
+    v_order.user_id = v_reservation.user_id
+    and v_payment.user_id = v_reservation.user_id
+  );
+  v_has_consistent_payment_order_link := v_payment.order_id = v_order.id;
+  v_has_valid_listing_status := v_listing.status in ('active', 'passive');
+
   v_can_cancel := (
-    v_reservation.status not in ('cancelled', 'expired')
+    v_has_consistent_ownership
+    and v_has_consistent_payment_order_link
+    and v_has_valid_listing_status
+    and v_reservation.status not in ('cancelled', 'expired')
     and v_order.status <> 'cancelled'
   );
 
@@ -770,7 +855,10 @@ begin
     and p.status = 'succeeded';
 
   v_can_confirm := (
-    v_payment.status = 'succeeded'
+    v_has_consistent_ownership
+    and v_has_consistent_payment_order_link
+    and v_has_valid_listing_status
+    and v_payment.status = 'succeeded'
     and v_reservation.status not in ('cancelled', 'expired')
     and v_order.status not in ('cancelled', 'failed', 'conflict')
     and v_other_occupant_count = 0

@@ -832,6 +832,136 @@ set
 where id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd003'::uuid;
 
 -- ============================================================
+-- TEST 6C: snapshot fails closed on ownership drift instead of advertising admin actions
+-- ============================================================
+insert into public.listings (
+  id,
+  type,
+  status,
+  title,
+  slug,
+  city,
+  price,
+  currency
+)
+values (
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd005'::uuid,
+  'rent',
+  'active',
+  'Admin Ownership Drift Listing',
+  'admin-ownership-drift-listing',
+  'Istanbul',
+  29000,
+  'TRY'
+);
+
+insert into public.reservations (
+  id,
+  listing_id,
+  user_id,
+  move_in_date,
+  stay_months,
+  guest_count,
+  note,
+  status
+)
+values (
+  'eeeeeeee-ffff-4fff-8fff-fffffffff006'::uuid,
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd005'::uuid,
+  'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb002'::uuid,
+  current_date + 28,
+  6,
+  1,
+  'ownership drift regression guard',
+  'pending'
+);
+
+insert into public.orders (
+  id,
+  reservation_id,
+  user_id,
+  total_amount,
+  currency,
+  status
+)
+values (
+  '11111111-2222-4222-8222-222222222006'::uuid,
+  'eeeeeeee-ffff-4fff-8fff-fffffffff006'::uuid,
+  'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb001'::uuid,
+  29000,
+  'TRY',
+  'pending'
+);
+
+insert into public.payments (
+  id,
+  order_id,
+  user_id,
+  amount,
+  currency,
+  status,
+  provider,
+  provider_ref
+)
+values (
+  '33333333-4444-4444-8444-444444444006'::uuid,
+  '11111111-2222-4222-8222-222222222006'::uuid,
+  'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb002'::uuid,
+  29000,
+  'TRY',
+  'succeeded',
+  'isbank',
+  '33333333-4444-4444-8444-444444444006'
+);
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', 'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb001', false);
+select set_config('request.jwt.claim.role', 'authenticated', false);
+
+do $$
+declare
+  v_snapshot jsonb;
+begin
+  v_snapshot := public.get_admin_reservation_workflow_snapshot(
+    'eeeeeeee-ffff-4fff-8fff-fffffffff006'::uuid
+  );
+
+  if v_snapshot #>> '{eligibility,can_cancel}' <> 'false' then
+    raise exception 'TEST 6C FAILED: ownership drift should not be cancelable, got %', v_snapshot;
+  end if;
+
+  if v_snapshot #>> '{eligibility,can_confirm}' <> 'false' then
+    raise exception 'TEST 6C FAILED: ownership drift should not be confirmable, got %', v_snapshot;
+  end if;
+
+  begin
+    perform public.admin_cancel_reservation(
+      'eeeeeeee-ffff-4fff-8fff-fffffffff006'::uuid,
+      'should_fail_ownership_drift',
+      null
+    );
+    raise exception 'TEST 6C FAILED: admin cancel should reject ownership drift';
+  exception
+    when sqlstate 'P0004' then null;
+  end;
+end;
+$$;
+
+reset role;
+
+delete from public.payments
+where id = '33333333-4444-4444-8444-444444444006'::uuid;
+
+delete from public.orders
+where id = '11111111-2222-4222-8222-222222222006'::uuid;
+
+delete from public.reservations
+where id = 'eeeeeeee-ffff-4fff-8fff-fffffffff006'::uuid;
+
+delete from public.listings
+where id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd005'::uuid;
+
+-- ============================================================
 -- TEST 7: admin confirm rejects non-succeeded payment
 -- ============================================================
 set role authenticated;
