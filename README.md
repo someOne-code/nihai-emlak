@@ -52,7 +52,7 @@ Repo icinde ilerleme sirasi:
 
 1. `AGENTS.md`
 2. `README.md`
-3. `docs/PHASE_1_2_TASKS.md`
+3. `docs/PHASE_3_TASKS.md`
 4. `docs/SUPABASE_CAPABILITY_AUDIT.md`
 5. gorevle ilgili diger plan dokumanlari
 
@@ -60,7 +60,8 @@ Hizli repo haritasi:
 
 - `AGENTS.md`: repo kurallari ve kanonik workspace
 - `docs/IMPLEMENTATION_PLAN.md`: faz sirasini ve teslim kapilarini tanimlar
-- `docs/PHASE_1_2_TASKS.md`: guncel backend gorev panosu
+- `docs/PHASE_3_TASKS.md`: guncel checkout backend gorev panosu
+- `docs/PHASE_1_2_TASKS.md`: Faz 1 + Faz 2 gorev gecmisi ve erken backend referansi
 - `docs/SUPABASE_CAPABILITY_AUDIT.md`: katman karar matrisi
 - `docs/PROJECT_PLAN.md`: is ve domain baglami
 - `docs/BACKEND_PHASE_1.md`: erken faz referans notu
@@ -105,7 +106,7 @@ npm run build
 
 Bu repo TDD ile ilerler:
 
-1. `docs/PHASE_1_2_TASKS.md` icinden gorevi sec
+1. aktif faz gorev dokumanindan gorevi sec (`docs/PHASE_3_TASKS.md` Phase 3 icin)
 2. `docs/SUPABASE_CAPABILITY_AUDIT.md` ile katman kararini kontrol et
 3. en kucuk failing testi yaz veya guncelle
 4. minimum implementasyonu yap
@@ -147,6 +148,7 @@ Ornek degerler icin `.env.example` dosyasina bak.
 - Supabase-first capability audit: `docs/SUPABASE_CAPABILITY_AUDIT.md`
 - Ilk backend implementasyon listesi: `docs/BACKEND_PHASE_1.md`
 - Faz bazli uygulama sirasi: `docs/IMPLEMENTATION_PLAN.md`
+- Faz 3 checkout gorev listesi: `docs/PHASE_3_TASKS.md`
 - Faz 1-2 somut gorev listesi: `docs/PHASE_1_2_TASKS.md`
 - Workspace kontrol listesi: `docs/WORKSPACE_HEALTH_CHECKLIST.md`
 

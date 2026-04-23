@@ -22,7 +22,7 @@ dir AGENTS.md, package.json, supabase, tests
 Read in this order:
 
 1. `AGENTS.md`
-2. `PHASE_1_2_TASKS.md`
+2. active phase task board (`PHASE_3_TASKS.md` while Phase 3 is active)
 3. `SUPABASE_CAPABILITY_AUDIT.md`
 4. relevant task docs referenced from those files
 
@@ -50,7 +50,7 @@ bash .codex/scripts/test.sh
 
 For every task:
 
-1. pick the task from `PHASE_1_2_TASKS.md`
+1. pick the task from the active phase task board
 2. do a quick Supabase-first layer check in `SUPABASE_CAPABILITY_AUDIT.md`
 3. write or update the smallest failing test first
 4. implement the minimum code
