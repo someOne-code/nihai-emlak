@@ -178,7 +178,7 @@ test("admin workflow surfaces map SQLSTATE 22023 to invalid request without mess
   }
 });
 
-test("admin workflow surfaces preserve P0004 invariant mapping when audit RPC fails", async (t) => {
+test("admin workflow surfaces fail closed when invariant audit RPC fails", async (t) => {
   setupAdminWorkflowEnv(t);
 
   for (const surface of ADMIN_WORKFLOW_SURFACES) {
@@ -208,7 +208,11 @@ test("admin workflow surfaces preserve P0004 invariant mapping when audit RPC fa
     );
 
     assert.equal(response.status, 500, `${surface.name} surface status`);
-    assert.equal((await response.json()).error, "Admin workflow invariant violation", `${surface.name} surface payload.error`);
+    assert.equal(
+      (await response.json()).error,
+      "Failed to audit admin workflow invariant violation",
+      `${surface.name} surface payload.error`,
+    );
   }
 });
 

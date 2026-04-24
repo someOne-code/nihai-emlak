@@ -379,8 +379,7 @@ async function auditAdminWorkflowInvariantRejection(
   });
 
   if (auditResult.error || !asUuid(auditResult.data)) {
-    // Preserve deterministic SQLSTATE-to-HTTP mapping for the primary workflow RPC.
-    return null;
+    return jsonError("Failed to audit admin workflow invariant violation", 500);
   }
 
   return null;
