@@ -117,16 +117,20 @@ export function resolveCheckoutInitReturnUrlsFromEnvironment(input: {
         : normalizedVercelUrl ?? "http://localhost:3000"
   ) as string;
   const configuredOrigins = [
-    normalizeHttpOrigin(input.siteUrl),
-    normalizeHttpOrigin(input.publicSiteUrl),
-    ...(isDevOrTest ? [normalizeHttpOrigin(normalizedVercelUrl)] : []),
-  ].filter((value): value is string => value !== null);
-  const selectedSiteUrl = normalizedPreferredOrigin && (
-    configuredOrigins.includes(normalizedPreferredOrigin)
-    || (isDevOrTest && configuredOrigins.length === 0)
-  )
-    ? applyTrustedOriginToConfiguredSiteUrl(configuredSiteUrl, normalizedPreferredOrigin)
-    : configuredSiteUrl;
+    { origin: normalizeHttpOrigin(input.siteUrl), siteUrl: input.siteUrl },
+    { origin: normalizeHttpOrigin(input.publicSiteUrl), siteUrl: input.publicSiteUrl },
+    ...(isDevOrTest ? [{ origin: normalizeHttpOrigin(normalizedVercelUrl), siteUrl: normalizedVercelUrl }] : []),
+  ].filter((value): value is { origin: string; siteUrl: string } => {
+    return value.origin !== null && typeof value.siteUrl === "string";
+  });
+  const matchedSiteUrl = normalizedPreferredOrigin
+    ? configuredOrigins.find((item) => item.origin === normalizedPreferredOrigin)?.siteUrl ?? null
+    : null;
+  const selectedSiteUrl = matchedSiteUrl ?? (
+    normalizedPreferredOrigin && isDevOrTest && configuredOrigins.length === 0
+      ? applyTrustedOriginToConfiguredSiteUrl(configuredSiteUrl, normalizedPreferredOrigin)
+      : configuredSiteUrl
+  );
 
   try {
     return {

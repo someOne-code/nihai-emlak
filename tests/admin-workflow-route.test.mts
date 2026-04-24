@@ -610,6 +610,94 @@ test("admin confirm route calls admin_confirm_reservation RPC and returns summar
   assert.equal(payload.data.listing.status, "passive");
 });
 
+test("admin confirm route normalizes blank note values to null instead of rejecting body", async (t) => {
+  setupAdminWorkflowEnv(t);
+
+  for (const rawNote of ["", "   "]) {
+    const calls: Array<{ functionName: string; args: Record<string, unknown> }> = [];
+    const response = await handleAdminConfirmReservationPost(
+      createJsonRequest({ note: rawNote }),
+      createDependencies({
+        rpc: (functionName, args) => {
+          calls.push({ functionName, args });
+          return {
+            data: {
+              result: "confirmed",
+              event_id: "99999999-9999-4999-8999-999999999999",
+              reservation_id: "11111111-1111-4111-8111-111111111111",
+              order_id: "33333333-3333-4333-8333-333333333333",
+              payment_id: "44444444-4444-4444-8444-444444444444",
+              listing_id: "55555555-5555-4555-8555-555555555555",
+              reservation_status: "confirmed",
+              order_status: "completed",
+              payment_status: "succeeded",
+              listing_status: "passive",
+            },
+            error: null,
+          };
+        },
+      }),
+      { reservationId: "11111111-1111-4111-8111-111111111111" },
+    );
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(calls, [
+      {
+        functionName: "admin_confirm_reservation",
+        args: {
+          p_reservation_id: "11111111-1111-4111-8111-111111111111",
+          p_note: null,
+        },
+      },
+    ]);
+  }
+});
+
+test("admin cancel route normalizes blank note to null instead of rejecting body", async (t) => {
+  setupAdminWorkflowEnv(t);
+
+  const calls: Array<{ functionName: string; args: Record<string, unknown> }> = [];
+  const response = await handleAdminCancelReservationPost(
+    createJsonRequest({
+      reason: "customer_withdrew_before_payment",
+      note: "   ",
+    }),
+    createDependencies({
+      rpc: (functionName, args) => {
+        calls.push({ functionName, args });
+        return {
+          data: {
+            result: "cancelled",
+            event_id: "22222222-2222-4222-8222-222222222222",
+            reservation_id: "11111111-1111-4111-8111-111111111111",
+            order_id: "33333333-3333-4333-8333-333333333333",
+            payment_id: "44444444-4444-4444-8444-444444444444",
+            listing_id: "55555555-5555-4555-8555-555555555555",
+            reservation_status: "cancelled",
+            order_status: "cancelled",
+            payment_status: "cancelled",
+            listing_status: "active",
+          },
+          error: null,
+        };
+      },
+    }),
+    { reservationId: "11111111-1111-4111-8111-111111111111" },
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(calls, [
+    {
+      functionName: "admin_cancel_reservation",
+      args: {
+        p_reservation_id: "11111111-1111-4111-8111-111111111111",
+        p_cancel_reason: "customer_withdrew_before_payment",
+        p_note: null,
+      },
+    },
+  ]);
+});
+
 test("admin reopen route validates reason and maps rpc response", async (t) => {
   setupAdminWorkflowEnv(t);
 

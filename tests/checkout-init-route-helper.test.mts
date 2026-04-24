@@ -226,6 +226,40 @@ test("resolveCheckoutInitReturnUrlsFromEnvironment preserves configured base pat
   assert.equal(result.returnUrls.failUrl, "https://nihaiemlak.com/app/checkout/fail");
 });
 
+test("resolveCheckoutInitReturnUrlsFromEnvironment uses public site base path when preferred origin matches public site", () => {
+  const result = resolveCheckoutInitReturnUrlsFromEnvironment({
+    nodeEnv: "production",
+    siteUrl: "https://admin.example.com/internal",
+    publicSiteUrl: "https://www.example.com",
+    preferredOrigin: "https://www.example.com",
+  });
+
+  assert.equal(result.ok, true);
+  if (!result.ok) {
+    throw new Error("Expected public preferred origin to succeed");
+  }
+
+  assert.equal(result.returnUrls.okUrl, "https://www.example.com/checkout/success");
+  assert.equal(result.returnUrls.failUrl, "https://www.example.com/checkout/fail");
+});
+
+test("resolveCheckoutInitReturnUrlsFromEnvironment preserves admin base path when preferred origin matches admin site", () => {
+  const result = resolveCheckoutInitReturnUrlsFromEnvironment({
+    nodeEnv: "production",
+    siteUrl: "https://admin.example.com/internal",
+    publicSiteUrl: "https://www.example.com",
+    preferredOrigin: "https://admin.example.com",
+  });
+
+  assert.equal(result.ok, true);
+  if (!result.ok) {
+    throw new Error("Expected admin preferred origin to succeed");
+  }
+
+  assert.equal(result.returnUrls.okUrl, "https://admin.example.com/internal/checkout/success");
+  assert.equal(result.returnUrls.failUrl, "https://admin.example.com/internal/checkout/fail");
+});
+
 test("resolveCheckoutInitReturnUrlsFromEnvironment fails closed on invalid configured URL", () => {
   const result = resolveCheckoutInitReturnUrlsFromEnvironment({
     nodeEnv: "production",

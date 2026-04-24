@@ -387,6 +387,90 @@ test("callback route records durable payment event for checkout invariant failur
   assert.equal(json.error, "Failed to process payment callback");
 });
 
+test("callback route releases receipt when invariant audit insert fails", async (t) => {
+  const callbackClientId = setupCallbackRouteEnv(t);
+
+  const paymentId = "2ab41e80-b9f1-4ace-a0f9-5c4bd9de541b";
+  const callbackPayload = {
+    clientid: callbackClientId,
+    oid: paymentId,
+    amount: "1250.00",
+    currency: "TRY",
+    okurl: "https://example.com/ok",
+    failurl: "https://example.com/fail",
+    txnType: "Auth",
+    instalment: "0",
+    rnd: "rnd-123",
+    ProcReturnCode: "00",
+    Response: "Approved",
+  };
+
+  const providedHash = sha1Upper(
+    buildIsbankSha1Input(callbackPayload, process.env.ISBANK_STORE_KEY),
+  );
+  const rawBody = new URLSearchParams(callbackPayload).toString();
+
+  let registerReceiptCalled = false;
+  let releaseReceiptCalled = false;
+
+  const response = await handlePaymentCallbackPost(
+    new Request("http://localhost/api/payment/callback", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        "x-isbank-hash": providedHash,
+      },
+      body: rawBody,
+    }),
+    {
+      createSupabaseClient: (_url, key) => {
+        assert.equal(key, "service-key");
+        return {
+          from: buildPaymentsTableMock({
+            onReceiptRelease: () => {
+              releaseReceiptCalled = true;
+            },
+            paymentEventInsertError: { message: "audit insert failed" },
+            paymentRowsById: {
+              [paymentId]: {
+                id: paymentId,
+                amount: "1250.00",
+                currency: "TRY",
+                provider: "isbank",
+                provider_ref: paymentId,
+                status: "pending",
+              },
+            },
+          }),
+          rpc: async (functionName: string) => {
+            if (functionName === "register_payment_callback_receipt") {
+              registerReceiptCalled = true;
+              return { data: true, error: null };
+            }
+
+            return {
+              data: null,
+              error: {
+                code: "22023",
+                message: "payment amount invariant violated for payment: 2ab41e80-b9f1-4ace-a0f9-5c4bd9de541b",
+              },
+            };
+          },
+        };
+      },
+      sendInngestEvent: async () => {},
+    },
+  );
+
+  assert.equal(response.status, 500);
+  assert.equal(registerReceiptCalled, true);
+  assert.equal(releaseReceiptCalled, true);
+
+  const json = await response.json();
+  assert.equal(json.success, false);
+  assert.equal(json.error, "Failed to audit payment callback invariant violation");
+});
+
 test("callback route surfaces receipt cleanup failure after checkout processing error", async (t) => {
   const callbackClientId = setupCallbackRouteEnv(t);
 
@@ -1245,6 +1329,7 @@ function buildPaymentsTableMock(input: {
   onProviderRefLookup?: () => void;
   onReceiptRelease?: () => void;
   onInsertPaymentEvent?: (row: Record<string, unknown>) => void;
+  paymentEventInsertError?: { message: string } | null;
   receiptReleaseError?: { message: string } | null;
   receiptStillExists?: boolean;
   paymentRowsById?: Record<string, PaymentRow>;
@@ -1287,7 +1372,7 @@ function buildPaymentsTableMock(input: {
       return {
         insert: async (row: Record<string, unknown>) => {
           input.onInsertPaymentEvent?.(row);
-          return { error: null };
+          return { error: input.paymentEventInsertError ?? null };
         },
       };
     }

@@ -296,7 +296,7 @@ async function parseAdminReasonBody(
     };
   }
 
-  if (typeof body.note === "string" && note === null) {
+  if (isStringLongerThan(body.note, 1000)) {
     return {
       ok: false,
       status: 400,
@@ -337,7 +337,7 @@ async function parseAdminNoteOnlyBody(
 
   const body = payloadResult.value as Record<string, unknown>;
   const note = asOptionalBoundedString(body.note);
-  if (typeof body.note === "string" && note === null) {
+  if (isStringLongerThan(body.note, 1000)) {
     return {
       ok: false,
       status: 400,
@@ -562,6 +562,10 @@ function asOptionalBoundedString(value: unknown): string | null {
   }
 
   return normalized;
+}
+
+function isStringLongerThan(value: unknown, maxLength: number): boolean {
+  return typeof value === "string" && value.trim().length > maxLength;
 }
 
 function asUuid(value: unknown): string | null {

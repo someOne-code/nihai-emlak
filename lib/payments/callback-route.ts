@@ -337,16 +337,6 @@ export async function handlePaymentCallbackPost(
         `isbank_callback_${preparedCallback.callbackStatus}`,
         checkoutResult,
       );
-      if (!auditResult.ok) {
-        return Response.json(
-          {
-            success: false,
-            error: auditResult.error,
-          },
-          { status: auditResult.status },
-        );
-      }
-
       const cleanupResult = await releaseCallbackReceipt(receiptInput, dependencies);
       if (!cleanupResult.ok) {
         return Response.json(
@@ -355,6 +345,16 @@ export async function handlePaymentCallbackPost(
             error: cleanupResult.error,
           },
           { status: cleanupResult.status },
+        );
+      }
+
+      if (!auditResult.ok) {
+        return Response.json(
+          {
+            success: false,
+            error: auditResult.error,
+          },
+          { status: auditResult.status },
         );
       }
 
