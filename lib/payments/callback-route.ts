@@ -347,6 +347,17 @@ export async function handlePaymentCallbackPost(
         );
       }
 
+      const cleanupResult = await releaseCallbackReceipt(receiptInput, dependencies);
+      if (!cleanupResult.ok) {
+        return Response.json(
+          {
+            success: false,
+            error: cleanupResult.error,
+          },
+          { status: cleanupResult.status },
+        );
+      }
+
       return Response.json(
         {
           success: false,

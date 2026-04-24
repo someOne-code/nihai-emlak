@@ -287,7 +287,7 @@ test("callback route does not persist duplicate receipt when checkout processing
   assert.equal(json.error, "Failed to process payment callback");
 });
 
-test("callback route records durable payment event for checkout invariant failures and keeps receipt", async (t) => {
+test("callback route records durable payment event for checkout invariant failures and releases receipt", async (t) => {
   const callbackClientId = setupCallbackRouteEnv(t);
 
   const paymentId = "9fe9c8e0-b663-441e-86fc-b8dd72dfd5d0";
@@ -367,7 +367,7 @@ test("callback route records durable payment event for checkout invariant failur
 
   assert.equal(response.status, 500);
   assert.equal(registerReceiptCalled, true);
-  assert.equal(releaseReceiptCalled, false);
+  assert.equal(releaseReceiptCalled, true);
   assert.equal(insertedPaymentEvents.length, 1);
   assert.deepEqual(insertedPaymentEvents[0], {
     payment_id: paymentId,
