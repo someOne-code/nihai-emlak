@@ -56,6 +56,8 @@ type ProcessPaymentResult =
       ok: false;
       status: number;
       error: string;
+      processingErrorCode?: string | null;
+      processingErrorMessage?: string | null;
       callbackContractRejection?: CallbackContractRejection;
     };
 type ResolvePaymentIdResult =
@@ -115,6 +117,9 @@ type CallbackSupabaseClient = {
     (table: "payment_callback_receipts"): {
       select: (columns: string) => CallbackReceiptLookupQuery;
       delete: () => CallbackReceiptDeleteQuery;
+    };
+    (table: "payment_events"): {
+      insert: (row: Record<string, unknown>) => Promise<{ error: SupabaseClientError | null }>;
     };
   };
 };
@@ -324,6 +329,33 @@ export async function handlePaymentCallbackPost(
     preparedCallback,
   );
   if (!checkoutResult.ok) {
+    if (isInvariantFailure(checkoutResult)) {
+      const auditResult = await recordInvariantRejectedPaymentEvent(
+        preparedCallback.supabase,
+        preparedCallback.paymentId,
+        preparedCallback.providerRef,
+        `isbank_callback_${preparedCallback.callbackStatus}`,
+        checkoutResult,
+      );
+      if (!auditResult.ok) {
+        return Response.json(
+          {
+            success: false,
+            error: auditResult.error,
+          },
+          { status: auditResult.status },
+        );
+      }
+
+      return Response.json(
+        {
+          success: false,
+          error: checkoutResult.error,
+        },
+        { status: checkoutResult.status },
+      );
+    }
+
     const cleanupResult = await releaseCallbackReceipt(receiptInput, dependencies);
     if (!cleanupResult.ok) {
       return Response.json(
@@ -515,6 +547,8 @@ async function executePreparedPaymentCallback(
         ok: false,
         status: 404,
         error: "Payment record not found for callback",
+        processingErrorCode: error.code ?? null,
+        processingErrorMessage: error.message ?? null,
       };
     }
 
@@ -522,6 +556,8 @@ async function executePreparedPaymentCallback(
       ok: false,
       status: 500,
       error: "Failed to process payment callback",
+      processingErrorCode: error.code ?? null,
+      processingErrorMessage: error.message ?? null,
     };
   }
 
@@ -539,6 +575,46 @@ async function executePreparedPaymentCallback(
     result: resultKind,
     paymentId: input.paymentId,
   };
+}
+
+async function recordInvariantRejectedPaymentEvent(
+  supabase: CallbackSupabaseClient,
+  paymentId: string,
+  providerRef: string | null,
+  sourceEventType: string,
+  failure: Extract<ProcessPaymentResult, { ok: false }>,
+): Promise<
+  | { ok: true }
+  | { ok: false; status: number; error: string }
+> {
+  const insertResult = await supabase.from("payment_events").insert({
+    payment_id: paymentId,
+    event_type: "payment_callback_invariant_rejected",
+    provider: "isbank",
+    payload: {
+      source_event_type: sourceEventType,
+      reason: "callback_invariant_violation",
+      processing_error_code: failure.processingErrorCode ?? null,
+      processing_error_message: failure.processingErrorMessage ?? null,
+      provider_ref: providerRef,
+    },
+  });
+
+  if (insertResult.error) {
+    return {
+      ok: false,
+      status: 500,
+      error: "Failed to audit payment callback invariant violation",
+    };
+  }
+
+  return { ok: true };
+}
+
+function isInvariantFailure(
+  result: Extract<ProcessPaymentResult, { ok: false }>,
+): boolean {
+  return result.processingErrorCode === "22023" || result.processingErrorCode === "P0004";
 }
 
 async function releaseCallbackReceipt(

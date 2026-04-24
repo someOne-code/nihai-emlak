@@ -287,6 +287,106 @@ test("callback route does not persist duplicate receipt when checkout processing
   assert.equal(json.error, "Failed to process payment callback");
 });
 
+test("callback route records durable payment event for checkout invariant failures and keeps receipt", async (t) => {
+  const callbackClientId = setupCallbackRouteEnv(t);
+
+  const paymentId = "9fe9c8e0-b663-441e-86fc-b8dd72dfd5d0";
+  const callbackPayload = {
+    clientid: callbackClientId,
+    oid: paymentId,
+    amount: "1250.00",
+    currency: "TRY",
+    okurl: "https://example.com/ok",
+    failurl: "https://example.com/fail",
+    txnType: "Auth",
+    instalment: "0",
+    rnd: "rnd-123",
+    ProcReturnCode: "00",
+    Response: "Approved",
+  };
+
+  const providedHash = sha1Upper(
+    buildIsbankSha1Input(callbackPayload, process.env.ISBANK_STORE_KEY),
+  );
+  const rawBody = new URLSearchParams(callbackPayload).toString();
+
+  let registerReceiptCalled = false;
+  let releaseReceiptCalled = false;
+  const insertedPaymentEvents: Array<Record<string, unknown>> = [];
+
+  const response = await handlePaymentCallbackPost(
+    new Request("http://localhost/api/payment/callback", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        "x-isbank-hash": providedHash,
+      },
+      body: rawBody,
+    }),
+    {
+      createSupabaseClient: (_url, key) => {
+        assert.equal(key, "service-key");
+        return {
+          from: buildPaymentsTableMock({
+            onReceiptRelease: () => {
+              releaseReceiptCalled = true;
+            },
+            onInsertPaymentEvent: (row) => {
+              insertedPaymentEvents.push(row);
+            },
+            paymentRowsById: {
+              [paymentId]: {
+                id: paymentId,
+                amount: "1250.00",
+                currency: "TRY",
+                provider: "isbank",
+                provider_ref: paymentId,
+                status: "pending",
+              },
+            },
+          }),
+          rpc: async (functionName: string) => {
+            if (functionName === "register_payment_callback_receipt") {
+              registerReceiptCalled = true;
+              return { data: true, error: null };
+            }
+
+            return {
+              data: null,
+              error: {
+                code: "22023",
+                message: "payment amount invariant violated for payment: 9fe9c8e0-b663-441e-86fc-b8dd72dfd5d0",
+              },
+            };
+          },
+        };
+      },
+      sendInngestEvent: async () => {},
+    },
+  );
+
+  assert.equal(response.status, 500);
+  assert.equal(registerReceiptCalled, true);
+  assert.equal(releaseReceiptCalled, false);
+  assert.equal(insertedPaymentEvents.length, 1);
+  assert.deepEqual(insertedPaymentEvents[0], {
+    payment_id: paymentId,
+    event_type: "payment_callback_invariant_rejected",
+    provider: "isbank",
+    payload: {
+      source_event_type: "isbank_callback_approved",
+      reason: "callback_invariant_violation",
+      processing_error_code: "22023",
+      processing_error_message: "payment amount invariant violated for payment: 9fe9c8e0-b663-441e-86fc-b8dd72dfd5d0",
+      provider_ref: paymentId,
+    },
+  });
+
+  const json = await response.json();
+  assert.equal(json.success, false);
+  assert.equal(json.error, "Failed to process payment callback");
+});
+
 test("callback route surfaces receipt cleanup failure after checkout processing error", async (t) => {
   const callbackClientId = setupCallbackRouteEnv(t);
 
@@ -1144,6 +1244,7 @@ function setupCallbackRouteEnv(
 function buildPaymentsTableMock(input: {
   onProviderRefLookup?: () => void;
   onReceiptRelease?: () => void;
+  onInsertPaymentEvent?: (row: Record<string, unknown>) => void;
   receiptReleaseError?: { message: string } | null;
   receiptStillExists?: boolean;
   paymentRowsById?: Record<string, PaymentRow>;
@@ -1179,6 +1280,15 @@ function buildPaymentsTableMock(input: {
             },
           }),
         }),
+      };
+    }
+
+    if (table === "payment_events") {
+      return {
+        insert: async (row: Record<string, unknown>) => {
+          input.onInsertPaymentEvent?.(row);
+          return { error: null };
+        },
       };
     }
 
