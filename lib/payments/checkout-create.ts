@@ -12,35 +12,6 @@ export type CheckoutCreateParseResult =
   | { ok: true; body: CheckoutCreateRequestBody }
   | { ok: false; status: number; error: string };
 
-export type CheckoutCreateAvailabilitySnapshot = {
-  listing: {
-    id: string;
-    status: string;
-    type: string;
-  } | null;
-  hasEnabledMainItems: boolean;
-  mainItems: Array<{
-    code: string;
-    isActive: boolean;
-    isEnabledForListing: boolean;
-  }>;
-  services: Array<{
-    code: string;
-    isActive: boolean;
-    isEnabledForListing: boolean;
-  }>;
-};
-
-export type CheckoutCreateAvailabilityResult =
-  | { ok: true }
-  | { ok: false; status: number; error: string };
-
-export type CheckoutCreateAvailabilityLookup = (input: {
-  listingId: string;
-  mainItemCodes: string[];
-  serviceCodes: string[];
-}) => Promise<CheckoutCreateAvailabilitySnapshot>;
-
 const FINANCIAL_CLIENT_FIELDS = new Set([
   "amount",
   "currency",
@@ -124,77 +95,10 @@ export function parseCheckoutCreateRequestBody(payload: unknown): CheckoutCreate
   };
 }
 
-export function validateCheckoutCreateAvailability(
-  body: Pick<CheckoutCreateRequestBody, "listingId" | "mainItems" | "serviceItems">,
-  snapshot: CheckoutCreateAvailabilitySnapshot,
-): CheckoutCreateAvailabilityResult {
-  if (!snapshot.listing) {
-    return availabilityError("Listing not found", 404);
-  }
-
-  if (snapshot.listing.status !== "active") {
-    return availabilityError("Listing is not available for checkout", 409);
-  }
-
-  if (snapshot.listing.type !== "rent") {
-    return availabilityError("Listing is not available for checkout", 409);
-  }
-
-  if (!snapshot.hasEnabledMainItems) {
-    return availabilityError("Listing does not have any enabled main checkout items", 409);
-  }
-
-  const mainItemsByCode = new Map(
-    snapshot.mainItems.map((mainItem) => [normalizeLookupCode(mainItem.code), mainItem]),
-  );
-
-  for (const mainItemCode of body.mainItems) {
-    const mainItem = mainItemsByCode.get(mainItemCode);
-    if (!mainItem || !mainItem.isEnabledForListing) {
-      return availabilityError(
-        "main_items contains an item that is not enabled for this listing",
-        400,
-      );
-    }
-
-    if (!mainItem.isActive) {
-      return availabilityError("main_items contains an inactive item", 400);
-    }
-  }
-
-  const servicesByCode = new Map(
-    snapshot.services.map((service) => [normalizeLookupCode(service.code), service]),
-  );
-
-  for (const serviceCode of body.serviceItems) {
-    const service = servicesByCode.get(serviceCode);
-    if (!service || !service.isEnabledForListing) {
-      return availabilityError(
-        "service_items contains a service that is not enabled for this listing",
-        400,
-      );
-    }
-
-    if (!service.isActive) {
-      return availabilityError("service_items contains an inactive service", 409);
-    }
-  }
-
-  return { ok: true };
-}
-
 function validationError(error: string): CheckoutCreateParseResult {
   return {
     ok: false,
     status: 400,
-    error,
-  };
-}
-
-function availabilityError(error: string, status: number): CheckoutCreateAvailabilityResult {
-  return {
-    ok: false,
-    status,
     error,
   };
 }
@@ -285,10 +189,6 @@ function asItemCode(value: unknown): string | null {
   }
 
   return normalized;
-}
-
-function normalizeLookupCode(value: string): string {
-  return value.trim().toLowerCase();
 }
 
 function asInteger(value: unknown): number | null {

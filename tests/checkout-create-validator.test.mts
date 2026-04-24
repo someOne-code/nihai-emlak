@@ -1,10 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  parseCheckoutCreateRequestBody,
-  validateCheckoutCreateAvailability,
-} from "../lib/payments/checkout-create.ts";
+import * as checkoutCreate from "../lib/payments/checkout-create.ts";
+
+const { parseCheckoutCreateRequestBody } = checkoutCreate;
 
 const validCheckoutCreatePayload = {
   listing_id: "11111111-1111-4111-8111-111111111111",
@@ -120,6 +119,20 @@ test("parseCheckoutCreateRequestBody requires at least one main item", () => {
   });
 });
 
+test("parseCheckoutCreateRequestBody defaults missing service_items to an empty list", () => {
+  const result = parseCheckoutCreateRequestBody({
+    ...validCheckoutCreatePayload,
+    service_items: undefined,
+  });
+
+  assert.equal(result.ok, true);
+  if (!result.ok) {
+    throw new Error("Expected checkout create payload without service_items to be valid");
+  }
+
+  assert.deepEqual(result.body.serviceItems, []);
+});
+
 test("parseCheckoutCreateRequestBody rejects duplicate main items", () => {
   const result = parseCheckoutCreateRequestBody({
     ...validCheckoutCreatePayload,
@@ -159,281 +172,6 @@ test("parseCheckoutCreateRequestBody rejects client-supplied financial totals", 
   });
 });
 
-test("validateCheckoutCreateAvailability rejects missing listings", () => {
-  const parsed = parseCheckoutCreateRequestBody(validCheckoutCreatePayload);
-  assert.equal(parsed.ok, true);
-  if (!parsed.ok) {
-    throw new Error("Expected valid checkout create payload");
-  }
-
-  const result = validateCheckoutCreateAvailability(parsed.body, {
-    listing: null,
-    hasEnabledMainItems: false,
-    mainItems: [],
-    services: [],
-  });
-
-  assert.deepEqual(result, {
-    ok: false,
-    status: 404,
-    error: "Listing not found",
-  });
-});
-
-test("validateCheckoutCreateAvailability rejects passive listings", () => {
-  const parsed = parseCheckoutCreateRequestBody(validCheckoutCreatePayload);
-  assert.equal(parsed.ok, true);
-  if (!parsed.ok) {
-    throw new Error("Expected valid checkout create payload");
-  }
-
-  const result = validateCheckoutCreateAvailability(parsed.body, {
-    listing: {
-      id: parsed.body.listingId,
-      type: "rent",
-      status: "passive",
-    },
-    hasEnabledMainItems: true,
-    mainItems: [
-      {
-        code: "deposit",
-        isActive: true,
-        isEnabledForListing: true,
-      },
-    ],
-    services: [],
-  });
-
-  assert.deepEqual(result, {
-    ok: false,
-    status: 409,
-    error: "Listing is not available for checkout",
-  });
-});
-
-test("validateCheckoutCreateAvailability rejects sale listings", () => {
-  const parsed = parseCheckoutCreateRequestBody(validCheckoutCreatePayload);
-  assert.equal(parsed.ok, true);
-  if (!parsed.ok) {
-    throw new Error("Expected valid checkout create payload");
-  }
-
-  const result = validateCheckoutCreateAvailability(parsed.body, {
-    listing: {
-      id: parsed.body.listingId,
-      type: "sale",
-      status: "active",
-    },
-    hasEnabledMainItems: true,
-    mainItems: [
-      {
-        code: "deposit",
-        isActive: true,
-        isEnabledForListing: true,
-      },
-    ],
-    services: [],
-  });
-
-  assert.deepEqual(result, {
-    ok: false,
-    status: 409,
-    error: "Listing is not available for checkout",
-  });
-});
-
-test("validateCheckoutCreateAvailability rejects listings without any enabled main items", () => {
-  const parsed = parseCheckoutCreateRequestBody(validCheckoutCreatePayload);
-  assert.equal(parsed.ok, true);
-  if (!parsed.ok) {
-    throw new Error("Expected valid checkout create payload");
-  }
-
-  const result = validateCheckoutCreateAvailability(parsed.body, {
-    listing: {
-      id: parsed.body.listingId,
-      type: "rent",
-      status: "active",
-    },
-    hasEnabledMainItems: false,
-    mainItems: [],
-    services: [],
-  });
-
-  assert.deepEqual(result, {
-    ok: false,
-    status: 409,
-    error: "Listing does not have any enabled main checkout items",
-  });
-});
-
-test("validateCheckoutCreateAvailability rejects main items not enabled for the listing", () => {
-  const parsed = parseCheckoutCreateRequestBody(validCheckoutCreatePayload);
-  assert.equal(parsed.ok, true);
-  if (!parsed.ok) {
-    throw new Error("Expected valid checkout create payload");
-  }
-
-  const result = validateCheckoutCreateAvailability(parsed.body, {
-    listing: {
-      id: parsed.body.listingId,
-      type: "rent",
-      status: "active",
-    },
-    hasEnabledMainItems: true,
-    mainItems: [
-      {
-        code: "deposit",
-        isActive: true,
-        isEnabledForListing: false,
-      },
-    ],
-    services: [],
-  });
-
-  assert.deepEqual(result, {
-    ok: false,
-    status: 400,
-    error: "main_items contains an item that is not enabled for this listing",
-  });
-});
-
-test("validateCheckoutCreateAvailability rejects inactive main items", () => {
-  const parsed = parseCheckoutCreateRequestBody(validCheckoutCreatePayload);
-  assert.equal(parsed.ok, true);
-  if (!parsed.ok) {
-    throw new Error("Expected valid checkout create payload");
-  }
-
-  const result = validateCheckoutCreateAvailability(parsed.body, {
-    listing: {
-      id: parsed.body.listingId,
-      type: "rent",
-      status: "active",
-    },
-    hasEnabledMainItems: true,
-    mainItems: [
-      {
-        code: "deposit",
-        isActive: false,
-        isEnabledForListing: true,
-      },
-    ],
-    services: [],
-  });
-
-  assert.deepEqual(result, {
-    ok: false,
-    status: 400,
-    error: "main_items contains an inactive item",
-  });
-});
-
-test("validateCheckoutCreateAvailability rejects services not enabled for the listing", () => {
-  const parsed = parseCheckoutCreateRequestBody(validCheckoutCreatePayload);
-  assert.equal(parsed.ok, true);
-  if (!parsed.ok) {
-    throw new Error("Expected valid checkout create payload");
-  }
-
-  const result = validateCheckoutCreateAvailability(parsed.body, {
-    listing: {
-      id: parsed.body.listingId,
-      type: "rent",
-      status: "active",
-    },
-    hasEnabledMainItems: true,
-    mainItems: [
-      {
-        code: "deposit",
-        isActive: true,
-        isEnabledForListing: true,
-      },
-    ],
-    services: [
-      {
-        code: "cleaning",
-        isActive: true,
-        isEnabledForListing: false,
-      },
-    ],
-  });
-
-  assert.deepEqual(result, {
-    ok: false,
-    status: 400,
-    error: "service_items contains a service that is not enabled for this listing",
-  });
-});
-
-test("validateCheckoutCreateAvailability rejects inactive services", () => {
-  const parsed = parseCheckoutCreateRequestBody(validCheckoutCreatePayload);
-  assert.equal(parsed.ok, true);
-  if (!parsed.ok) {
-    throw new Error("Expected valid checkout create payload");
-  }
-
-  const result = validateCheckoutCreateAvailability(parsed.body, {
-    listing: {
-      id: parsed.body.listingId,
-      type: "rent",
-      status: "active",
-    },
-    hasEnabledMainItems: true,
-    mainItems: [
-      {
-        code: "deposit",
-        isActive: true,
-        isEnabledForListing: true,
-      },
-    ],
-    services: [
-      {
-        code: "cleaning",
-        isActive: false,
-        isEnabledForListing: true,
-      },
-    ],
-  });
-
-  assert.deepEqual(result, {
-    ok: false,
-    status: 409,
-    error: "service_items contains an inactive service",
-  });
-});
-
-test("validateCheckoutCreateAvailability accepts active listings with enabled active services", () => {
-  const parsed = parseCheckoutCreateRequestBody(validCheckoutCreatePayload);
-  assert.equal(parsed.ok, true);
-  if (!parsed.ok) {
-    throw new Error("Expected valid checkout create payload");
-  }
-
-  const result = validateCheckoutCreateAvailability(parsed.body, {
-    listing: {
-      id: parsed.body.listingId,
-      type: "rent",
-      status: "active",
-    },
-    hasEnabledMainItems: true,
-    mainItems: [
-      {
-        code: "deposit",
-        isActive: true,
-        isEnabledForListing: true,
-      },
-    ],
-    services: [
-      {
-        code: "cleaning",
-        isActive: true,
-        isEnabledForListing: true,
-      },
-    ],
-  });
-
-  assert.deepEqual(result, {
-    ok: true,
-  });
+test("checkout-create module leaves listing and item availability as DB/RPC source of truth", () => {
+  assert.equal("validateCheckoutCreateAvailability" in checkoutCreate, false);
 });

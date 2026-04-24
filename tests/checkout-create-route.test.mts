@@ -299,6 +299,29 @@ test("checkout create maps item configuration RPC errors to 400", async (t) => {
   assert.equal(payload.error, "Checkout item selection is not valid for this listing");
 });
 
+test("checkout create maps missing enabled main item configuration RPC errors to 409", async (t) => {
+  setupCheckoutCreateEnv(t);
+
+  const response = await handleCheckoutCreatePost(
+    createJsonRequest(validCheckoutCreatePayload),
+    createDependencies({
+      rpc: () => ({
+        data: null,
+        error: {
+          code: "P0001",
+          message: "listing does not have any enabled main checkout items",
+        },
+      }),
+    }),
+  );
+
+  assert.equal(response.status, 409);
+
+  const payload = await response.json();
+  assert.equal(payload.success, false);
+  assert.equal(payload.error, "Listing does not have any enabled main checkout items");
+});
+
 test("checkout create rejects malformed RPC success payloads", async (t) => {
   setupCheckoutCreateEnv(t);
 

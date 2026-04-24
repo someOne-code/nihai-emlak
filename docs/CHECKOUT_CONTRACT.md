@@ -1,54 +1,35 @@
-# Checkout Backend Contract
+# Faz 3 Checkout Backend Contract
 
-## Scope
+Bu doküman mevcut Phase 3 implementasyonundaki iki adımlı checkout akışını özetler. Source of truth route/helper kodu ile SQL testleridir.
 
-This document defines the Phase 3 checkout backend contract for the frontend and admin/content teams.
+## Akış Özeti
 
-The checkout flow is intentionally split into two steps:
+1. `POST /api/checkout`
+   Yeni `reservation`, `order`, `order_items` ve `pending payment` üretir.
+2. `POST /api/checkout/init`
+   Var olan `pending order/payment` için Is Bankası hosted checkout payload üretir.
 
-1. `POST /api/checkout` creates the operational checkout records.
-2. `POST /api/checkout/init` creates the Is Bankasi hosted checkout payload for an existing pending order/payment.
+Kural:
+- `POST /api/checkout` banka payload'ı döndürmez.
+- `POST /api/checkout/init` yeni checkout kaydı üretmez.
+- `POST /api/checkout/init`, `POST /api/checkout` başarılı olmadan çağrılmamalıdır.
 
-`POST /api/checkout` does not return an Is Bankasi payload. `POST /api/checkout/init` does not create reservations, orders, order items, or payments.
+## Ortak Gereksinimler
 
-## Architecture Contract
+İki endpoint de state-changing JSON POST boundary'sidir.
 
-- Supabase Auth is the identity/session source.
-- The Next.js routes are thin state-changing request boundaries.
-- PostgreSQL/RPC is the authoritative source for checkout eligibility, pricing, atomic record creation, and write invariants.
-- The frontend never sends trusted totals.
-- `service_role` is not the default checkout create model.
-- Listing availability and item pricing are read from database/admin configuration at request time.
+- Auth: Geçerli Supabase oturumu zorunlu, aksi halde `401`.
+- Origin: `Origin` header zorunlu ve trusted olmalı, aksi halde `403`.
+- Content-Type: `application/json` zorunlu, aksi halde `415`.
+- Geçersiz JSON veya geçersiz body: `400`.
+- Büyük payload: `413`.
 
-## Frontend Flow
+Trusted origin kaynağı:
+- Production'da kanonik origin `SITE_URL` ve/veya `NEXT_PUBLIC_SITE_URL`.
+- `development` / `test` ortamında bunlar yoksa `http://localhost:3000` fallback'i kullanılır.
+- `VERCEL_URL` yalnızca `development` / `test` modunda trusted origin listesine girebilir.
 
-```text
-User selects listing + main payment items + optional services
-  -> POST /api/checkout
-  -> receive reservation/order/payment summary
-  -> POST /api/checkout/init with orderId
-  -> receive Is Bankasi hosted checkout payload
-  -> submit/render bank hosted payment form
-```
-
-If `POST /api/checkout` fails, the frontend must not call `POST /api/checkout/init`.
-
-If `POST /api/checkout/init` returns `409`, the frontend must not retry by inventing a new payment. The user should refresh the checkout state or restart the checkout create step.
-
-## Shared Request Requirements
-
-Both checkout routes are state-changing cookie-auth endpoints.
-
-Required:
-
-- Authenticated Supabase session.
-- `Content-Type: application/json`.
-- Trusted `Origin` header.
-- JSON body within the route body-size limit.
-
-Responses are JSON and should be treated as non-cacheable.
-
-Common error shape:
+Hata formatı:
 
 ```json
 {
@@ -57,16 +38,11 @@ Common error shape:
 }
 ```
 
-## POST /api/checkout
+## `POST /api/checkout`
 
-Creates a pending reservation, pending order, order items, and pending Is Bankasi payment.
+Amaç: Authenticated kullanıcı için checkout create RPC'sine normalize edilmiş intent göndermek.
 
-### Request
-
-```http
-POST /api/checkout
-Content-Type: application/json
-```
+Örnek request:
 
 ```json
 {
@@ -76,45 +52,30 @@ Content-Type: application/json
   "guest_count": 2,
   "main_items": ["deposit"],
   "service_items": ["cleaning"],
-  "note": "Optional customer note"
+  "note": "Opsiyonel not"
 }
 ```
 
-### Request Fields
+Kurallar:
+- `listing_id` UUID olmalı.
+- `move_in_date` `YYYY-MM-DD` ISO tarih olmalı.
+- `stay_months` `1..12` aralığında integer olmalı.
+- `guest_count` pozitif integer olmalı.
+- `main_items` zorunlu array; en az bir öğe içermeli; duplicate olamaz.
+- `service_items` opsiyonel array; verilmezse boş listeye normalize edilir; duplicate olamaz.
+- Item code'lar trim + lowercase normalize edilir ve parser uyumlu formatta olmalıdır: `^[a-z0-9][a-z0-9_-]*$`
+- `note` string ise trim edilir; boşsa `null` olur.
 
-| Field | Required | Notes |
-| --- | --- | --- |
-| `listing_id` | yes | UUID. Normalized server-side. |
-| `move_in_date` | yes | ISO date, `YYYY-MM-DD`. Past dates are rejected by the DB function. |
-| `stay_months` | yes | Integer from 1 to 12. |
-| `guest_count` | yes | Positive integer. |
-| `main_items` | yes | Array of item codes. Must contain at least one item. No duplicates. |
-| `service_items` | no | Array of service codes. Defaults to empty when omitted. No duplicates. |
-| `note` | no | String or null. Blank notes are normalized to null. |
-
-Item codes must be lowercase-compatible normalized codes:
-
-```text
-^[a-z0-9][a-z0-9_-]*$
-```
-
-The parser trims and lowercases item codes before passing them to the DB/RPC layer.
-
-### Forbidden Client Fields
-
-The frontend must not send financial totals. These fields are rejected:
-
+Frontend'in göndermemesi gereken alanlar:
 - `amount`
 - `currency`
 - `price`
 - `total`
 - `total_amount`
 
-The authoritative total is calculated by PostgreSQL from listing, main item, service, override, stay-month, and admin configuration data.
+Bu alanlar gelirse request `400` ile reddedilir.
 
-### Success Response
-
-Status: `201 Created`
+Örnek başarılı response (`201`):
 
 ```json
 {
@@ -139,36 +100,20 @@ Status: `201 Created`
 }
 ```
 
-Important response rules:
+Beklenen hata kodları:
+- `400`: validation hatası, duplicate item, forbidden total field, geçersiz item seçimi
+- `401`: auth yok/geçersiz
+- `403`: origin yok/güvenilmiyor
+- `409`: listing checkout'a uygun değil veya listing için enabled main item yok
+- `413`: body çok büyük
+- `415`: JSON değil
+- `500`: RPC cevabı veya server tarafı hata
 
-- The response does not include an `isbank` payload.
-- `payment.status` is always `pending` on success.
-- `payment.id` is the Is Bankasi `oid`/`provider_ref` source for the next step.
+## `POST /api/checkout/init`
 
-### Error Responses
+Amaç: Mevcut pending ödeme için Is Bankası hosted checkout payload üretmek.
 
-| Status | Meaning |
-| --- | --- |
-| `400` | Invalid request body, invalid item selection, forbidden client total, malformed date/count/item code. |
-| `401` | Missing or invalid authenticated session. |
-| `403` | Missing/untrusted origin. |
-| `409` | Listing unavailable, sale listing, inactive listing, no enabled main items, existing pending checkout for listing, or stale checkout state. |
-| `413` | Request body too large. |
-| `415` | Content type is not JSON. |
-| `500` | Server/RPC/configuration failure. Treat as non-retryable until backend health is confirmed. |
-
-## POST /api/checkout/init
-
-Creates the Is Bankasi hosted checkout payload for an existing pending order/payment.
-
-This endpoint must only be called after `POST /api/checkout` succeeds.
-
-### Request
-
-```http
-POST /api/checkout/init
-Content-Type: application/json
-```
+Örnek request:
 
 ```json
 {
@@ -176,15 +121,14 @@ Content-Type: application/json
 }
 ```
 
-### Request Fields
+Not:
+- Alan adı `orderId` olarak camelCase'tir.
+- Endpoint sadece authenticated kullanıcının kendi order'ında çalışır.
+- Order `pending` değilse init reddedilir.
+- Endpoint mevcut `pending isbank payment` satırını reuse eder.
+- Eksik `pending payment` için yeni payment yaratmaz.
 
-| Field | Required | Notes |
-| --- | --- | --- |
-| `orderId` | yes | UUID returned from `POST /api/checkout`. |
-
-### Success Response
-
-Status: `200 OK`
+Örnek başarılı response (`200`):
 
 ```json
 {
@@ -214,94 +158,41 @@ Status: `200 OK`
 }
 ```
 
-Important response rules:
+Init contract sabitleri:
+- `isbank.oid = payment.id = payment.providerRef`
+- Terminal veya drift etmiş payment tekrar yazılmaz.
+- Pending payment order toplamı ile eşleşmiyorsa `409`.
 
-- `data.payment.id`, `data.payment.providerRef`, and `data.isbank.oid` must be the same UUID.
-- The endpoint reuses an existing pending payment.
-- The endpoint does not create missing pending payments.
-- The endpoint does not rewrite stale, terminal, or amount-drifted payments.
+Beklenen hata kodları:
+- `400`: body veya `orderId` geçersiz
+- `401`: auth yok/geçersiz
+- `403`: origin yok/güvenilmiyor
+- `404`: order bulunamadı veya kullanıcıya ait değil
+- `409`: order pending değil, pending payment yok, payment artık pending değil, amount/currency drift var
+- `413`: body çok büyük
+- `415`: JSON değil
+- `500`: Is Bankası config veya server tarafı hata
 
-### Error Responses
+## `main_items` / `service_items` ve Pricing
 
-| Status | Meaning |
-| --- | --- |
-| `400` | Invalid request body or invalid `orderId`. |
-| `401` | Missing or invalid authenticated session. |
-| `403` | Missing/untrusted origin. |
-| `404` | Order not found for the authenticated user. |
-| `409` | Order is not pending, payment is missing, payment is terminal, or payment no longer matches the order total. |
-| `413` | Request body too large. |
-| `415` | Content type is not JSON. |
-| `500` | Server/payment configuration failure. |
+`main_items` kullanıcı seçimini taşır ama source of truth değildir. Backend şu sırayı izler:
 
-## Pricing Rules
+1. Route request'i normalize eder.
+2. DB/RPC listing uygunluğunu kontrol eder.
+3. DB/RPC `main_items` ve `service_items` seçimlerini listing/admin config'e karşı doğrular.
+4. DB/RPC authoritative toplamı ve line item'ları üretir.
 
-The frontend can display a price preview, but it must not be treated as authoritative.
+Authoritative pricing kuralları:
+- Frontend toplam fiyat göndermez.
+- `orders.total_amount` DB/RPC tarafından hesaplanır.
+- `order_items.amount` DB/RPC tarafından üretilir.
+- `payments.amount` order toplamı ile uyumlu olur.
+- Para birimi route'ta DB/RPC sonucundan alınır; mevcut Phase 3 SQL fixture'ları `TRY` kullanır.
+- Listing price, main item config, service catalog ve listing-level override'lar DB/admin tarafında okunur.
 
-Authoritative pricing rules:
-
-- `orders.total_amount` is generated by PostgreSQL/RPC.
-- `order_items.amount` rows are generated by PostgreSQL/RPC.
-- The order total must match the sum of generated line items.
-- Default currency is `TRY` unless the DB configuration says otherwise.
-- Listing base price, main item configuration, service catalog prices, listing-level overrides, and stay-month rules are DB/admin configuration.
-- Negative, missing, malformed, or ambiguous pricing configuration must fail closed.
-
-## Main Items and Services
-
-Main payment items are selected by the customer in the frontend, but the selectable set is controlled by admin/DB configuration.
-
-Admin/DB source of truth:
-
-- `main_item_catalog`
-- `listing_main_item_options`
-- `service_catalog`
-- `listing_service_options`
-
-Frontend responsibilities:
-
-- Send selected main item codes in `main_items`.
-- Send selected optional service codes in `service_items`.
-- Do not send labels, prices, totals, or currency.
-- Do not offer services unless at least one main item is selected.
-
-Backend responsibilities:
-
-- Reject unknown, inactive, or listing-disabled main items.
-- Reject unknown, inactive, or listing-disabled services.
-- Apply listing-specific price overrides when configured.
-- Reject sale listings and unavailable rental listings for checkout.
-- Prevent multiple concurrent pending checkout attempts for the same listing.
-
-## Admin/Content Team Notes
-
-Admin-managed item codes must stay compatible with the checkout parser and DB checks.
-
-Valid examples:
-
-- `deposit`
-- `first_rent`
-- `cleaning`
-- `insurance_q1`
-
-Invalid examples:
-
-- `First Rent`
-- `deposit.v2`
-- ` cleaning `
-- ``
-
-Display labels can be Turkish or English and are not part of the API contract. The API contract uses stable item codes only.
-
-## Non-Goals
-
-This contract does not define:
-
-- Frontend UI layout.
-- Admin UI implementation.
-- Bank callback completion behavior.
-- Refund or void flows.
-- Long-running notification/CRM workflows.
-
-Payment callback completion remains the payment callback/DB function responsibility.
-
+Mevcut SQL testleri şu davranışları sabitler:
+- En az bir `main_items` seçimi zorunlu.
+- Duplicate `service_items` reddedilir.
+- Listing override fiyatı varsa kullanılır; yoksa service base price fallback olur.
+- Sale listing checkout quote/create akışına giremez.
+- Aynı listing için ikinci pending checkout açılamaz.
