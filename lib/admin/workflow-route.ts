@@ -1,4 +1,5 @@
 import {
+  validateStateChangingJsonRequestEnvelope,
   readStateChangingJsonRequestPayload,
   type StateChangingJsonRouteConfig,
 } from "../http/state-changing-json-route.ts";
@@ -36,7 +37,8 @@ type SupabaseClient = {
     functionName:
       | "admin_cancel_reservation"
       | "admin_confirm_reservation"
-      | "admin_reopen_listing",
+      | "admin_reopen_listing"
+      | "log_admin_workflow_invariant_rejection",
     args: Record<string, unknown>,
   ) => Promise<SupabaseRpcResponse>;
 };
@@ -75,6 +77,16 @@ export async function handleAdminCancelReservationPost(
     p_cancel_reason: bodyResult.body.reason,
     p_note: bodyResult.body.note,
   });
+  const invariantAuditFailure = await auditAdminWorkflowInvariantRejection(guard.supabase, rpcResult.error, {
+    workflowName: "admin_cancel_reservation_rejected",
+    reservationId,
+    listingId: null,
+    reason: bodyResult.body.reason,
+    note: bodyResult.body.note,
+  });
+  if (invariantAuditFailure) {
+    return invariantAuditFailure;
+  }
 
   return buildWorkflowResponse(
     rpcResult,
@@ -107,6 +119,16 @@ export async function handleAdminConfirmReservationPost(
     p_reservation_id: reservationId,
     p_note: bodyResult.body.note,
   });
+  const invariantAuditFailure = await auditAdminWorkflowInvariantRejection(guard.supabase, rpcResult.error, {
+    workflowName: "admin_confirm_reservation_rejected",
+    reservationId,
+    listingId: null,
+    reason: null,
+    note: bodyResult.body.note,
+  });
+  if (invariantAuditFailure) {
+    return invariantAuditFailure;
+  }
 
   return buildWorkflowResponse(
     rpcResult,
@@ -140,6 +162,16 @@ export async function handleAdminReopenListingPost(
     p_reason: bodyResult.body.reason,
     p_note: bodyResult.body.note,
   });
+  const invariantAuditFailure = await auditAdminWorkflowInvariantRejection(guard.supabase, rpcResult.error, {
+    workflowName: "admin_reopen_listing_rejected",
+    reservationId: null,
+    listingId,
+    reason: bodyResult.body.reason,
+    note: bodyResult.body.note,
+  });
+  if (invariantAuditFailure) {
+    return invariantAuditFailure;
+  }
 
   return buildWorkflowResponse(
     rpcResult,
@@ -206,79 +238,10 @@ function validateAdminWorkflowRequestEnvelope(
   request: Request,
   config: StateChangingJsonRouteConfig,
 ): { ok: true } | { ok: false; status: number; error: string } {
-  if (!isJsonContentType(request.headers.get("content-type"))) {
-    return {
-      ok: false,
-      status: 415,
-      error: `${config.routeLabel} requires application/json`,
-    };
-  }
-
-  const trustedOriginsResult = resolveTrustedAdminWorkflowOriginsFromEnvironment();
-  if (!trustedOriginsResult.ok) {
-    return trustedOriginsResult;
-  }
-
-  const originHeader = request.headers.get("origin");
-  if (!originHeader || originHeader.trim().length === 0) {
-    return {
-      ok: false,
-      status: 403,
-      error: `${config.routeLabel} Origin header is required`,
-    };
-  }
-
-  const requestOrigin = normalizeHttpOrigin(originHeader);
-  if (!requestOrigin || !trustedOriginsResult.origins.includes(requestOrigin)) {
-    return {
-      ok: false,
-      status: 403,
-      error: `${config.routeLabel} Origin is not trusted`,
-    };
-  }
-
-  return { ok: true };
-}
-
-function resolveTrustedAdminWorkflowOriginsFromEnvironment():
-  | { ok: true; origins: string[] }
-  | { ok: false; status: number; error: string } {
-  const nodeEnv = typeof process.env.NODE_ENV === "string" ? process.env.NODE_ENV.toLowerCase() : "";
-  const isDevOrTest = nodeEnv === "development" || nodeEnv === "test";
-  const trustedOrigin = (
-    asNonEmptyString(process.env.SITE_URL)
-    ?? asNonEmptyString(process.env.NEXT_PUBLIC_SITE_URL)
-    ?? (isDevOrTest ? normalizeVercelUrl(process.env.VERCEL_URL) : null)
-  );
-
-  if (!trustedOrigin) {
-    if (!isDevOrTest) {
-      return {
-        ok: false,
-        status: 500,
-        error: "SITE_URL or NEXT_PUBLIC_SITE_URL must be configured outside development/test",
-      };
-    }
-
-    return {
-      ok: true,
-      origins: ["http://localhost:3000"],
-    };
-  }
-
-  const normalizedOrigin = normalizeHttpOrigin(trustedOrigin);
-  if (!normalizedOrigin) {
-    return {
-      ok: false,
-      status: 500,
-      error: "Admin workflow trusted origin configuration is invalid",
-    };
-  }
-
-  return {
-    ok: true,
-    origins: [normalizedOrigin],
-  };
+  return validateStateChangingJsonRequestEnvelope(request, config, {
+    invalidConfigError: "Admin workflow trusted origin configuration is invalid",
+    strategy: "first-configured",
+  });
 }
 
 async function parseAdminCancelBody(
@@ -388,6 +351,40 @@ async function parseAdminNoteOnlyBody(
   };
 }
 
+async function auditAdminWorkflowInvariantRejection(
+  supabase: SupabaseClient,
+  error: SupabaseError | null,
+  input: {
+    workflowName: string;
+    reservationId: string | null;
+    listingId: string | null;
+    reason: string | null;
+    note: string | null;
+  },
+): Promise<Response | null> {
+  if (asNonEmptyString(error?.code) !== "P0004") {
+    return null;
+  }
+
+  const auditResult = await supabase.rpc("log_admin_workflow_invariant_rejection", {
+    p_workflow_name: input.workflowName,
+    p_reservation_id: input.reservationId,
+    p_listing_id: input.listingId,
+    p_reason: input.reason,
+    p_note: input.note,
+    p_payload: {
+      error_code: asNonEmptyString(error?.code),
+      error_message: asNonEmptyString(error?.message),
+    },
+  });
+
+  if (auditResult.error || !asUuid(auditResult.data)) {
+    return jsonError("Admin workflow invariant logging failed", 500);
+  }
+
+  return null;
+}
+
 function buildWorkflowResponse<T>(
   rpcResult: SupabaseRpcResponse,
   notFoundError: string,
@@ -416,7 +413,6 @@ function mapAdminWorkflowRpcError(
   notFoundError: string,
 ): [string, number] {
   const code = asNonEmptyString(error.code);
-  const message = asNonEmptyString(error.message);
 
   if (code === "28000") {
     return ["Authentication required", 401];
@@ -439,23 +435,10 @@ function mapAdminWorkflowRpcError(
   }
 
   if (code === "22023") {
-    if (isAdminWorkflowInvariantMessage(message)) {
-      return ["Admin workflow invariant violation", 500];
-    }
-
     return ["Invalid admin workflow request", 400];
   }
 
   return ["Admin workflow RPC failed", 500];
-}
-
-function isAdminWorkflowInvariantMessage(message: string | null): boolean {
-  const normalizedMessage = message?.trim().toLowerCase() ?? "";
-  if (!normalizedMessage) {
-    return false;
-  }
-
-  return normalizedMessage.includes("invariant");
 }
 
 function parseReservationWorkflowSuccess(value: unknown): {
@@ -601,36 +584,4 @@ function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     value,
   );
-}
-
-function isJsonContentType(value: string | null): boolean {
-  return value?.toLowerCase().split(";")[0]?.trim() === "application/json";
-}
-
-function normalizeHttpOrigin(value: string): string | null {
-  let parsed: URL;
-  try {
-    parsed = new URL(value.trim());
-  } catch {
-    return null;
-  }
-
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    return null;
-  }
-
-  if (parsed.username || parsed.password) {
-    return null;
-  }
-
-  return parsed.origin;
-}
-
-function normalizeVercelUrl(value: string | null | undefined): string | null {
-  const normalized = asNonEmptyString(value);
-  if (!normalized) {
-    return null;
-  }
-
-  return normalized.includes("://") ? normalized : `https://${normalized}`;
 }

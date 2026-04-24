@@ -278,33 +278,29 @@ test("admin confirm route accepts optional note and maps not found/conflict erro
 test("admin confirm route maps invariant drift separately from validation errors", async (t) => {
   setupAdminWorkflowEnv(t);
 
-  const legacyInvariantResponse = await handleAdminConfirmReservationPost(
-    createJsonRequest({}),
-    createDependencies({
-      rpc: () => ({
-        data: null,
-        error: {
-          code: "22023",
-          message: "reservation ownership invariant violated: 11111111-1111-4111-8111-111111111111",
-        },
-      }),
-    }),
-    { reservationId: "11111111-1111-4111-8111-111111111111" },
-  );
-
-  assert.equal(legacyInvariantResponse.status, 500);
-  assert.equal((await legacyInvariantResponse.json()).error, "Admin workflow invariant violation");
-
   const invariantResponse = await handleAdminConfirmReservationPost(
     createJsonRequest({}),
     createDependencies({
-      rpc: () => ({
-        data: null,
-        error: {
-          code: "P0004",
-          message: "reservation confirm invariant drift: 11111111-1111-4111-8111-111111111111",
-        },
-      }),
+      rpc: (functionName) => {
+        if (functionName === "admin_confirm_reservation") {
+          return {
+            data: null,
+            error: {
+              code: "P0004",
+              message: "reservation confirm invariant drift: 11111111-1111-4111-8111-111111111111",
+            },
+          };
+        }
+
+        if (functionName === "log_admin_workflow_invariant_rejection") {
+          return {
+            data: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            error: null,
+          };
+        }
+
+        throw new Error(`Unexpected RPC: ${functionName}`);
+      },
     }),
     { reservationId: "11111111-1111-4111-8111-111111111111" },
   );
@@ -328,6 +324,87 @@ test("admin confirm route maps invariant drift separately from validation errors
 
   assert.equal(validationResponse.status, 400);
   assert.equal((await validationResponse.json()).error, "Invalid admin workflow request");
+
+  const arbitrary22023Response = await handleAdminConfirmReservationPost(
+    createJsonRequest({}),
+    createDependencies({
+      rpc: () => ({
+        data: null,
+        error: {
+          code: "22023",
+          message: "reservation ownership drift detected",
+        },
+      }),
+    }),
+    { reservationId: "11111111-1111-4111-8111-111111111111" },
+  );
+
+  assert.equal(arbitrary22023Response.status, 400);
+  assert.equal((await arbitrary22023Response.json()).error, "Invalid admin workflow request");
+});
+
+test("admin cancel route records invariant rejection audit before returning 500", async (t) => {
+  setupAdminWorkflowEnv(t);
+
+  const calls: Array<{ functionName: string; args: Record<string, unknown> }> = [];
+  const response = await handleAdminCancelReservationPost(
+    createJsonRequest({
+      reason: "  customer_withdrew_before_payment  ",
+      note: "  customer changed plans  ",
+    }),
+    createDependencies({
+      rpc: (functionName, args) => {
+        calls.push({ functionName, args });
+
+        if (functionName === "admin_cancel_reservation") {
+          return {
+            data: null,
+            error: {
+              code: "P0004",
+              message: "reservation cancel invariant drift: 11111111-1111-4111-8111-111111111111",
+            },
+          };
+        }
+
+        if (functionName === "log_admin_workflow_invariant_rejection") {
+          return {
+            data: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            error: null,
+          };
+        }
+
+        throw new Error(`Unexpected RPC: ${functionName}`);
+      },
+    }),
+    { reservationId: "11111111-1111-4111-8111-111111111111" },
+  );
+
+  assert.equal(response.status, 500);
+  assert.equal((await response.json()).error, "Admin workflow invariant violation");
+  assert.deepEqual(calls, [
+    {
+      functionName: "admin_cancel_reservation",
+      args: {
+        p_reservation_id: "11111111-1111-4111-8111-111111111111",
+        p_cancel_reason: "customer_withdrew_before_payment",
+        p_note: "customer changed plans",
+      },
+    },
+    {
+      functionName: "log_admin_workflow_invariant_rejection",
+      args: {
+        p_workflow_name: "admin_cancel_reservation_rejected",
+        p_reservation_id: "11111111-1111-4111-8111-111111111111",
+        p_listing_id: null,
+        p_reason: "customer_withdrew_before_payment",
+        p_note: "customer changed plans",
+        p_payload: {
+          error_code: "P0004",
+          error_message: "reservation cancel invariant drift: 11111111-1111-4111-8111-111111111111",
+        },
+      },
+    },
+  ]);
 });
 
 test("admin confirm route calls admin_confirm_reservation RPC and returns summary", async (t) => {
@@ -454,6 +531,80 @@ test("admin workflow SQL keeps payment-first lock order aligned with payment cal
   );
 });
 
+test("admin reopen listing serializes on listing lock before live-state checks", () => {
+  const adminWorkflowSql = readFileSync(
+    new URL("../supabase/migrations/20260423120000_25_admin_workflow_rpcs.sql", import.meta.url),
+    "utf8",
+  );
+  const checkoutSql = readFileSync(
+    new URL("../supabase/migrations/20260423100000_22_harden_checkout_write_surface_production.sql", import.meta.url),
+    "utf8",
+  );
+
+  const reopenBody = extractFunctionBody(
+    adminWorkflowSql,
+    "internal.admin_reopen_listing",
+  );
+
+  const listingLockMatch = reopenBody.match(
+    /select\s+\*\s+into\s+v_listing\s+from\s+public\.listings\s+where\s+id\s*=\s*p_listing_id\s+for\s+update;/i,
+  );
+  const reservationCountMatch = reopenBody.match(
+    /select\s+count\(\*\)\s+into\s+v_live_reservation_count/i,
+  );
+  const orderCountMatch = reopenBody.match(
+    /select\s+count\(\*\)\s+into\s+v_live_order_count/i,
+  );
+  const pendingPaymentCountMatch = reopenBody.match(
+    /select\s+count\(\*\)\s+into\s+v_pending_payment_count/i,
+  );
+
+  const listingLockIndex = listingLockMatch?.index ?? -1;
+  const reservationCountIndex = reservationCountMatch?.index ?? -1;
+  const orderCountIndex = orderCountMatch?.index ?? -1;
+  const pendingPaymentCountIndex = pendingPaymentCountMatch?.index ?? -1;
+
+  assert.notEqual(listingLockIndex, -1, "Expected reopen flow to lock listing row");
+  assert.notEqual(reservationCountIndex, -1, "Expected reopen flow to check live reservations");
+  assert.notEqual(orderCountIndex, -1, "Expected reopen flow to check live orders");
+  assert.notEqual(pendingPaymentCountIndex, -1, "Expected reopen flow to check pending payments");
+  assert.ok(
+    listingLockIndex < reservationCountIndex
+      && listingLockIndex < orderCountIndex
+      && listingLockIndex < pendingPaymentCountIndex,
+    "Expected reopen flow to acquire listing lock before live-state checks",
+  );
+
+  assert.deepEqual(
+    extractLockOrder(checkoutSql, "internal.create_checkout"),
+    ["public.listings"],
+  );
+});
+
+test("admin workflow audit table preserves target links instead of nulling them on delete", () => {
+  const adminWorkflowSql = readFileSync(
+    new URL("../supabase/migrations/20260423120000_25_admin_workflow_rpcs.sql", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(
+    adminWorkflowSql,
+    /reservation_id uuid references public\.reservations\(id\) on delete restrict/i,
+  );
+  assert.match(
+    adminWorkflowSql,
+    /order_id uuid references public\.orders\(id\) on delete restrict/i,
+  );
+  assert.match(
+    adminWorkflowSql,
+    /payment_id uuid references public\.payments\(id\) on delete restrict/i,
+  );
+  assert.match(
+    adminWorkflowSql,
+    /listing_id uuid references public\.listings\(id\) on delete restrict/i,
+  );
+});
+
 function createJsonRequest(payload: unknown, origin = "http://localhost:3000"): Request {
   return new Request("http://localhost:3000/api/admin/workflows/test", {
     method: "POST",
@@ -543,16 +694,7 @@ function restoreEnv(key: string, value: string | undefined): void {
 }
 
 function extractLockOrder(sqlText: string, functionName: string): string[] {
-  const functionBodyMatch = sqlText.match(
-    new RegExp(
-      `create\\s+or\\s+replace\\s+function\\s+${escapeRegExp(functionName)}\\([^]*?as\\s+\\$\\$([^]*?)\\$\\$;`,
-      "i",
-    ),
-  );
-
-  assert.ok(functionBodyMatch, `Expected to find function ${functionName}`);
-
-  return functionBodyMatch[1]!
+  return extractFunctionBody(sqlText, functionName)
     .split(";")
     .map((statement) => statement.trim())
     .filter((statement) => /for update$/i.test(statement))
@@ -561,6 +703,18 @@ function extractLockOrder(sqlText: string, functionName: string): string[] {
       assert.ok(fromMatch, `Expected lock statement in ${functionName} to include a tracked table`);
       return fromMatch[1].toLowerCase();
     });
+}
+
+function extractFunctionBody(sqlText: string, functionName: string): string {
+  const functionBodyMatch = sqlText.match(
+    new RegExp(
+      `create\\s+or\\s+replace\\s+function\\s+${escapeRegExp(functionName)}\\([^]*?as\\s+\\$\\$([^]*?)\\$\\$;`,
+      "i",
+    ),
+  );
+
+  assert.ok(functionBodyMatch, `Expected to find function ${functionName}`);
+  return functionBodyMatch[1]!;
 }
 
 function escapeRegExp(value: string): string {

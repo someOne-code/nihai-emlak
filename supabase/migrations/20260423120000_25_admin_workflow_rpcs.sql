@@ -5,10 +5,10 @@ create table if not exists public.admin_workflow_events (
   id uuid primary key default extensions.gen_random_uuid(),
   workflow_name text not null,
   admin_user_id uuid not null references auth.users(id) on delete restrict,
-  reservation_id uuid references public.reservations(id) on delete set null,
-  order_id uuid references public.orders(id) on delete set null,
-  payment_id uuid references public.payments(id) on delete set null,
-  listing_id uuid references public.listings(id) on delete set null,
+  reservation_id uuid references public.reservations(id) on delete restrict,
+  order_id uuid references public.orders(id) on delete restrict,
+  payment_id uuid references public.payments(id) on delete restrict,
+  listing_id uuid references public.listings(id) on delete restrict,
   reason text,
   note text,
   payload jsonb not null default '{}'::jsonb,
@@ -103,6 +103,50 @@ begin
   returning id into v_event_id;
 
   return v_event_id;
+end;
+$$;
+
+create or replace function internal.log_admin_workflow_invariant_rejection(
+  p_workflow_name text,
+  p_reservation_id uuid default null,
+  p_listing_id uuid default null,
+  p_reason text default null,
+  p_note text default null,
+  p_payload jsonb default '{}'::jsonb
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_admin_user_id uuid;
+begin
+  v_admin_user_id := auth.uid();
+
+  if v_admin_user_id is null then
+    raise exception 'authenticated admin is required' using errcode = '28000';
+  end if;
+
+  if not (select public.is_admin()) then
+    raise exception 'admin role is required' using errcode = '42501';
+  end if;
+
+  if p_reservation_id is null and p_listing_id is null then
+    raise exception 'at least one admin workflow target is required' using errcode = '22023';
+  end if;
+
+  return internal.log_admin_workflow_event(
+    p_workflow_name,
+    v_admin_user_id,
+    p_reservation_id,
+    null,
+    null,
+    p_listing_id,
+    p_reason,
+    p_note,
+    p_payload
+  );
 end;
 $$;
 
@@ -256,6 +300,28 @@ begin
     raise exception 'listing status invariant violated: %', v_listing.id using errcode = 'P0004';
   end if;
 
+  if v_payment.amount <> v_order.total_amount then
+    raise exception 'payment amount invariant violated: %', v_payment.id using errcode = 'P0004';
+  end if;
+
+  if v_payment.currency <> v_order.currency then
+    raise exception 'payment currency invariant violated: %', v_payment.id using errcode = 'P0004';
+  end if;
+
+  if (
+    v_payment.status = 'succeeded'
+    or v_reservation.status = 'confirmed'
+    or v_order.status = 'completed'
+    or v_listing.status = 'passive'
+  ) and not (
+    v_payment.status = 'succeeded'
+    and v_reservation.status = 'confirmed'
+    and v_order.status = 'completed'
+    and v_listing.status = 'passive'
+  ) then
+    raise exception 'reservation cancel invariant drift: %', v_reservation.id using errcode = 'P0004';
+  end if;
+
   if v_reservation.status in ('cancelled', 'expired') then
     raise exception 'reservation cannot be cancelled from status: %', v_reservation.status using errcode = 'P0001';
   end if;
@@ -373,6 +439,10 @@ begin
     raise exception 'p_note is too long' using errcode = '22023';
   end if;
 
+  -- Listing row is the serialization boundary for reopen versus checkout create.
+  -- Keep this as the only row lock here: payment callback already locks
+  -- payment -> order -> reservation before listing, so reversing that order
+  -- inside reopen would create a deadlock-prone lock cycle.
   select *
   into v_listing
   from public.listings
@@ -588,6 +658,14 @@ begin
     raise exception 'payment order invariant violated: %', v_payment.id using errcode = 'P0004';
   end if;
 
+  if v_payment.amount <> v_order.total_amount then
+    raise exception 'payment amount invariant violated: %', v_payment.id using errcode = 'P0004';
+  end if;
+
+  if v_payment.currency <> v_order.currency then
+    raise exception 'payment currency invariant violated: %', v_payment.id using errcode = 'P0004';
+  end if;
+
   if v_payment.status <> 'succeeded' then
     raise exception 'reservation cannot be confirmed without succeeded payment: %', v_payment.status using errcode = 'P0001';
   end if;
@@ -732,6 +810,29 @@ as $$
   );
 $$;
 
+create or replace function public.log_admin_workflow_invariant_rejection(
+  p_workflow_name text,
+  p_reservation_id uuid default null,
+  p_listing_id uuid default null,
+  p_reason text default null,
+  p_note text default null,
+  p_payload jsonb default '{}'::jsonb
+)
+returns uuid
+language sql
+security definer
+set search_path = ''
+as $$
+  select internal.log_admin_workflow_invariant_rejection(
+    p_workflow_name,
+    p_reservation_id,
+    p_listing_id,
+    p_reason,
+    p_note,
+    p_payload
+  );
+$$;
+
 create or replace function public.get_admin_reservation_workflow_snapshot(
   p_reservation_id uuid
 )
@@ -754,6 +855,10 @@ declare
   v_has_consistent_ownership boolean := false;
   v_has_consistent_payment_order_link boolean := false;
   v_has_valid_listing_status boolean := false;
+  v_has_matching_payment_amount boolean := false;
+  v_has_matching_payment_currency boolean := false;
+  v_has_success_terminal_tuple boolean := false;
+  v_has_terminal_signal boolean := false;
 begin
   if auth.uid() is null then
     raise exception 'authenticated admin is required' using errcode = '28000';
@@ -832,13 +937,30 @@ begin
   );
   v_has_consistent_payment_order_link := v_payment.order_id = v_order.id;
   v_has_valid_listing_status := v_listing.status in ('active', 'passive');
+  v_has_matching_payment_amount := v_payment.amount = v_order.total_amount;
+  v_has_matching_payment_currency := v_payment.currency = v_order.currency;
+  v_has_success_terminal_tuple := (
+    v_payment.status = 'succeeded'
+    and v_reservation.status = 'confirmed'
+    and v_order.status = 'completed'
+    and v_listing.status = 'passive'
+  );
+  v_has_terminal_signal := (
+    v_payment.status = 'succeeded'
+    or v_reservation.status = 'confirmed'
+    or v_order.status = 'completed'
+    or v_listing.status = 'passive'
+  );
 
   v_can_cancel := (
     v_has_consistent_ownership
     and v_has_consistent_payment_order_link
     and v_has_valid_listing_status
+    and v_has_matching_payment_amount
+    and v_has_matching_payment_currency
     and v_reservation.status not in ('cancelled', 'expired')
     and v_order.status <> 'cancelled'
+    and (not v_has_terminal_signal or v_has_success_terminal_tuple)
   );
 
   select count(*)
@@ -858,6 +980,8 @@ begin
     v_has_consistent_ownership
     and v_has_consistent_payment_order_link
     and v_has_valid_listing_status
+    and v_has_matching_payment_amount
+    and v_has_matching_payment_currency
     and v_payment.status = 'succeeded'
     and v_reservation.status not in ('cancelled', 'expired')
     and v_order.status not in ('cancelled', 'failed', 'conflict')
@@ -995,6 +1119,8 @@ $$;
 
 revoke all on function internal.log_admin_workflow_event(text, uuid, uuid, uuid, uuid, uuid, text, text, jsonb)
 from public;
+revoke all on function internal.log_admin_workflow_invariant_rejection(text, uuid, uuid, text, text, jsonb)
+from public;
 revoke all on function internal.admin_cancel_reservation(uuid, text, text)
 from public;
 revoke all on function internal.admin_reopen_listing(uuid, text, text)
@@ -1021,6 +1147,13 @@ from public;
 revoke execute on function public.admin_confirm_reservation(uuid, text)
 from anon;
 grant execute on function public.admin_confirm_reservation(uuid, text)
+to authenticated;
+
+revoke all on function public.log_admin_workflow_invariant_rejection(text, uuid, uuid, text, text, jsonb)
+from public;
+revoke execute on function public.log_admin_workflow_invariant_rejection(text, uuid, uuid, text, text, jsonb)
+from anon;
+grant execute on function public.log_admin_workflow_invariant_rejection(text, uuid, uuid, text, text, jsonb)
 to authenticated;
 
 revoke all on function public.get_admin_reservation_workflow_snapshot(uuid)

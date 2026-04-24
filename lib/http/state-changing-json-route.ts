@@ -7,9 +7,19 @@ export type StateChangingJsonRouteResult<T> =
   | { ok: true; value: T }
   | { ok: false; status: number; error: string };
 
+export type TrustedOriginsStrategy = "all-configured" | "first-configured";
+
+export type ResolveTrustedOriginsFromEnvironmentOptions = {
+  invalidConfigError: string;
+  strategy?: TrustedOriginsStrategy;
+};
+
 export function validateStateChangingJsonRequestEnvelope(
   request: Request,
   config: StateChangingJsonRouteConfig,
+  options: ResolveTrustedOriginsFromEnvironmentOptions = {
+    invalidConfigError: "Checkout trusted origin configuration is invalid",
+  },
 ): { ok: true } | { ok: false; status: number; error: string } {
   if (!isJsonContentType(request.headers.get("content-type"))) {
     return {
@@ -19,7 +29,7 @@ export function validateStateChangingJsonRequestEnvelope(
     };
   }
 
-  const trustedOriginsResult = resolveTrustedOriginsFromEnvironment();
+  const trustedOriginsResult = resolveTrustedOriginsFromEnvironment(options);
   if (!trustedOriginsResult.ok) {
     return trustedOriginsResult;
   }
@@ -118,16 +128,17 @@ async function readStateChangingJsonRawBody(
   };
 }
 
-function resolveTrustedOriginsFromEnvironment():
+export function resolveTrustedOriginsFromEnvironment(
+  options: ResolveTrustedOriginsFromEnvironmentOptions,
+):
   | { ok: true; origins: string[] }
   | { ok: false; status: number; error: string } {
   const nodeEnv = typeof process.env.NODE_ENV === "string" ? process.env.NODE_ENV.toLowerCase() : "";
   const isDevOrTest = nodeEnv === "development" || nodeEnv === "test";
-  const configuredOrigins = [
-    asNonEmptyString(process.env.SITE_URL),
-    asNonEmptyString(process.env.NEXT_PUBLIC_SITE_URL),
-    ...(isDevOrTest ? [normalizeVercelUrl(process.env.VERCEL_URL)] : []),
-  ].filter((value): value is string => value !== null);
+  const configuredOrigins = resolveConfiguredOrigins({
+    isDevOrTest,
+    strategy: options.strategy ?? "all-configured",
+  });
 
   if (configuredOrigins.length === 0) {
     if (!isDevOrTest) {
@@ -151,7 +162,7 @@ function resolveTrustedOriginsFromEnvironment():
       return {
         ok: false,
         status: 500,
-        error: "Checkout trusted origin configuration is invalid",
+        error: options.invalidConfigError,
       };
     }
 
@@ -164,6 +175,23 @@ function resolveTrustedOriginsFromEnvironment():
     ok: true,
     origins: trustedOrigins,
   };
+}
+
+function resolveConfiguredOrigins(input: {
+  isDevOrTest: boolean;
+  strategy: TrustedOriginsStrategy;
+}): string[] {
+  const configuredOrigins = [
+    asNonEmptyString(process.env.SITE_URL),
+    asNonEmptyString(process.env.NEXT_PUBLIC_SITE_URL),
+    ...(input.isDevOrTest ? [normalizeVercelUrl(process.env.VERCEL_URL)] : []),
+  ].filter((value): value is string => value !== null);
+
+  if (input.strategy === "first-configured") {
+    return configuredOrigins.length > 0 ? [configuredOrigins[0]] : [];
+  }
+
+  return configuredOrigins;
 }
 
 function concatUint8Arrays(chunks: Uint8Array[], byteLength: number): Uint8Array {
