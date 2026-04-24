@@ -370,6 +370,10 @@ begin
     raise exception 'TEST FAILED: public listing detail returned wrong listing: %', v_detail;
   end if;
 
+  if v_detail ? 'address_line' then
+    raise exception 'TEST FAILED: public listing detail should not expose exact address_line: %', v_detail;
+  end if;
+
   begin
     perform public.get_public_listing_detail('cccccccc-dddd-4ddd-8ddd-ddddddddd102'::uuid);
     raise exception 'TEST FAILED: passive listing detail should be hidden';
@@ -513,6 +517,15 @@ begin
     raise exception 'TEST FAILED: admin payment event list should include fixture event, got %', v_count;
   end if;
 
+  select count(*)
+  into v_count
+  from jsonb_array_elements(v_result -> 'items') item
+  where item ? 'payload';
+
+  if v_count <> 0 then
+    raise exception 'TEST FAILED: admin payment event list should not expose raw payload, got %', v_count;
+  end if;
+
   v_result := public.list_admin_payment_events('33333333-4444-4444-8444-444444444101'::uuid, 20, 0);
 
   select count(*)
@@ -527,6 +540,22 @@ end $$;
 
 do $$
 begin
+  begin
+    perform public.list_public_listings(null::public.listing_type, null::text, null::integer, 0);
+    raise exception 'TEST FAILED: null limit should be rejected';
+  exception
+    when sqlstate '22023' then
+      null;
+  end;
+
+  begin
+    perform public.list_public_listings(null::public.listing_type, null::text, 20, null::integer);
+    raise exception 'TEST FAILED: null offset should be rejected';
+  exception
+    when sqlstate '22023' then
+      null;
+  end;
+
   begin
     perform public.list_public_listings(null::public.listing_type, null::text, 0, 0);
     raise exception 'TEST FAILED: limit < 1 should be rejected';
@@ -552,8 +581,24 @@ begin
   end;
 
   begin
+    perform public.list_admin_reservations(null::public.reservation_status, null::integer, 0);
+    raise exception 'TEST FAILED: admin reservation null limit should be rejected';
+  exception
+    when sqlstate '22023' then
+      null;
+  end;
+
+  begin
     perform public.list_admin_reservations(null::public.reservation_status, 0, 0);
     raise exception 'TEST FAILED: admin reservation limit < 1 should be rejected';
+  exception
+    when sqlstate '22023' then
+      null;
+  end;
+
+  begin
+    perform public.list_admin_orders(null::public.order_status, 20, null::integer);
+    raise exception 'TEST FAILED: admin order null offset should be rejected';
   exception
     when sqlstate '22023' then
       null;
@@ -568,8 +613,24 @@ begin
   end;
 
   begin
+    perform public.list_admin_payments(null::public.payment_status, null::integer, 0);
+    raise exception 'TEST FAILED: admin payment null limit should be rejected';
+  exception
+    when sqlstate '22023' then
+      null;
+  end;
+
+  begin
     perform public.list_admin_payments(null::public.payment_status, 20, -1);
     raise exception 'TEST FAILED: admin payment offset < 0 should be rejected';
+  exception
+    when sqlstate '22023' then
+      null;
+  end;
+
+  begin
+    perform public.list_admin_payment_events(null::uuid, 20, null::integer);
+    raise exception 'TEST FAILED: admin payment event null offset should be rejected';
   exception
     when sqlstate '22023' then
       null;

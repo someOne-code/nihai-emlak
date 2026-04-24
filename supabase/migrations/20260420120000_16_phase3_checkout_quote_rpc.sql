@@ -8,7 +8,7 @@ create or replace function public.calculate_checkout_quote(
 )
 returns jsonb
 language plpgsql
-security invoker
+security definer
 set search_path = ''
 as $$
 declare

@@ -368,7 +368,8 @@ declare
   v_res_count integer;
   v_ord_count integer;
   v_pay_count integer;
-  v_evt_count integer;
+  v_evt_count integer := 0;
+  v_payment_events_read_blocked boolean := false;
 begin
   select count(*) into v_res_count
   from public.reservations where id = '11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa'::uuid;
@@ -391,11 +392,23 @@ begin
     raise exception 'Admin should see all payments, got %', v_pay_count;
   end if;
 
-  select count(*) into v_evt_count
-  from public.payment_events where id = '66666666-ffff-ffff-ffff-ffffffffffff'::uuid;
+  begin
+    select count(*) into v_evt_count
+    from public.payment_events
+    where id = '66666666-ffff-ffff-ffff-ffffffffffff'::uuid;
+  exception
+    when insufficient_privilege then
+      v_payment_events_read_blocked := true;
+    when others then
+      if sqlstate = '42501' then
+        v_payment_events_read_blocked := true;
+      else
+        raise;
+      end if;
+  end;
 
-  if v_evt_count <> 1 then
-    raise exception 'Admin should see all payment_events, got %', v_evt_count;
+  if not v_payment_events_read_blocked and v_evt_count <> 0 then
+    raise exception 'Admin direct payment_events read surface should not return rows, got %', v_evt_count;
   end if;
 end;
 $$;

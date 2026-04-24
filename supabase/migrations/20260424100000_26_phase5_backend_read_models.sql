@@ -8,14 +8,14 @@ create or replace function public.list_public_listings(
 )
 returns jsonb
 language plpgsql
-security invoker
+security definer
 set search_path = ''
 stable
 as $$
 declare
   v_items jsonb;
 begin
-  if p_limit < 1 or p_limit > 100 or p_offset < 0 then
+  if p_limit is null or p_offset is null or p_limit < 1 or p_limit > 100 or p_offset < 0 then
     raise exception 'invalid pagination'
       using errcode = '22023';
   end if;
@@ -76,7 +76,7 @@ create or replace function public.get_public_listing_detail(
 )
 returns jsonb
 language plpgsql
-security invoker
+security definer
 set search_path = ''
 stable
 as $$
@@ -122,7 +122,6 @@ begin
     'description', v_listing.description,
     'city', v_listing.city,
     'district', v_listing.district,
-    'address_line', v_listing.address_line,
     'price', v_listing.price,
     'currency', v_listing.currency,
     'room_count', v_listing.room_count,
@@ -141,7 +140,7 @@ create or replace function public.list_public_listing_services(
 )
 returns jsonb
 language plpgsql
-security invoker
+security definer
 set search_path = ''
 stable
 as $$
@@ -208,7 +207,7 @@ begin
       using errcode = '42501';
   end if;
 
-  if p_limit < 1 or p_limit > 100 or p_offset < 0 then
+  if p_limit is null or p_offset is null or p_limit < 1 or p_limit > 100 or p_offset < 0 then
     raise exception 'invalid pagination'
       using errcode = '22023';
   end if;
@@ -281,7 +280,7 @@ begin
       using errcode = '42501';
   end if;
 
-  if p_limit < 1 or p_limit > 100 or p_offset < 0 then
+  if p_limit is null or p_offset is null or p_limit < 1 or p_limit > 100 or p_offset < 0 then
     raise exception 'invalid pagination'
       using errcode = '22023';
   end if;
@@ -350,7 +349,7 @@ begin
       using errcode = '42501';
   end if;
 
-  if p_limit < 1 or p_limit > 100 or p_offset < 0 then
+  if p_limit is null or p_offset is null or p_limit < 1 or p_limit > 100 or p_offset < 0 then
     raise exception 'invalid pagination'
       using errcode = '22023';
   end if;
@@ -406,7 +405,7 @@ create or replace function public.list_admin_payment_events(
 )
 returns jsonb
 language plpgsql
-security invoker
+security definer
 set search_path = ''
 stable
 as $$
@@ -423,7 +422,7 @@ begin
       using errcode = '42501';
   end if;
 
-  if p_limit < 1 or p_limit > 100 or p_offset < 0 then
+  if p_limit is null or p_offset is null or p_limit < 1 or p_limit > 100 or p_offset < 0 then
     raise exception 'invalid pagination'
       using errcode = '22023';
   end if;
@@ -435,7 +434,6 @@ begin
         'payment_id', e.payment_id,
         'event_type', e.event_type,
         'provider', e.provider,
-        'payload', e.payload,
         'created_at', e.created_at
       )
       order by e.created_at desc, e.id

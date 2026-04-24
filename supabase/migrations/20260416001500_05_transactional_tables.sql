@@ -153,7 +153,8 @@ grant insert on public.order_items to authenticated;
 grant select on public.payments to authenticated;
 grant insert on public.payments to authenticated;
 
-grant select on public.payment_events to authenticated;
+-- NOTE: payment_events is an audit storage table.
+-- Client-facing reads must go through sanitized RPC surfaces, not direct table selects.
 
 -- ============================================================
 -- 8. ROW LEVEL SECURITY
@@ -252,8 +253,3 @@ with check ((select auth.uid()) = user_id);
 alter table public.payment_events enable row level security;
 
 drop policy if exists payment_events_select_admin on public.payment_events;
-create policy payment_events_select_admin
-on public.payment_events
-for select
-to authenticated
-using ((select public.is_admin()));

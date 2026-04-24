@@ -110,8 +110,22 @@ select set_config('request.jwt.claim.role', 'authenticated', false);
 
 do $$
 declare
+  v_has_address_column boolean;
   v_has_consultant_column boolean;
 begin
+  select exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'listings'
+      and column_name = 'address_line'
+  )
+  into v_has_address_column;
+
+  if v_has_address_column then
+    raise exception 'Task 3 contract violated: listings.address_line must not exist';
+  end if;
+
   select exists (
     select 1
     from information_schema.columns

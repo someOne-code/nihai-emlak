@@ -364,7 +364,8 @@ select set_config('request.jwt.claim.role', 'authenticated', false);
 do $$
 declare
   v_evt_id uuid := '77777777-ffff-ffff-ffff-ffffffffffff'::uuid;
-  v_count integer;
+  v_visible_count integer := 0;
+  v_direct_read_blocked boolean := false;
 begin
   insert into public.payment_events (id, payment_id, event_type, provider, payload)
   values (
@@ -375,15 +376,24 @@ begin
     '{"note": "Manuel denetim girdisi"}'::jsonb
   );
 
-  select count(*) into v_count
-  from public.payment_events where id = v_evt_id;
+  begin
+    select count(*) into v_visible_count
+    from public.payment_events
+    where id = v_evt_id;
+  exception
+    when insufficient_privilege then
+      v_direct_read_blocked := true;
+    when others then
+      if sqlstate = '42501' then
+        v_direct_read_blocked := true;
+      else
+        raise;
+      end if;
+  end;
 
-  if v_count <> 1 then
-    raise exception 'Admin should be able to insert payment_events, got %', v_count;
+  if not v_direct_read_blocked and v_visible_count <> 0 then
+    raise exception 'Admin direct payment_events read surface should not return rows, got %', v_visible_count;
   end if;
-
-  -- cleanup
-  delete from public.payment_events where id = v_evt_id;
 end;
 $$;
 
@@ -400,7 +410,8 @@ select set_config('request.jwt.claim.role', 'authenticated', false);
 
 do $$
 declare
-  v_count integer;
+  v_visible_count integer := 0;
+  v_direct_read_blocked boolean := false;
 begin
   begin
     insert into public.payment_events (id, payment_id, event_type, provider, payload)
@@ -415,14 +426,23 @@ begin
     when others then null;  -- expected: RLS blocks it
   end;
 
-  -- verify nothing was inserted (check as superuser later)
-  -- from user's perspective, they can't even see payment_events
-  select count(*) into v_count
-  from public.payment_events
-  where id = '88888888-ffff-ffff-ffff-ffffffffffff'::uuid;
+  begin
+    select count(*) into v_visible_count
+    from public.payment_events
+    where id = '88888888-ffff-ffff-ffff-ffffffffffff'::uuid;
+  exception
+    when insufficient_privilege then
+      v_direct_read_blocked := true;
+    when others then
+      if sqlstate = '42501' then
+        v_direct_read_blocked := true;
+      else
+        raise;
+      end if;
+  end;
 
-  if v_count <> 0 then
-    raise exception 'Normal user should NOT be able to insert payment_events';
+  if not v_direct_read_blocked and v_visible_count <> 0 then
+    raise exception 'Normal user direct payment_events read should not return rows, got %', v_visible_count;
   end if;
 end;
 $$;
@@ -434,6 +454,14 @@ do $$
 declare
   v_count integer;
 begin
+  select count(*) into v_count
+  from public.payment_events
+  where id = '77777777-ffff-ffff-ffff-ffffffffffff'::uuid;
+
+  if v_count <> 1 then
+    raise exception 'Admin payment_event insert should persist, got %', v_count;
+  end if;
+
   select count(*) into v_count
   from public.payment_events
   where id = '88888888-ffff-ffff-ffff-ffffffffffff'::uuid;

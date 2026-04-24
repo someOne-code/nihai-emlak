@@ -377,7 +377,7 @@ declare
   v_order_status text;
   v_payment_status text;
   v_listing_status text;
-  v_event_count integer;
+  v_snapshot jsonb;
 begin
   v_result := public.admin_cancel_reservation(
     'eeeeeeee-ffff-4fff-8fff-fffffffff001'::uuid,
@@ -414,13 +414,14 @@ begin
       v_reservation_status, v_order_status, v_payment_status, v_listing_status;
   end if;
 
-  select count(*) into v_event_count
-  from public.admin_workflow_events
-  where workflow_name = 'admin_cancel_reservation'
-    and reservation_id = 'eeeeeeee-ffff-4fff-8fff-fffffffff001'::uuid;
+  v_snapshot := public.get_admin_reservation_workflow_snapshot(
+    'eeeeeeee-ffff-4fff-8fff-fffffffff001'::uuid
+  );
 
-  if v_event_count <> 1 then
-    raise exception 'TEST 2 FAILED: expected one cancel event, got %', v_event_count;
+  if coalesce(v_snapshot->'latest_event'->>'workflow_name', '') <> 'admin_cancel_reservation' then
+    raise exception
+      'TEST 2 FAILED: expected latest cancel workflow event, got %',
+      coalesce(v_snapshot->'latest_event', '{}'::jsonb);
   end if;
 end;
 $$;
@@ -492,7 +493,7 @@ do $$
 declare
   v_result jsonb;
   v_listing_status text;
-  v_event_count integer;
+  v_snapshot jsonb;
 begin
   v_result := public.admin_reopen_listing(
     'cccccccc-dddd-4ddd-8ddd-ddddddddd002'::uuid,
@@ -512,13 +513,48 @@ begin
     raise exception 'TEST 4 FAILED: expected active listing, got %', v_listing_status;
   end if;
 
-  select count(*) into v_event_count
-  from public.admin_workflow_events
-  where workflow_name = 'admin_reopen_listing'
-    and listing_id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd002'::uuid;
+  v_snapshot := public.get_admin_listing_workflow_snapshot(
+    'cccccccc-dddd-4ddd-8ddd-ddddddddd002'::uuid
+  );
 
-  if v_event_count <> 1 then
-    raise exception 'TEST 4 FAILED: expected one reopen event, got %', v_event_count;
+  if coalesce(v_snapshot->'latest_event'->>'workflow_name', '') <> 'admin_reopen_listing' then
+    raise exception
+      'TEST 4 FAILED: expected latest reopen workflow event, got %',
+      coalesce(v_snapshot->'latest_event', '{}'::jsonb);
+  end if;
+end;
+$$;
+
+reset role;
+
+-- ============================================================
+-- TEST 4A: admin cannot read admin_workflow_events directly
+-- ============================================================
+set role authenticated;
+select set_config('request.jwt.claim.sub', 'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb001', false);
+select set_config('request.jwt.claim.role', 'authenticated', false);
+
+do $$
+declare
+  v_visible_count integer := 0;
+  v_direct_read_blocked boolean := false;
+begin
+  begin
+    select count(*) into v_visible_count
+    from public.admin_workflow_events;
+  exception
+    when insufficient_privilege then
+      v_direct_read_blocked := true;
+    when others then
+      if sqlstate = '42501' then
+        v_direct_read_blocked := true;
+      else
+        raise;
+      end if;
+  end;
+
+  if not v_direct_read_blocked and v_visible_count <> 0 then
+    raise exception 'TEST 4A FAILED: direct admin_workflow_events read should not return rows, got %', v_visible_count;
   end if;
 end;
 $$;

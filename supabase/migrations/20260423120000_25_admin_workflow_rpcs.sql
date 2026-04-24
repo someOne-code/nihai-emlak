@@ -36,16 +36,9 @@ create index if not exists admin_workflow_events_listing_lookup_idx
   on public.admin_workflow_events (listing_id, created_at desc)
   where listing_id is not null;
 
-grant select on public.admin_workflow_events to authenticated;
-
 alter table public.admin_workflow_events enable row level security;
 
 drop policy if exists admin_workflow_events_select_admin on public.admin_workflow_events;
-create policy admin_workflow_events_select_admin
-on public.admin_workflow_events
-for select
-to authenticated
-using ((select public.is_admin()));
 
 create or replace function internal.log_admin_workflow_event(
   p_workflow_name text,
@@ -854,7 +847,7 @@ create or replace function public.get_admin_reservation_workflow_snapshot(
 )
 returns jsonb
 language plpgsql
-security invoker
+security definer
 set search_path = ''
 as $$
 declare
@@ -1048,7 +1041,7 @@ create or replace function public.get_admin_listing_workflow_snapshot(
 )
 returns jsonb
 language plpgsql
-security invoker
+security definer
 set search_path = ''
 as $$
 declare

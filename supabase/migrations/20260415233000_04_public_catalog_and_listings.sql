@@ -35,7 +35,6 @@ create table if not exists public.listings (
   description text,
   city text not null,
   district text,
-  address_line text,
   price numeric(12, 2) not null,
   currency text not null default 'TRY',
   room_count integer,
