@@ -690,6 +690,39 @@ set
 where id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd003'::uuid;
 
 -- ============================================================
+-- TEST 6AA: already-finalized reservation keeps can_confirm=false and returns conflict
+-- ============================================================
+set role authenticated;
+select set_config('request.jwt.claim.sub', 'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb001', false);
+select set_config('request.jwt.claim.role', 'authenticated', false);
+
+do $$
+declare
+  v_snapshot jsonb;
+begin
+  v_snapshot := public.get_admin_reservation_workflow_snapshot(
+    'eeeeeeee-ffff-4fff-8fff-fffffffff003'::uuid
+  );
+
+  if v_snapshot #>> '{eligibility,can_confirm}' <> 'false' then
+    raise exception 'TEST 6AA FAILED: already-finalized reservation should not be confirmable, got %', v_snapshot;
+  end if;
+
+  begin
+    perform public.admin_confirm_reservation(
+      'eeeeeeee-ffff-4fff-8fff-fffffffff003'::uuid,
+      'should_fail_already_finalized'
+    );
+    raise exception 'TEST 6AA FAILED: confirm should report conflict for already-finalized reservation';
+  exception
+    when sqlstate 'P0001' then null;
+  end;
+end;
+$$;
+
+reset role;
+
+-- ============================================================
 -- TEST 6B: admin confirm rejects stale reservation when listing is already occupied
 -- ============================================================
 update public.listings
@@ -1226,6 +1259,69 @@ where id = 'eeeeeeee-ffff-4fff-8fff-fffffffff008'::uuid;
 
 delete from public.listings
 where id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd007'::uuid;
+
+-- ============================================================
+-- TEST 6F: admin confirm treats partial-terminal drift as invariant even when payment is not succeeded
+-- ============================================================
+update public.reservations
+set
+  status = 'pending',
+  updated_at = now()
+where id = 'eeeeeeee-ffff-4fff-8fff-fffffffff004'::uuid;
+
+update public.orders
+set
+  status = 'completed',
+  updated_at = now()
+where id = '11111111-2222-4222-8222-222222222004'::uuid;
+
+update public.listings
+set
+  status = 'active',
+  updated_at = now()
+where id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd004'::uuid;
+
+update public.payments
+set
+  status = 'pending',
+  updated_at = now()
+where id = '33333333-4444-4444-8444-444444444004'::uuid;
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', 'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb001', false);
+select set_config('request.jwt.claim.role', 'authenticated', false);
+
+do $$
+declare
+  v_snapshot jsonb;
+begin
+  v_snapshot := public.get_admin_reservation_workflow_snapshot(
+    'eeeeeeee-ffff-4fff-8fff-fffffffff004'::uuid
+  );
+
+  if v_snapshot #>> '{eligibility,can_confirm}' <> 'false' then
+    raise exception 'TEST 6F FAILED: partial-terminal drift should not be confirmable, got %', v_snapshot;
+  end if;
+
+  begin
+    perform public.admin_confirm_reservation(
+      'eeeeeeee-ffff-4fff-8fff-fffffffff004'::uuid,
+      'should_fail_partial_terminal_drift_even_with_pending_payment'
+    );
+    raise exception 'TEST 6F FAILED: confirm should reject partial-terminal drift with invariant violation';
+  exception
+    when sqlstate 'P0004' then null;
+  end;
+end;
+$$;
+
+reset role;
+
+update public.orders
+set
+  status = 'pending',
+  updated_at = now()
+where id = '11111111-2222-4222-8222-222222222004'::uuid;
 
 -- ============================================================
 -- TEST 7: admin confirm rejects non-succeeded payment

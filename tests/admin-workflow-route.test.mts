@@ -10,6 +10,42 @@ import {
   type AdminWorkflowRouteDependencies,
 } from "../lib/admin/workflow-route.ts";
 
+type AdminWorkflowSurface = {
+  name: "cancel" | "confirm" | "reopen";
+  createRequest: (origin?: string | null) => Request;
+  handle: (
+    request: Request,
+    dependencies: AdminWorkflowRouteDependencies,
+  ) => Promise<Response>;
+};
+
+const ADMIN_WORKFLOW_SURFACES: AdminWorkflowSurface[] = [
+  {
+    name: "cancel",
+    createRequest: (origin) => createJsonRequest({ reason: "customer_withdrew" }, origin),
+    handle: (request, dependencies) =>
+      handleAdminCancelReservationPost(request, dependencies, {
+        reservationId: "11111111-1111-4111-8111-111111111111",
+      }),
+  },
+  {
+    name: "confirm",
+    createRequest: (origin) => createJsonRequest({ note: "docs completed" }, origin),
+    handle: (request, dependencies) =>
+      handleAdminConfirmReservationPost(request, dependencies, {
+        reservationId: "11111111-1111-4111-8111-111111111111",
+      }),
+  },
+  {
+    name: "reopen",
+    createRequest: (origin) => createJsonRequest({ reason: "paperwork completed" }, origin),
+    handle: (request, dependencies) =>
+      handleAdminReopenListingPost(request, dependencies, {
+        listingId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      }),
+  },
+];
+
 test("admin cancel route rejects non-json requests before auth", async (t) => {
   setupAdminWorkflowEnv(t);
 
@@ -31,6 +67,149 @@ test("admin cancel route rejects non-json requests before auth", async (t) => {
   const payload = await response.json();
   assert.equal(payload.success, false);
   assert.equal(payload.error, "Admin workflow requires application/json");
+});
+
+test("admin workflow surfaces reject missing origin before auth", async (t) => {
+  setupAdminWorkflowEnv(t);
+
+  for (const surface of ADMIN_WORKFLOW_SURFACES) {
+    const response = await surface.handle(
+      surface.createRequest(null),
+      createFailingDependencies(),
+    );
+
+    assert.equal(response.status, 403, `${surface.name} surface status`);
+
+    const payload = await response.json();
+    assert.equal(payload.success, false, `${surface.name} surface payload.success`);
+    assert.equal(payload.error, "Admin workflow Origin header is required", `${surface.name} surface payload.error`);
+  }
+});
+
+test("admin workflow surfaces reject untrusted origin before auth", async (t) => {
+  setupAdminWorkflowEnv(t);
+
+  for (const surface of ADMIN_WORKFLOW_SURFACES) {
+    const response = await surface.handle(
+      surface.createRequest("https://evil.example"),
+      createFailingDependencies(),
+    );
+
+    assert.equal(response.status, 403, `${surface.name} surface status`);
+
+    const payload = await response.json();
+    assert.equal(payload.success, false, `${surface.name} surface payload.success`);
+    assert.equal(payload.error, "Admin workflow Origin is not trusted", `${surface.name} surface payload.error`);
+  }
+});
+
+test("admin workflow surfaces fail closed when auth lookup fails", async (t) => {
+  setupAdminWorkflowEnv(t);
+
+  for (const surface of ADMIN_WORKFLOW_SURFACES) {
+    const response = await surface.handle(
+      surface.createRequest(),
+      createDependencies({
+        authError: {
+          code: "57014",
+          message: "statement timeout",
+        },
+        getProfileRole: () => {
+          throw new Error("profile lookup should not run when auth lookup fails");
+        },
+        rpc: () => {
+          throw new Error("rpc should not run when auth lookup fails");
+        },
+      }),
+    );
+
+    assert.equal(response.status, 401, `${surface.name} surface status`);
+
+    const payload = await response.json();
+    assert.equal(payload.success, false, `${surface.name} surface payload.success`);
+    assert.equal(payload.error, "Authentication required", `${surface.name} surface payload.error`);
+  }
+});
+
+test("admin workflow surfaces fail closed when profile lookup fails", async (t) => {
+  setupAdminWorkflowEnv(t);
+
+  for (const surface of ADMIN_WORKFLOW_SURFACES) {
+    const response = await surface.handle(
+      surface.createRequest(),
+      createDependencies({
+        profileError: {
+          code: "57014",
+          message: "statement timeout",
+        },
+        rpc: () => {
+          throw new Error("rpc should not run when profile lookup fails");
+        },
+      }),
+    );
+
+    assert.equal(response.status, 500, `${surface.name} surface status`);
+
+    const payload = await response.json();
+    assert.equal(payload.success, false, `${surface.name} surface payload.success`);
+    assert.equal(payload.error, "Admin profile lookup failed", `${surface.name} surface payload.error`);
+  }
+});
+
+test("admin workflow surfaces map SQLSTATE 22023 to invalid request without message coupling", async (t) => {
+  setupAdminWorkflowEnv(t);
+
+  for (const surface of ADMIN_WORKFLOW_SURFACES) {
+    const response = await surface.handle(
+      surface.createRequest(),
+      createDependencies({
+        rpc: () => ({
+          data: null,
+          error: {
+            code: "22023",
+            message: `${surface.name} ownership drift should not affect HTTP mapping`,
+          },
+        }),
+      }),
+    );
+
+    assert.equal(response.status, 400, `${surface.name} surface status`);
+    assert.equal((await response.json()).error, "Invalid admin workflow request", `${surface.name} surface payload.error`);
+  }
+});
+
+test("admin workflow surfaces preserve P0004 invariant mapping when audit RPC fails", async (t) => {
+  setupAdminWorkflowEnv(t);
+
+  for (const surface of ADMIN_WORKFLOW_SURFACES) {
+    const response = await surface.handle(
+      surface.createRequest(),
+      createDependencies({
+        rpc: (functionName) => {
+          if (functionName === "log_admin_workflow_invariant_rejection") {
+            return {
+              data: null,
+              error: {
+                code: "42501",
+                message: "audit insert blocked by RLS",
+              },
+            };
+          }
+
+          return {
+            data: null,
+            error: {
+              code: "P0004",
+              message: `${surface.name} drift details should not affect HTTP mapping`,
+            },
+          };
+        },
+      }),
+    );
+
+    assert.equal(response.status, 500, `${surface.name} surface status`);
+    assert.equal((await response.json()).error, "Admin workflow invariant violation", `${surface.name} surface payload.error`);
+  }
 });
 
 test("admin cancel route rejects unauthenticated requests", async (t) => {
@@ -76,30 +255,6 @@ test("admin cancel route rejects non-admin users before RPC", async (t) => {
   const payload = await response.json();
   assert.equal(payload.success, false);
   assert.equal(payload.error, "Admin role required");
-});
-
-test("admin workflow route fails closed when profile lookup fails", async (t) => {
-  setupAdminWorkflowEnv(t);
-
-  const response = await handleAdminCancelReservationPost(
-    createJsonRequest({ reason: "customer_withdrew" }),
-    createDependencies({
-      profileError: {
-        code: "57014",
-        message: "statement timeout",
-      },
-      rpc: () => {
-        throw new Error("rpc should not run when profile lookup fails");
-      },
-    }),
-    { reservationId: "11111111-1111-4111-8111-111111111111" },
-  );
-
-  assert.equal(response.status, 500);
-
-  const payload = await response.json();
-  assert.equal(payload.success, false);
-  assert.equal(payload.error, "Admin profile lookup failed");
 });
 
 test("admin workflow route trusts private SITE_URL and rejects NEXT_PUBLIC_SITE_URL when both are configured", async (t) => {
@@ -237,7 +392,7 @@ test("admin cancel route calls admin_cancel_reservation RPC with normalized inpu
   assert.equal(payload.data.listing.status, "active");
 });
 
-test("admin confirm route accepts optional note and maps not found/conflict errors", async (t) => {
+test("admin confirm route accepts optional note and maps not found/already-finalized conflicts", async (t) => {
   setupAdminWorkflowEnv(t);
 
   const notFoundResponse = await handleAdminConfirmReservationPost(
@@ -264,7 +419,7 @@ test("admin confirm route accepts optional note and maps not found/conflict erro
         data: null,
         error: {
           code: "P0001",
-          message: "reservation cannot be confirmed without succeeded payment",
+          message: "reservation is already confirmed: 11111111-1111-4111-8111-111111111111",
         },
       }),
     }),
@@ -275,7 +430,7 @@ test("admin confirm route accepts optional note and maps not found/conflict erro
   assert.equal((await conflictResponse.json()).error, "Admin workflow conflict");
 });
 
-test("admin confirm route maps invariant drift separately from validation errors", async (t) => {
+test("admin confirm route maps partial-terminal invariant drift separately from validation errors", async (t) => {
   setupAdminWorkflowEnv(t);
 
   const invariantResponse = await handleAdminConfirmReservationPost(
@@ -287,7 +442,7 @@ test("admin confirm route maps invariant drift separately from validation errors
             data: null,
             error: {
               code: "P0004",
-              message: "reservation confirm invariant drift: 11111111-1111-4111-8111-111111111111",
+              message: "reservation confirm invariant drift: partial-terminal mismatch",
             },
           };
         }
@@ -605,13 +760,17 @@ test("admin workflow audit table preserves target links instead of nulling them 
   );
 });
 
-function createJsonRequest(payload: unknown, origin = "http://localhost:3000"): Request {
+function createJsonRequest(payload: unknown, origin: string | null = "http://localhost:3000"): Request {
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+  };
+  if (origin !== null) {
+    headers.origin = origin;
+  }
+
   return new Request("http://localhost:3000/api/admin/workflows/test", {
     method: "POST",
-    headers: {
-      "content-type": "application/json",
-      origin,
-    },
+    headers,
     body: JSON.stringify(payload),
   });
 }
@@ -626,6 +785,7 @@ function createFailingDependencies(): AdminWorkflowRouteDependencies {
 
 function createDependencies(options: {
   userId?: string | null;
+  authError?: { code?: string | null; message?: string | null } | null;
   getProfileRole?: () => string | null;
   profileError?: { code?: string | null; message?: string | null } | null;
   rpc: (
@@ -642,7 +802,7 @@ function createDependencies(options: {
               ? null
               : { id: options.userId ?? "55555555-5555-4555-8555-555555555555" },
           },
-          error: null,
+          error: options.authError ?? null,
         }),
       },
       from: () => ({

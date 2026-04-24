@@ -287,46 +287,49 @@ begin
     raise exception 'listing not found for reservation: %', v_reservation.id using errcode = 'P0002';
   end if;
 
-  if v_order.user_id <> v_reservation.user_id
-     or v_payment.user_id <> v_reservation.user_id then
+  if v_order.user_id is distinct from v_reservation.user_id
+     or v_payment.user_id is distinct from v_reservation.user_id then
     raise exception 'reservation ownership invariant violated: %', v_reservation.id using errcode = 'P0004';
   end if;
 
-  if v_payment.order_id <> v_order.id then
+  if v_payment.order_id is distinct from v_order.id then
     raise exception 'payment order invariant violated: %', v_payment.id using errcode = 'P0004';
   end if;
 
-  if v_listing.status not in ('active', 'passive') then
+  if v_listing.status is null
+     or v_listing.status not in ('active', 'passive') then
     raise exception 'listing status invariant violated: %', v_listing.id using errcode = 'P0004';
   end if;
 
-  if v_payment.amount <> v_order.total_amount then
+  if v_payment.amount is distinct from v_order.total_amount then
     raise exception 'payment amount invariant violated: %', v_payment.id using errcode = 'P0004';
   end if;
 
-  if v_payment.currency <> v_order.currency then
+  if v_payment.currency is distinct from v_order.currency then
     raise exception 'payment currency invariant violated: %', v_payment.id using errcode = 'P0004';
   end if;
 
   if (
-    v_payment.status = 'succeeded'
-    or v_reservation.status = 'confirmed'
-    or v_order.status = 'completed'
-    or v_listing.status = 'passive'
+    coalesce(v_payment.status = 'succeeded', false)
+    or coalesce(v_reservation.status = 'confirmed', false)
+    or coalesce(v_order.status = 'completed', false)
+    or coalesce(v_listing.status = 'passive', false)
   ) and not (
-    v_payment.status = 'succeeded'
-    and v_reservation.status = 'confirmed'
-    and v_order.status = 'completed'
-    and v_listing.status = 'passive'
+    coalesce(v_payment.status = 'succeeded', false)
+    and coalesce(v_reservation.status = 'confirmed', false)
+    and coalesce(v_order.status = 'completed', false)
+    and coalesce(v_listing.status = 'passive', false)
   ) then
     raise exception 'reservation cancel invariant drift: %', v_reservation.id using errcode = 'P0004';
   end if;
 
-  if v_reservation.status in ('cancelled', 'expired') then
+  if v_reservation.status is null
+     or v_reservation.status in ('cancelled', 'expired') then
     raise exception 'reservation cannot be cancelled from status: %', v_reservation.status using errcode = 'P0001';
   end if;
 
-  if v_order.status = 'cancelled' then
+  if v_order.status is null
+     or v_order.status = 'cancelled' then
     raise exception 'order cannot be cancelled from status: %', v_order.status using errcode = 'P0001';
   end if;
 
@@ -542,6 +545,8 @@ declare
   v_other_occupant_count integer;
   v_note text;
   v_event_id uuid;
+  v_has_confirm_success_terminal_tuple boolean := false;
+  v_has_confirm_terminal_signal boolean := false;
 begin
   v_admin_user_id := auth.uid();
 
@@ -649,39 +654,55 @@ begin
     raise exception 'listing not found for reservation: %', v_reservation.id using errcode = 'P0002';
   end if;
 
-  if v_order.user_id <> v_reservation.user_id
-     or v_payment.user_id <> v_reservation.user_id then
+  if v_order.user_id is distinct from v_reservation.user_id
+     or v_payment.user_id is distinct from v_reservation.user_id then
     raise exception 'reservation ownership invariant violated: %', v_reservation.id using errcode = 'P0004';
   end if;
 
-  if v_payment.order_id <> v_order.id then
+  if v_payment.order_id is distinct from v_order.id then
     raise exception 'payment order invariant violated: %', v_payment.id using errcode = 'P0004';
   end if;
 
-  if v_payment.amount <> v_order.total_amount then
+  if v_payment.amount is distinct from v_order.total_amount then
     raise exception 'payment amount invariant violated: %', v_payment.id using errcode = 'P0004';
   end if;
 
-  if v_payment.currency <> v_order.currency then
+  if v_payment.currency is distinct from v_order.currency then
     raise exception 'payment currency invariant violated: %', v_payment.id using errcode = 'P0004';
   end if;
 
-  if v_payment.status <> 'succeeded' then
+  v_has_confirm_success_terminal_tuple := (
+    coalesce(v_payment.status = 'succeeded', false)
+    and coalesce(v_reservation.status = 'confirmed', false)
+    and coalesce(v_order.status = 'completed', false)
+    and coalesce(v_listing.status = 'passive', false)
+  );
+  v_has_confirm_terminal_signal := (
+    coalesce(v_reservation.status = 'confirmed', false)
+    or coalesce(v_order.status = 'completed', false)
+    or coalesce(v_listing.status = 'passive', false)
+  );
+
+  if v_has_confirm_success_terminal_tuple then
+    raise exception 'reservation is already confirmed: %', v_reservation.id using errcode = 'P0001';
+  end if;
+
+  if v_has_confirm_terminal_signal then
+    raise exception 'reservation confirm invariant drift: %', v_reservation.id using errcode = 'P0004';
+  end if;
+
+  if v_payment.status is distinct from 'succeeded' then
     raise exception 'reservation cannot be confirmed without succeeded payment: %', v_payment.status using errcode = 'P0001';
   end if;
 
-  if v_reservation.status in ('cancelled', 'expired') then
+  if v_reservation.status is null
+     or v_reservation.status in ('cancelled', 'expired') then
     raise exception 'reservation cannot be confirmed from status: %', v_reservation.status using errcode = 'P0001';
   end if;
 
-  if v_order.status in ('cancelled', 'failed', 'conflict') then
+  if v_order.status is null
+     or v_order.status in ('cancelled', 'failed', 'conflict') then
     raise exception 'order cannot be confirmed from status: %', v_order.status using errcode = 'P0001';
-  end if;
-
-  if v_reservation.status = 'confirmed'
-     and v_order.status = 'completed'
-     and v_listing.status = 'passive' then
-    raise exception 'reservation is already confirmed: %', v_reservation.id using errcode = 'P0001';
   end if;
 
   select count(*)
@@ -701,13 +722,8 @@ begin
     raise exception 'listing is already occupied: %', v_listing.id using errcode = 'P0001';
   end if;
 
-  if v_reservation.status = 'confirmed'
-     or v_order.status = 'completed'
-     or v_listing.status = 'passive' then
-    raise exception 'reservation confirm invariant drift: %', v_reservation.id using errcode = 'P0004';
-  end if;
-
-  if v_listing.status not in ('active', 'passive') then
+  if v_listing.status is null
+     or v_listing.status not in ('active', 'passive') then
     raise exception 'listing status invariant violated: %', v_listing.id using errcode = 'P0004';
   end if;
 
@@ -859,6 +875,7 @@ declare
   v_has_matching_payment_currency boolean := false;
   v_has_success_terminal_tuple boolean := false;
   v_has_terminal_signal boolean := false;
+  v_has_confirm_terminal_signal boolean := false;
 begin
   if auth.uid() is null then
     raise exception 'authenticated admin is required' using errcode = '28000';
@@ -951,6 +968,11 @@ begin
     or v_order.status = 'completed'
     or v_listing.status = 'passive'
   );
+  v_has_confirm_terminal_signal := (
+    v_reservation.status = 'confirmed'
+    or v_order.status = 'completed'
+    or v_listing.status = 'passive'
+  );
 
   v_can_cancel := (
     v_has_consistent_ownership
@@ -986,9 +1008,7 @@ begin
     and v_reservation.status not in ('cancelled', 'expired')
     and v_order.status not in ('cancelled', 'failed', 'conflict')
     and v_other_occupant_count = 0
-    and v_reservation.status <> 'confirmed'
-    and v_order.status <> 'completed'
-    and v_listing.status <> 'passive'
+    and not v_has_confirm_terminal_signal
   );
 
   return jsonb_build_object(
