@@ -702,6 +702,54 @@ test("admin cancel route normalizes blank note to null instead of rejecting body
   ]);
 });
 
+test("admin workflow surfaces reject non-string note values", async (t) => {
+  setupAdminWorkflowEnv(t);
+
+  const cancelResponse = await handleAdminCancelReservationPost(
+    createJsonRequest({
+      reason: "customer_withdrew_before_payment",
+      note: 123,
+    }),
+    createDependencies({
+      rpc: () => {
+        throw new Error("rpc should not run for invalid note type");
+      },
+    }),
+    { reservationId: "11111111-1111-4111-8111-111111111111" },
+  );
+  assert.equal(cancelResponse.status, 400);
+  assert.equal((await cancelResponse.json()).error, "Admin workflow note must be a string");
+
+  const confirmResponse = await handleAdminConfirmReservationPost(
+    createJsonRequest({
+      note: {},
+    }),
+    createDependencies({
+      rpc: () => {
+        throw new Error("rpc should not run for invalid note type");
+      },
+    }),
+    { reservationId: "11111111-1111-4111-8111-111111111111" },
+  );
+  assert.equal(confirmResponse.status, 400);
+  assert.equal((await confirmResponse.json()).error, "Admin workflow note must be a string");
+
+  const reopenResponse = await handleAdminReopenListingPost(
+    createJsonRequest({
+      reason: "paperwork completed",
+      note: [],
+    }),
+    createDependencies({
+      rpc: () => {
+        throw new Error("rpc should not run for invalid note type");
+      },
+    }),
+    { listingId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" },
+  );
+  assert.equal(reopenResponse.status, 400);
+  assert.equal((await reopenResponse.json()).error, "Admin workflow note must be a string");
+});
+
 test("admin reopen route validates reason and maps rpc response", async (t) => {
   setupAdminWorkflowEnv(t);
 

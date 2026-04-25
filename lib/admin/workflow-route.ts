@@ -278,7 +278,7 @@ async function parseAdminReasonBody(
 
   const body = payloadResult.value as Record<string, unknown>;
   const reason = asNonEmptyString(body.reason);
-  const note = asOptionalBoundedString(body.note);
+  const noteResult = parseOptionalAdminWorkflowNote(body.note);
 
   if (!reason) {
     return {
@@ -296,11 +296,11 @@ async function parseAdminReasonBody(
     };
   }
 
-  if (isStringLongerThan(body.note, 1000)) {
+  if (!noteResult.ok) {
     return {
       ok: false,
       status: 400,
-      error: "Admin workflow note is too long",
+      error: noteResult.error,
     };
   }
 
@@ -308,7 +308,7 @@ async function parseAdminReasonBody(
     ok: true,
     body: {
       reason,
-      note,
+      note: noteResult.value,
     },
   };
 }
@@ -336,18 +336,18 @@ async function parseAdminNoteOnlyBody(
   }
 
   const body = payloadResult.value as Record<string, unknown>;
-  const note = asOptionalBoundedString(body.note);
-  if (isStringLongerThan(body.note, 1000)) {
+  const noteResult = parseOptionalAdminWorkflowNote(body.note);
+  if (!noteResult.ok) {
     return {
       ok: false,
       status: 400,
-      error: "Admin workflow note is too long",
+      error: noteResult.error,
     };
   }
 
   return {
     ok: true,
-    body: { note },
+    body: { note: noteResult.value },
   };
 }
 
@@ -550,21 +550,44 @@ function jsonResponse(payload: unknown, status: number): Response {
   });
 }
 
-function asOptionalBoundedString(value: unknown): string | null {
-  const normalized = asNonEmptyString(value);
-  if (!normalized) {
-    return null;
+function parseOptionalAdminWorkflowNote(
+  value: unknown,
+):
+  | { ok: true; value: string | null }
+  | { ok: false; error: string } {
+  if (value === undefined || value === null) {
+    return {
+      ok: true,
+      value: null,
+    };
+  }
+
+  if (typeof value !== "string") {
+    return {
+      ok: false,
+      error: "Admin workflow note must be a string",
+    };
+  }
+
+  const normalized = value.trim();
+  if (normalized.length === 0) {
+    return {
+      ok: true,
+      value: null,
+    };
   }
 
   if (normalized.length > 1000) {
-    return null;
+    return {
+      ok: false,
+      error: "Admin workflow note is too long",
+    };
   }
 
-  return normalized;
-}
-
-function isStringLongerThan(value: unknown, maxLength: number): boolean {
-  return typeof value === "string" && value.trim().length > maxLength;
+  return {
+    ok: true,
+    value: normalized,
+  };
 }
 
 function asUuid(value: unknown): string | null {
