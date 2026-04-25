@@ -277,6 +277,31 @@ values (
   'pending'
 );
 
+insert into public.reservation_intake (
+  reservation_id,
+  user_id,
+  contact_full_name,
+  contact_phone,
+  contact_email,
+  preferred_contact_method,
+  preferred_contact_time,
+  occupant_full_name,
+  document_readiness,
+  note
+)
+values (
+  'eeeeeeee-ffff-4fff-8fff-fffffffff101'::uuid,
+  'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb102'::uuid,
+  'Phase5 Contact User',
+  '+905551112233',
+  'phase5-contact@example.com',
+  'whatsapp',
+  '18:00 sonrasi',
+  null,
+  'needs_help',
+  'Evrak listesi icin arayin'
+);
+
 insert into public.orders (
   id,
   reservation_id,
@@ -470,6 +495,22 @@ begin
 
   if v_count <> 1 then
     raise exception 'TEST FAILED: admin reservation list should include fixture reservation, got %', v_count;
+  end if;
+
+  select count(*)
+  into v_count
+  from jsonb_array_elements(v_result -> 'items') item
+  where item ->> 'id' = 'eeeeeeee-ffff-4fff-8fff-fffffffff101'
+    and item #>> '{contact,fullName}' = 'Phase5 Contact User'
+    and item #>> '{contact,phone}' = '+905551112233'
+    and item #>> '{contact,email}' = 'phase5-contact@example.com'
+    and item #>> '{contact,preferredContactMethod}' = 'whatsapp'
+    and item #>> '{contact,preferredContactTime}' = '18:00 sonrasi'
+    and item #>> '{contact,documentReadiness}' = 'needs_help'
+    and item #>> '{contact,note}' = 'Evrak listesi icin arayin';
+
+  if v_count <> 1 then
+    raise exception 'TEST FAILED: admin reservation list should expose sanitized checkout intake contact, got %', v_result;
   end if;
 
   v_result := public.list_admin_orders(null::public.order_status, 20, 0);

@@ -21,6 +21,8 @@ Admin endpointler:
 - `GET /api/admin/read/payments` -> `list_admin_payments`
 - `GET /api/admin/read/payment-events` -> `list_admin_payment_events`
 
+Phase 5.6 checkout intake alanlari eklendikten sonra admin reservation read/snapshot yuzeyleri, ofis operasyonu icin gereken sanitize iletisim alanlarini dondurmelidir. Public read endpointleri intake bilgisini dondurmez.
+
 ## Ortak Response Envelope
 
 Basarili:
@@ -114,6 +116,19 @@ RPC args:
 - `p_limit`
 - `p_offset`
 
+Phase 5.6 sonrasi beklenen sanitize intake alanlari:
+
+- `contact.fullName`
+- `contact.phone`
+- `contact.email`
+- `contact.preferredContactMethod`
+- `contact.preferredContactTime`
+- `contact.occupantFullName`
+- `contact.documentReadiness`
+- `contact.note`
+
+Bu alanlar yalnizca admin/backoffice read yuzeyinde bulunur.
+
 ### `GET /api/admin/read/orders`
 
 Query:
@@ -170,3 +185,4 @@ Admin endpoint error semantigi:
 - `service_role` client tarafina acilmaz.
 - Public listing surface exact address bilgisini tasimaz; `public.listings` schema'sinda `address_line` kolonu bulunmaz.
 - Audit/event tablolari (`payment_events`, `admin_workflow_events`) dogrudan client read surface'i degildir; liste/snapshot erisimi dar RPC fonksiyonlari uzerinden saglanir.
+- Checkout intake bilgisi public read surface'e tasinmaz; event payload'larinda ham intake verisi kopyalanmaz.

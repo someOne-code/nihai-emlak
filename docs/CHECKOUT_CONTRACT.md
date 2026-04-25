@@ -52,7 +52,17 @@ Amaç: Authenticated kullanıcı için checkout create RPC'sine normalize edilmi
   "guest_count": 2,
   "main_items": ["deposit"],
   "service_items": ["cleaning"],
-  "note": "Opsiyonel not"
+  "note": "Opsiyonel not",
+  "contact": {
+    "full_name": "Ali Veli",
+    "phone": "+905551112233",
+    "email": "ali@example.com",
+    "preferred_contact_method": "whatsapp",
+    "preferred_contact_time": "18:00 sonrasi",
+    "occupant_full_name": "Ali Veli",
+    "document_readiness": "needs_help",
+    "note": "Ofis aramadan once WhatsApp mesaji atarsa iyi olur."
+  }
 }
 ```
 
@@ -65,6 +75,24 @@ Kurallar:
 - `service_items` opsiyonel array; verilmezse boş listeye normalize edilir; duplicate olamaz.
 - Item code'lar trim + lowercase normalize edilir ve parser uyumlu formatta olmalıdır: `^[a-z0-9][a-z0-9_-]*$`
 - `note` string ise trim edilir; boşsa `null` olur.
+
+Phase 5.6 pre-payment intake kurallari:
+- `contact` zorunlu pre-payment intake objesidir.
+- `contact.full_name` zorunlu, trim edilmis `2..120` karakter olmalidir.
+- `contact.phone` zorunlu, trim edilmis `7..32` karakter olmalidir.
+- `contact.preferred_contact_method` zorunlu ve `phone | whatsapp | email` degerlerinden biri olmalidir.
+- `contact.document_readiness` zorunlu ve `ready | needs_help | later` degerlerinden biri olmalidir.
+- `contact.email`, `contact.preferred_contact_time`, `contact.occupant_full_name`, `contact.note` opsiyoneldir; bos string ise `null` olur.
+- `contact.note` ofis/backoffice sureci icin kisa musteri notudur; finansal toplam veya banka payload kaynagi degildir.
+
+Pre-payment intake kapsami disi:
+- TC kimlik numarasi
+- pasaport veya oturum izni numarasi
+- belge upload
+- maas bordrosu, banka dokumu, kefil evraki
+- imzali kontrat dosyasi
+- kart/banka hesap bilgisi
+- mevcut acik adres
 
 Frontend'in göndermemesi gereken alanlar:
 - `amount`

@@ -295,6 +295,7 @@ declare
   v_reservation public.reservations%rowtype;
   v_order public.orders%rowtype;
   v_payment public.payments%rowtype;
+  v_intake public.reservation_intake%rowtype;
   v_item_count integer;
   v_code_count integer;
   v_item_sum numeric(12, 2);
@@ -307,7 +308,15 @@ begin
     2,
     array['deposit_t4', 'first_rent_t4'],
     array['cleaning_t4'],
-    'Havale notu'
+    'Havale notu',
+    'Phase3 Contact User',
+    '+905551112233',
+    'PHASE3-CONTACT@example.com',
+    'whatsapp',
+    '18:00 sonrasi',
+    null,
+    'needs_help',
+    'Evrak listesi icin arayin'
   );
 
   if v_result->>'result' <> 'created' then
@@ -330,6 +339,10 @@ begin
   from public.payments
   where id = v_payment_id;
 
+  select * into v_intake
+  from public.reservation_intake
+  where reservation_id = v_reservation_id;
+
   select count(*), coalesce(sum(amount), 0)
   into v_item_count, v_item_sum
   from public.order_items
@@ -347,6 +360,22 @@ begin
 
   if v_reservation.id is null or v_order.id is null or v_payment.id is null then
     raise exception 'TEST 1 FAILED: expected reservation/order/payment rows to exist';
+  end if;
+
+  if v_intake.reservation_id is null then
+    raise exception 'TEST 1 FAILED: expected reservation_intake row to exist';
+  end if;
+
+  if v_intake.user_id <> '66666666-7777-4777-8777-777777777762'::uuid
+     or v_intake.contact_full_name <> 'Phase3 Contact User'
+     or v_intake.contact_phone <> '+905551112233'
+     or v_intake.contact_email <> 'phase3-contact@example.com'
+     or v_intake.preferred_contact_method <> 'whatsapp'
+     or v_intake.preferred_contact_time <> '18:00 sonrasi'
+     or v_intake.occupant_full_name is not null
+     or v_intake.document_readiness <> 'needs_help'
+     or v_intake.note <> 'Evrak listesi icin arayin' then
+    raise exception 'TEST 1 FAILED: reservation_intake values were not normalized or linked correctly';
   end if;
 
   if v_reservation.user_id <> '66666666-7777-4777-8777-777777777762'::uuid
@@ -396,6 +425,78 @@ begin
 end;
 $$;
 
+-- TEST 1A: checkout intake contact fields are required and validated before writes
+do $$
+declare
+  v_reservation_count integer;
+begin
+  begin
+    perform public.create_checkout(
+      '77777777-7777-4777-8777-777777777762'::uuid,
+      current_date + 32,
+      6,
+      1,
+      array['deposit_t4'],
+      array[]::text[],
+      'Eksik contact kontrolu',
+      null,
+      '+905551112233',
+      null,
+      'phone',
+      null,
+      null,
+      'ready',
+      null
+    );
+
+    raise exception 'TEST 1A FAILED: missing contact full name should have been rejected';
+  exception
+    when invalid_parameter_value then
+      if position('p_contact_full_name is required' in SQLERRM) = 0 then
+        raise;
+      end if;
+  end;
+
+  begin
+    perform public.create_checkout(
+      '77777777-7777-4777-8777-777777777762'::uuid,
+      current_date + 33,
+      6,
+      1,
+      array['deposit_t4'],
+      array[]::text[],
+      'Gecersiz contact enum kontrolu',
+      'Phase3 Contact User',
+      '+905551112233',
+      null,
+      'sms',
+      null,
+      null,
+      'ready',
+      null
+    );
+
+    raise exception 'TEST 1A FAILED: invalid contact preferred method should have been rejected';
+  exception
+    when invalid_parameter_value then
+      if position('p_contact_preferred_method must be one of phone, whatsapp, email' in SQLERRM) = 0 then
+        raise;
+      end if;
+  end;
+
+  select count(*)
+  into v_reservation_count
+  from public.reservations
+  where listing_id = '77777777-7777-4777-8777-777777777762'::uuid
+    and note in ('Eksik contact kontrolu', 'Gecersiz contact enum kontrolu');
+
+  if v_reservation_count <> 0 then
+    raise exception 'TEST 1A FAILED: invalid contact attempts must not create reservations, got %',
+      v_reservation_count;
+  end if;
+end;
+$$;
+
 -- TEST 1B: same listing cannot open a second pending checkout while one is already pending
 do $$
 begin
@@ -407,7 +508,15 @@ begin
       1,
       array['deposit_t4'],
       array[]::text[],
-      'Ikinci pending checkout denemesi'
+      'Ikinci pending checkout denemesi',
+      'Phase3 Contact User',
+      '+905551112233',
+      null,
+      'phone',
+      null,
+      null,
+      'ready',
+      null
     );
     raise exception 'TEST 1B FAILED: second pending checkout should have been rejected';
   exception
@@ -477,7 +586,15 @@ begin
       1,
       array['dup_one_t4'],
       array[]::text[],
-      '__phase3_t4_conflict__'
+      '__phase3_t4_conflict__',
+      'Phase3 Contact User',
+      '+905551112233',
+      null,
+      'phone',
+      null,
+      null,
+      'ready',
+      null
     );
     raise exception 'TEST 1C FAILED: expected concurrent conflict to map to listing unavailable';
   exception
@@ -540,7 +657,15 @@ begin
       1,
       array['dup_one_t4'],
       array[]::text[],
-      '__phase3_t4_other_unique__'
+      '__phase3_t4_other_unique__',
+      'Phase3 Contact User',
+      '+905551112233',
+      null,
+      'phone',
+      null,
+      null,
+      'ready',
+      null
     );
     raise exception 'TEST 1D FAILED: unrelated reservation unique violation should surface as raw unique_violation';
   exception
@@ -586,7 +711,8 @@ begin
   if has_table_privilege('authenticated', 'public.reservations', 'INSERT')
      or has_table_privilege('authenticated', 'public.orders', 'INSERT')
      or has_table_privilege('authenticated', 'public.order_items', 'INSERT')
-     or has_table_privilege('authenticated', 'public.payments', 'INSERT') then
+     or has_table_privilege('authenticated', 'public.payments', 'INSERT')
+     or has_table_privilege('authenticated', 'public.reservation_intake', 'INSERT') then
     raise exception 'TEST 2 FAILED: authenticated must not have direct transactional INSERT privileges';
   end if;
 
@@ -654,6 +780,29 @@ begin
   end;
 
   begin
+    insert into public.reservation_intake (
+      reservation_id,
+      user_id,
+      contact_full_name,
+      contact_phone,
+      preferred_contact_method,
+      document_readiness
+    )
+    values (
+      v_reservation_id,
+      '66666666-7777-4777-8777-777777777762'::uuid,
+      'Bypass Contact',
+      '+905551112233',
+      'phone',
+      'ready'
+    );
+    raise exception 'TEST 2 FAILED: direct reservation intake insert should be denied';
+  exception
+    when insufficient_privilege then
+      null;
+  end;
+
+  begin
     insert into public.payments (
       order_id,
       user_id,
@@ -691,7 +840,15 @@ begin
       1,
       array['deposit_t4'],
       array[]::text[],
-      'Gecmis tarih kontrolu'
+      'Gecmis tarih kontrolu',
+      'Phase3 Contact User',
+      '+905551112233',
+      null,
+      'phone',
+      null,
+      null,
+      'ready',
+      null
     );
     raise exception 'TEST 3 FAILED: past move-in date should have raised';
   exception
@@ -736,7 +893,15 @@ begin
     1,
     array['dup_one_t4', 'dup_two_t4'],
     array[]::text[],
-    'Ayni etiket farkli kod kontrolu'
+    'Ayni etiket farkli kod kontrolu',
+    'Phase3 Contact User',
+    '+905551112233',
+    null,
+    'phone',
+    null,
+    null,
+    'ready',
+    null
   );
 
   if v_result->>'result' <> 'created' then
@@ -901,7 +1066,15 @@ begin
       1,
       array['dup_one_t4'],
       array[]::text[],
-      'Lock kontrolu'
+      'Lock kontrolu',
+      'Phase3 Contact User',
+      '+905551112233',
+      null,
+      'phone',
+      null,
+      null,
+      'ready',
+      null
     );
     raise exception 'TEST 5 FAILED: create_checkout should block on locked listing row';
   exception
@@ -997,7 +1170,15 @@ begin
       1,
       array['dup_one_t4'],
       array[]::text[],
-      'Main item lock kontrolu'
+      'Main item lock kontrolu',
+      'Phase3 Contact User',
+      '+905551112233',
+      null,
+      'phone',
+      null,
+      null,
+      'ready',
+      null
     );
     raise exception 'TEST 6 FAILED: create_checkout should block on locked main item config row';
   exception
@@ -1080,7 +1261,7 @@ begin
 
   if has_function_privilege(
     'anon',
-    'public.create_checkout(uuid, date, integer, integer, text[], text[], text)',
+    'public.create_checkout(uuid, date, integer, integer, text[], text[], text, text, text, text, text, text, text, text, text)',
     'EXECUTE'
   ) then
     raise exception 'TEST 7 FAILED: anon should not be allowed to execute create_checkout';
@@ -1088,7 +1269,7 @@ begin
 
   if not has_function_privilege(
     'authenticated',
-    'public.create_checkout(uuid, date, integer, integer, text[], text[], text)',
+    'public.create_checkout(uuid, date, integer, integer, text[], text[], text, text, text, text, text, text, text, text, text)',
     'EXECUTE'
   ) then
     raise exception 'TEST 7 FAILED: authenticated should be allowed to execute create_checkout';
@@ -1096,7 +1277,7 @@ begin
 
   if has_function_privilege(
     'authenticated',
-    'internal.create_checkout(uuid, date, integer, integer, text[], text[], text)',
+    'internal.create_checkout(uuid, date, integer, integer, text[], text[], text, text, text, text, text, text, text, text, text)',
     'EXECUTE'
   ) then
     raise exception 'TEST 7 FAILED: authenticated should not execute internal create_checkout directly';
@@ -1104,7 +1285,7 @@ begin
 
   if has_function_privilege(
     'anon',
-    'internal.create_checkout(uuid, date, integer, integer, text[], text[], text)',
+    'internal.create_checkout(uuid, date, integer, integer, text[], text[], text, text, text, text, text, text, text, text, text)',
     'EXECUTE'
   ) then
     raise exception 'TEST 7 FAILED: anon should not execute internal create_checkout directly';
@@ -1112,7 +1293,7 @@ begin
 
   if not has_function_privilege(
     'service_role',
-    'internal.create_checkout(uuid, date, integer, integer, text[], text[], text)',
+    'internal.create_checkout(uuid, date, integer, integer, text[], text[], text, text, text, text, text, text, text, text, text)',
     'EXECUTE'
   ) then
     raise exception 'TEST 7 FAILED: service_role should execute internal create_checkout';

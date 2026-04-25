@@ -21,6 +21,7 @@ Bu audit, [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) icindeki Faz 0.5'in
 | Uzun süren arka plan işler | Inngest, gerekirse Edge Function background task | Dış sistem + ince custom |
 | İçerik yönetimi | Payload CMS | Dış sistem |
 | Mesajlaşma kimlik doğrulama | Chatwoot + server-side HMAC | Dış sistem + ince custom |
+| Checkout intake / pre-payment contact bilgisi | DB table + checkout RPC + RLS | Supabase native + ince custom |
 
 ## Detaylı Karar Matrisi
 
@@ -72,6 +73,14 @@ Bu audit, [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) icindeki Faz 0.5'in
 - **Uygulama:** `orders`, `order_items`, `payments` ve listing/service verisine bakan DB function
 - **Neden:** Transaction kritik ve veri yoğun mantık veritabanına yakın çözülmeli.
 - **Ne yapmayacağız:** Frontend toplam fiyat göndermeyecek; fiyatı client belirlemeyecek.
+
+### 6.5. Checkout Intake / Pre-payment Contact Bilgisi
+
+- **Karar:** Odeme oncesi operasyonel iletisim bilgisi checkout create sinirinda alinacak ve reservation ile iliskili DB tablosunda tutulacak.
+- **Sinif:** Supabase native + ince custom
+- **Uygulama:** `reservation_intake` benzeri tablo, RLS, checkout create RPC ve admin read/snapshot yuzeyleri.
+- **Neden:** Ofis belge surecini gercek hayatta yurutuyor; musteriye ulasma bilgisi operational backend kaydi olarak transaction sinirina yakin tutulmali.
+- **Ne yapmayacagiz:** Checkout sirasinda TC kimlik, pasaport, belge upload, banka/kart bilgisi veya mevcut acik adres toplamayacagiz.
 
 ### 7. Ödeme Callback Alma ve İmza Doğrulama
 

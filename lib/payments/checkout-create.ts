@@ -1,4 +1,14 @@
 export type CheckoutCreateRequestBody = {
+  contact: {
+    documentReadiness: "ready" | "needs_help" | "later";
+    email: string | null;
+    fullName: string;
+    note: string | null;
+    occupantFullName: string | null;
+    phone: string;
+    preferredContactMethod: "phone" | "whatsapp" | "email";
+    preferredContactTime: string | null;
+  };
   guestCount: number;
   listingId: string;
   mainItems: string[];
@@ -23,6 +33,16 @@ const FINANCIAL_CLIENT_FIELDS = new Set([
 const MAX_ITEM_COUNT = 20;
 const MAX_ITEM_CODE_LENGTH = 64;
 const MAX_NOTE_LENGTH = 1000;
+const MAX_CONTACT_FULL_NAME_LENGTH = 120;
+const MAX_CONTACT_PHONE_LENGTH = 32;
+const MAX_CONTACT_EMAIL_LENGTH = 254;
+const MAX_CONTACT_PREFERRED_TIME_LENGTH = 120;
+const MAX_CONTACT_OCCUPANT_FULL_NAME_LENGTH = 120;
+const MIN_CONTACT_FULL_NAME_LENGTH = 2;
+const MIN_CONTACT_PHONE_LENGTH = 7;
+
+const CONTACT_PREFERRED_METHOD_VALUES = ["phone", "whatsapp", "email"] as const;
+const CONTACT_DOCUMENT_READINESS_VALUES = ["ready", "needs_help", "later"] as const;
 
 export function parseCheckoutCreateRequestBody(payload: unknown): CheckoutCreateParseResult {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
@@ -81,9 +101,15 @@ export function parseCheckoutCreateRequestBody(payload: unknown): CheckoutCreate
     return validationError(note.error);
   }
 
+  const contact = normalizeContact(row.contact);
+  if (!contact.ok) {
+    return validationError(contact.error);
+  }
+
   return {
     ok: true,
     body: {
+      contact: contact.value,
       guestCount,
       listingId,
       mainItems: mainItems.items,
@@ -171,6 +197,209 @@ function normalizeNote(value: unknown): { ok: true; value: string | null } | { o
   return {
     ok: true,
     value: normalized.length === 0 ? null : normalized,
+  };
+}
+
+function normalizeContact(
+  value: unknown,
+):
+  | {
+    ok: true;
+    value: CheckoutCreateRequestBody["contact"];
+  }
+  | { ok: false; error: string } {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {
+      ok: false,
+      error: "contact is required",
+    };
+  }
+
+  const row = value as Record<string, unknown>;
+  const fullName = normalizeRequiredBoundedString(
+    "contact.full_name",
+    row.full_name,
+    MIN_CONTACT_FULL_NAME_LENGTH,
+    MAX_CONTACT_FULL_NAME_LENGTH,
+  );
+  if (!fullName.ok) {
+    return fullName;
+  }
+
+  const phone = normalizeRequiredBoundedString(
+    "contact.phone",
+    row.phone,
+    MIN_CONTACT_PHONE_LENGTH,
+    MAX_CONTACT_PHONE_LENGTH,
+  );
+  if (!phone.ok) {
+    return phone;
+  }
+
+  const preferredMethod = normalizeEnumString(
+    "contact.preferred_contact_method",
+    row.preferred_contact_method,
+    CONTACT_PREFERRED_METHOD_VALUES,
+  );
+  if (!preferredMethod.ok) {
+    return preferredMethod;
+  }
+
+  const documentReadiness = normalizeEnumString(
+    "contact.document_readiness",
+    row.document_readiness,
+    CONTACT_DOCUMENT_READINESS_VALUES,
+  );
+  if (!documentReadiness.ok) {
+    return documentReadiness;
+  }
+
+  const email = normalizeOptionalBoundedString(
+    "contact.email",
+    row.email,
+    MAX_CONTACT_EMAIL_LENGTH,
+    { lowercase: true },
+  );
+  if (!email.ok) {
+    return email;
+  }
+  if (email.value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value)) {
+    return {
+      ok: false,
+      error: "contact.email must be a valid email",
+    };
+  }
+
+  const preferredContactTime = normalizeOptionalBoundedString(
+    "contact.preferred_contact_time",
+    row.preferred_contact_time,
+    MAX_CONTACT_PREFERRED_TIME_LENGTH,
+  );
+  if (!preferredContactTime.ok) {
+    return preferredContactTime;
+  }
+
+  const occupantFullName = normalizeOptionalBoundedString(
+    "contact.occupant_full_name",
+    row.occupant_full_name,
+    MAX_CONTACT_OCCUPANT_FULL_NAME_LENGTH,
+  );
+  if (!occupantFullName.ok) {
+    return occupantFullName;
+  }
+
+  const note = normalizeOptionalBoundedString("contact.note", row.note, MAX_NOTE_LENGTH);
+  if (!note.ok) {
+    return note;
+  }
+
+  return {
+    ok: true,
+    value: {
+      fullName: fullName.value,
+      phone: phone.value,
+      email: email.value,
+      preferredContactMethod: preferredMethod.value,
+      preferredContactTime: preferredContactTime.value,
+      occupantFullName: occupantFullName.value,
+      documentReadiness: documentReadiness.value,
+      note: note.value,
+    },
+  };
+}
+
+function normalizeRequiredBoundedString(
+  fieldName: string,
+  value: unknown,
+  minLength: number,
+  maxLength: number,
+): { ok: true; value: string } | { ok: false; error: string } {
+  if (typeof value !== "string") {
+    return {
+      ok: false,
+      error: `${fieldName} is required`,
+    };
+  }
+
+  const normalized = value.trim();
+  if (normalized.length < minLength) {
+    return {
+      ok: false,
+      error: `${fieldName} is required`,
+    };
+  }
+
+  if (normalized.length > maxLength) {
+    return {
+      ok: false,
+      error: `${fieldName} is too long`,
+    };
+  }
+
+  return {
+    ok: true,
+    value: normalized,
+  };
+}
+
+function normalizeOptionalBoundedString(
+  fieldName: string,
+  value: unknown,
+  maxLength: number,
+  options: { lowercase?: boolean } = {},
+): { ok: true; value: string | null } | { ok: false; error: string } {
+  if (value === undefined || value === null) {
+    return { ok: true, value: null };
+  }
+
+  if (typeof value !== "string") {
+    return {
+      ok: false,
+      error: `${fieldName} must be a string`,
+    };
+  }
+
+  const normalized = value.trim();
+  if (normalized.length === 0) {
+    return { ok: true, value: null };
+  }
+
+  if (normalized.length > maxLength) {
+    return {
+      ok: false,
+      error: `${fieldName} is too long`,
+    };
+  }
+
+  return {
+    ok: true,
+    value: options.lowercase ? normalized.toLowerCase() : normalized,
+  };
+}
+
+function normalizeEnumString<const T extends readonly string[]>(
+  fieldName: string,
+  value: unknown,
+  values: T,
+): { ok: true; value: T[number] } | { ok: false; error: string } {
+  if (typeof value !== "string") {
+    return {
+      ok: false,
+      error: `${fieldName} must be one of ${values.join(", ")}`,
+    };
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (!(values as readonly string[]).includes(normalized)) {
+    return {
+      ok: false,
+      error: `${fieldName} must be one of ${values.join(", ")}`,
+    };
+  }
+
+  return {
+    ok: true,
+    value: normalized as T[number],
   };
 }
 

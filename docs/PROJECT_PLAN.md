@@ -66,11 +66,24 @@ Temel bilgiler alinacak:
 - soyisim
 - telefon numarasi
 - e-posta
+- tercih edilen iletisim kanali
+- tercih edilen iletisim zamani
+- kalacak kisi odemeyi yapan kisiden farkliysa kalacak kisi ad soyad
+- belge surecine hazirlik durumu
 
 Ayrica:
 - odeme oncesi secimlerden sonra bir aciklama alani olabilir
 - musteri para gonderirken not / aciklama yazabilsin mantigi dusunuluyor
 - bu not alani avukat tarafindan da gerekli gorulmus olabilir
+
+Odeme oncesinde alinmayacak hassas bilgiler:
+- TC kimlik numarasi
+- pasaport / oturum izni numarasi
+- belge dosyasi
+- maas bordrosu, banka dokumu, kefil evraki
+- imzali kontrat
+- kart veya banka hesap bilgisi
+- mevcut acik adres
 
 ### Belge Sureci
 

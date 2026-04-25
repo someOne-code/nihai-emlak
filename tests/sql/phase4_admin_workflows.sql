@@ -945,6 +945,31 @@ values (
   'pending'
 );
 
+insert into public.reservation_intake (
+  reservation_id,
+  user_id,
+  contact_full_name,
+  contact_phone,
+  contact_email,
+  preferred_contact_method,
+  preferred_contact_time,
+  occupant_full_name,
+  document_readiness,
+  note
+)
+values (
+  'eeeeeeee-ffff-4fff-8fff-fffffffff002'::uuid,
+  'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb002'::uuid,
+  'Phase45 Contact User',
+  '+905551112244',
+  'phase45-contact@example.com',
+  'phone',
+  '09:00-12:00',
+  null,
+  'ready',
+  'Snapshot intake notu'
+);
+
 insert into public.orders (
   id,
   reservation_id,
@@ -1404,6 +1429,17 @@ begin
 
   if v_reservation_snapshot #>> '{eligibility,can_cancel}' <> 'false' then
     raise exception 'TEST 8 FAILED: cancelled reservation should not be cancelable again, got %', v_reservation_snapshot;
+  end if;
+
+  if v_reservation_snapshot #>> '{contact,fullName}' <> 'Phase45 Contact User'
+     or v_reservation_snapshot #>> '{contact,phone}' <> '+905551112244'
+     or v_reservation_snapshot #>> '{contact,email}' <> 'phase45-contact@example.com'
+     or v_reservation_snapshot #>> '{contact,preferredContactMethod}' <> 'phone'
+     or v_reservation_snapshot #>> '{contact,preferredContactTime}' <> '09:00-12:00'
+     or v_reservation_snapshot #>> '{contact,documentReadiness}' <> 'ready'
+     or v_reservation_snapshot #>> '{contact,note}' <> 'Snapshot intake notu' then
+    raise exception 'TEST 8 FAILED: reservation snapshot should expose sanitized checkout intake contact, got %',
+      v_reservation_snapshot;
   end if;
 
   v_listing_snapshot := public.get_admin_listing_workflow_snapshot(

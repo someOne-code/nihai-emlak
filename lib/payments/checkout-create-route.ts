@@ -138,6 +138,14 @@ function buildCreateCheckoutRpcArgs(body: CheckoutCreateRequestBody): Record<str
     p_main_item_codes: body.mainItems,
     p_service_item_codes: body.serviceItems,
     p_note: body.note,
+    p_contact_full_name: body.contact.fullName,
+    p_contact_phone: body.contact.phone,
+    p_contact_email: body.contact.email,
+    p_contact_preferred_method: body.contact.preferredContactMethod,
+    p_contact_preferred_time: body.contact.preferredContactTime,
+    p_contact_occupant_full_name: body.contact.occupantFullName,
+    p_contact_document_readiness: body.contact.documentReadiness,
+    p_contact_note: body.contact.note,
   };
 }
 

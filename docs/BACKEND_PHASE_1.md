@@ -89,13 +89,24 @@ Bu fazda yazilacak minimum custom logic:
 
 Girdi:
 - listing id
-- kullanici temel bilgileri
+- kullanici temel bilgileri / checkout intake contact bilgisi
 - tasinma tarihi
 - kalis suresi
 - kisi sayisi
 - secilen ana kalemler
 - secilen ek hizmetler
 - havale benzeri aciklama/not
+
+Checkout intake contact bilgisi:
+- ad soyad
+- telefon / WhatsApp
+- opsiyonel e-posta
+- tercih edilen iletisim kanali ve zamani
+- farkliysa kalacak kisi ad soyad
+- belge hazirlik durumu
+- kisa musteri notu
+
+Checkout sirasinda TC kimlik, pasaport, belge upload, maas/banka/kefil evraki, imzali kontrat, kart/banka hesap bilgisi veya mevcut acik adres toplanmaz.
 
 Backend sorumlulugu:
 - listing aktif mi kontrol et

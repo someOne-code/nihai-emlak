@@ -234,6 +234,30 @@ Bu revizyonda özellikle şu kararlar netleştirildi:
   - iptal ve yeniden açma akışları inventory bütünlüğü açısından en yüksek operasyonel riski taşır
   - confirm akışı callback sonrası doğal finalizasyonla daha yakın çalışır; cancel/reopen daha fazla manuel hata riski taşır
 
+### Faz 5.6: Checkout intake / pre-payment contact bilgisi
+- Amac:
+  - odeme oncesi ofisin musteriye hizli ulasmasini ve belge surecini hazirlamasini saglayacak minimum operasyonel bilgiyi toplamak
+- Tasarim kurali:
+  - intake bilgisi checkout create authoritative sinirinda dogrulanir ve reservation ile birebir iliskili ayri bir tabloda tutulur
+  - `reservations` tablosu state/stay parametreleri icin sade kalir
+  - public read modelleri intake bilgisini asla dondurmez
+  - admin read/snapshot yuzeyleri yalnizca ofis operasyonu icin gereken sanitize alanlari gosterir
+- Toplanacak minimum alanlar:
+  - ad soyad
+  - telefon / WhatsApp
+  - opsiyonel e-posta
+  - tercih edilen iletisim kanali
+  - opsiyonel tercih edilen iletisim zamani
+  - farkliysa kalacak kisi ad soyad
+  - belge hazirlik durumu
+  - kisa musteri notu
+- Kapsam disi hassas alanlar:
+  - TC kimlik, pasaport, oturum izni, belge upload, maas/banka/kefil evraki, imzali kontrat, kart/banka hesap bilgisi ve mevcut acik adres
+- TDD sirasi:
+  - once checkout create SQL/route contract testleri kirmiziya dusurulur
+  - sonra migration/RPC ve route parser minimum implementasyonla yesile cekilir
+  - en son admin read/snapshot yuzeyine intake alanlari eklenir
+
 ### Faz 6: Content backend
 - Payload içerik backend’i olarak kalır.
 - İlk içerik modülleri:

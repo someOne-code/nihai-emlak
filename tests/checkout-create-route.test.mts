@@ -15,6 +15,16 @@ const validCheckoutCreatePayload = {
   main_items: [" Deposit "],
   service_items: [" Cleaning "],
   note: "  Lutfen ogleden sonra arayin.  ",
+  contact: {
+    full_name: " Ali Veli ",
+    phone: " +90 555 111 22 33 ",
+    email: " ALI@EXAMPLE.COM ",
+    preferred_contact_method: "whatsapp",
+    preferred_contact_time: " 18:00 sonrasi ",
+    occupant_full_name: " ",
+    document_readiness: "needs_help",
+    note: " Evrak listesi icin arayin. ",
+  },
 };
 
 test("checkout create rejects non-json state-changing requests before auth", async (t) => {
@@ -169,6 +179,14 @@ test("checkout create sends normalized checkout intent to create_checkout RPC", 
         p_main_item_codes: ["deposit"],
         p_service_item_codes: ["cleaning"],
         p_note: "Lutfen ogleden sonra arayin.",
+        p_contact_full_name: "Ali Veli",
+        p_contact_phone: "+90 555 111 22 33",
+        p_contact_email: "ali@example.com",
+        p_contact_preferred_method: "whatsapp",
+        p_contact_preferred_time: "18:00 sonrasi",
+        p_contact_occupant_full_name: null,
+        p_contact_document_readiness: "needs_help",
+        p_contact_note: "Evrak listesi icin arayin.",
       },
     },
   ]);

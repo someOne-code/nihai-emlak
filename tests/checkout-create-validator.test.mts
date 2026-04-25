@@ -13,6 +13,16 @@ const validCheckoutCreatePayload = {
   main_items: ["deposit"],
   service_items: ["cleaning"],
   note: "Lutfen ogleden sonra arayin.",
+  contact: {
+    full_name: "Ali Veli",
+    phone: "+90 555 111 22 33",
+    email: " ali@example.com ",
+    preferred_contact_method: "whatsapp",
+    preferred_contact_time: " 18:00 sonrasi ",
+    occupant_full_name: " Ayse Veli ",
+    document_readiness: "needs_help",
+    note: " Evrak listesi icin arayin. ",
+  },
 };
 
 test("parseCheckoutCreateRequestBody accepts and normalizes a valid checkout request", () => {
@@ -22,6 +32,14 @@ test("parseCheckoutCreateRequestBody accepts and normalizes a valid checkout req
     main_items: [" Deposit "],
     service_items: [" Cleaning "],
     note: "  Lutfen ogleden sonra arayin.  ",
+    contact: {
+      ...validCheckoutCreatePayload.contact,
+      full_name: " Ali Veli ",
+      email: " ALI@EXAMPLE.COM ",
+      preferred_contact_time: " 18:00 sonrasi ",
+      occupant_full_name: " ",
+      note: " ",
+    },
   });
 
   assert.equal(result.ok, true);
@@ -37,7 +55,78 @@ test("parseCheckoutCreateRequestBody accepts and normalizes a valid checkout req
     mainItems: ["deposit"],
     serviceItems: ["cleaning"],
     note: "Lutfen ogleden sonra arayin.",
+    contact: {
+      fullName: "Ali Veli",
+      phone: "+90 555 111 22 33",
+      email: "ali@example.com",
+      preferredContactMethod: "whatsapp",
+      preferredContactTime: "18:00 sonrasi",
+      occupantFullName: null,
+      documentReadiness: "needs_help",
+      note: null,
+    },
   });
+});
+
+test("parseCheckoutCreateRequestBody requires checkout contact intake fields", () => {
+  assert.deepEqual(
+    parseCheckoutCreateRequestBody({
+      ...validCheckoutCreatePayload,
+      contact: undefined,
+    }),
+    {
+      ok: false,
+      status: 400,
+      error: "contact is required",
+    },
+  );
+
+  assert.deepEqual(
+    parseCheckoutCreateRequestBody({
+      ...validCheckoutCreatePayload,
+      contact: {
+        ...validCheckoutCreatePayload.contact,
+        phone: "   ",
+      },
+    }),
+    {
+      ok: false,
+      status: 400,
+      error: "contact.phone is required",
+    },
+  );
+});
+
+test("parseCheckoutCreateRequestBody validates checkout contact enum and length fields", () => {
+  assert.deepEqual(
+    parseCheckoutCreateRequestBody({
+      ...validCheckoutCreatePayload,
+      contact: {
+        ...validCheckoutCreatePayload.contact,
+        preferred_contact_method: "sms",
+      },
+    }),
+    {
+      ok: false,
+      status: 400,
+      error: "contact.preferred_contact_method must be one of phone, whatsapp, email",
+    },
+  );
+
+  assert.deepEqual(
+    parseCheckoutCreateRequestBody({
+      ...validCheckoutCreatePayload,
+      contact: {
+        ...validCheckoutCreatePayload.contact,
+        note: "a".repeat(1001),
+      },
+    }),
+    {
+      ok: false,
+      status: 400,
+      error: "contact.note is too long",
+    },
+  );
 });
 
 test("parseCheckoutCreateRequestBody rejects malformed request bodies", () => {
