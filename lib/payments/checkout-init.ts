@@ -100,6 +100,10 @@ export function resolveCheckoutInitReturnUrlsFromEnvironment(input: {
   const hasPublicSiteUrl = Boolean(asNonEmptyString(input.publicSiteUrl));
   const normalizedVercelUrl = normalizeVercelUrl(input.vercelUrl);
   const normalizedPreferredOrigin = normalizeHttpOrigin(input.preferredOrigin);
+  const ambiguousConfigError = resolveSameOriginDivergentBasePathConfigError({
+    siteUrl: input.siteUrl,
+    publicSiteUrl: input.publicSiteUrl,
+  });
 
   if (!isDevOrTest && !hasPrivateSiteUrl && !hasPublicSiteUrl) {
     return {
@@ -107,6 +111,10 @@ export function resolveCheckoutInitReturnUrlsFromEnvironment(input: {
       status: 500,
       error: "SITE_URL or NEXT_PUBLIC_SITE_URL must be configured outside development/test",
     };
+  }
+
+  if (ambiguousConfigError) {
+    return ambiguousConfigError;
   }
 
   const configuredSiteUrl = (
@@ -143,6 +151,48 @@ export function resolveCheckoutInitReturnUrlsFromEnvironment(input: {
       status: 500,
       error: "Checkout return URL configuration is invalid",
     };
+  }
+}
+
+function resolveSameOriginDivergentBasePathConfigError(input: {
+  siteUrl: string | null | undefined;
+  publicSiteUrl: string | null | undefined;
+}): { ok: false; status: number; error: string } | null {
+  const normalizedSiteUrl = normalizeConfiguredCheckoutSiteUrl(input.siteUrl);
+  const normalizedPublicSiteUrl = normalizeConfiguredCheckoutSiteUrl(input.publicSiteUrl);
+
+  if (!normalizedSiteUrl || !normalizedPublicSiteUrl) {
+    return null;
+  }
+
+  const siteOrigin = normalizeHttpOrigin(normalizedSiteUrl);
+  const publicOrigin = normalizeHttpOrigin(normalizedPublicSiteUrl);
+
+  if (!siteOrigin || !publicOrigin) {
+    return null;
+  }
+
+  if (siteOrigin !== publicOrigin || normalizedSiteUrl === normalizedPublicSiteUrl) {
+    return null;
+  }
+
+  return {
+    ok: false,
+    status: 500,
+    error: "SITE_URL and NEXT_PUBLIC_SITE_URL must not share the same origin with different base paths for checkout return URLs",
+  };
+}
+
+function normalizeConfiguredCheckoutSiteUrl(value: string | null | undefined): string | null {
+  if (!asNonEmptyString(value)) {
+    return null;
+  }
+
+  try {
+    return normalizeCheckoutSiteUrl(value);
+  } catch {
+    // Invalid URL errors are handled by the existing selected-site validation path.
+    return null;
   }
 }
 

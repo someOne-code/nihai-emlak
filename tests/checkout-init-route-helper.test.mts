@@ -226,6 +226,43 @@ test("resolveCheckoutInitReturnUrlsFromEnvironment preserves configured base pat
   assert.equal(result.returnUrls.failUrl, "https://nihaiemlak.com/app/checkout/fail");
 });
 
+test("resolveCheckoutInitReturnUrlsFromEnvironment fails closed when SITE_URL and NEXT_PUBLIC_SITE_URL share origin but diverge by base path", () => {
+  const result = resolveCheckoutInitReturnUrlsFromEnvironment({
+    nodeEnv: "production",
+    siteUrl: "https://example.com/admin",
+    publicSiteUrl: "https://example.com",
+    preferredOrigin: "https://example.com",
+  });
+
+  assert.equal(result.ok, false);
+  if (result.ok) {
+    throw new Error("Expected same-origin divergent base paths to fail closed");
+  }
+
+  assert.equal(result.status, 500);
+  assert.equal(
+    result.error,
+    "SITE_URL and NEXT_PUBLIC_SITE_URL must not share the same origin with different base paths for checkout return URLs",
+  );
+});
+
+test("resolveCheckoutInitReturnUrlsFromEnvironment accepts equivalent base paths with only trailing slash difference", () => {
+  const result = resolveCheckoutInitReturnUrlsFromEnvironment({
+    nodeEnv: "production",
+    siteUrl: "https://example.com/admin/",
+    publicSiteUrl: "https://example.com/admin",
+    preferredOrigin: "https://example.com",
+  });
+
+  assert.equal(result.ok, true);
+  if (!result.ok) {
+    throw new Error("Expected equivalent base paths to be treated as a single canonical base path");
+  }
+
+  assert.equal(result.returnUrls.okUrl, "https://example.com/admin/checkout/success");
+  assert.equal(result.returnUrls.failUrl, "https://example.com/admin/checkout/fail");
+});
+
 test("resolveCheckoutInitReturnUrlsFromEnvironment uses public site base path when preferred origin matches public site", () => {
   const result = resolveCheckoutInitReturnUrlsFromEnvironment({
     nodeEnv: "production",

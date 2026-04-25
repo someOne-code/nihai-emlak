@@ -100,6 +100,46 @@ test("checkout init rejects preview origin in production when canonical site URL
   assert.equal(payload.error, "Checkout init Origin is not trusted");
 });
 
+test("checkout init fails closed when SITE_URL and NEXT_PUBLIC_SITE_URL share origin but diverge by base path", async (t) => {
+  setupCheckoutInitEnv(t, {
+    nodeEnv: "production",
+    siteUrl: "https://example.com/admin",
+    nextPublicSiteUrl: "https://example.com",
+  });
+
+  const response = await handleCheckoutInitPost(
+    new Request("https://example.com/api/checkout/init", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "https://example.com",
+      },
+      body: JSON.stringify({ orderId: "11111111-1111-4111-8111-111111111111" }),
+    }),
+    createDependencies({
+      getOrder: () => {
+        throw new Error("order lookup should not run for ambiguous same-origin return URL config");
+      },
+      getPendingPayment: () => {
+        throw new Error("payment lookup should not run for ambiguous same-origin return URL config");
+      },
+      insertPayment: () => {
+        throw new Error("insert should not run for ambiguous same-origin return URL config");
+      },
+      userId: "15151515-1515-4515-8515-151515151515",
+    }),
+  );
+
+  assert.equal(response.status, 500);
+
+  const payload = await response.json();
+  assert.equal(payload.success, false);
+  assert.equal(
+    payload.error,
+    "SITE_URL and NEXT_PUBLIC_SITE_URL must not share the same origin with different base paths for checkout return URLs",
+  );
+});
+
 test("checkout init rejects unauthenticated requests", async (t) => {
   setupCheckoutInitEnv(t);
 
