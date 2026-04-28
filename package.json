@@ -1,5 +1,6 @@
 {
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -7,9 +8,10 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "npm run test:payment-callback-security && npm run typecheck && npm run lint",
+    "test:payment-callback-smoke-launcher": "node --experimental-strip-types --test tests/payment-callback-smoke-launcher.test.mts",
     "test:db-security": "bash .codex/scripts/test-db-security.sh",
     "test:payment-callback-security": "bash .codex/scripts/test-payment-callback-security.sh",
-    "test:payment-callback-smoke": "bash .codex/scripts/test-payment-callback-smoke.sh"
+    "test:payment-callback-smoke": "node .codex/scripts/test-payment-callback-smoke-runner.mjs"
   },
   "dependencies": {
     "@payloadcms/db-postgres": "3.83.0-internal.ddc1147",
@@ -40,6 +42,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.3",
     "postcss": "^8",
+    "supabase": "^2.95.3",
     "tailwindcss": "^3.4.1",
     "tailwindcss-animate": "^1.0.7",
     "typescript": "^5"

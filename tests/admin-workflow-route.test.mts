@@ -312,6 +312,40 @@ test("admin workflow route trusts private SITE_URL and rejects NEXT_PUBLIC_SITE_
   assert.equal((await privateOriginResponse.json()).error, "Authentication required");
 });
 
+test("admin workflow route fails closed in production when SITE_URL is missing even if NEXT_PUBLIC_SITE_URL is set", async (t) => {
+  const previousNodeEnv = process.env.NODE_ENV;
+  const previousSiteUrl = process.env.SITE_URL;
+  const previousPublicSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+  const previousVercelUrl = process.env.VERCEL_URL;
+
+  process.env.NODE_ENV = "production";
+  delete process.env.SITE_URL;
+  process.env.NEXT_PUBLIC_SITE_URL = "https://www.example.com";
+  delete process.env.VERCEL_URL;
+
+  t.after(() => {
+    restoreEnv("NODE_ENV", previousNodeEnv);
+    restoreEnv("SITE_URL", previousSiteUrl);
+    restoreEnv("NEXT_PUBLIC_SITE_URL", previousPublicSiteUrl);
+    restoreEnv("VERCEL_URL", previousVercelUrl);
+  });
+
+  const response = await handleAdminCancelReservationPost(
+    createJsonRequest(
+      { reason: "customer_withdrew" },
+      "https://www.example.com",
+    ),
+    createFailingDependencies(),
+    { reservationId: "11111111-1111-4111-8111-111111111111" },
+  );
+
+  assert.equal(response.status, 500);
+  assert.equal(
+    (await response.json()).error,
+    "Admin workflow private SITE_URL must be configured outside development/test",
+  );
+});
+
 test("admin cancel route validates reservation id and request body", async (t) => {
   setupAdminWorkflowEnv(t);
 
@@ -657,6 +691,47 @@ test("admin confirm route normalizes blank note values to null instead of reject
   }
 });
 
+test("admin confirm route accepts empty JSON body for note-only action", async (t) => {
+  setupAdminWorkflowEnv(t);
+
+  const calls: Array<{ functionName: string; args: Record<string, unknown> }> = [];
+  const response = await handleAdminConfirmReservationPost(
+    createJsonRequestWithoutBody(),
+    createDependencies({
+      rpc: (functionName, args) => {
+        calls.push({ functionName, args });
+        return {
+          data: {
+            result: "confirmed",
+            event_id: "99999999-9999-4999-8999-999999999999",
+            reservation_id: "11111111-1111-4111-8111-111111111111",
+            order_id: "33333333-3333-4333-8333-333333333333",
+            payment_id: "44444444-4444-4444-8444-444444444444",
+            listing_id: "55555555-5555-4555-8555-555555555555",
+            reservation_status: "confirmed",
+            order_status: "completed",
+            payment_status: "succeeded",
+            listing_status: "passive",
+          },
+          error: null,
+        };
+      },
+    }),
+    { reservationId: "11111111-1111-4111-8111-111111111111" },
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(calls, [
+    {
+      functionName: "admin_confirm_reservation",
+      args: {
+        p_reservation_id: "11111111-1111-4111-8111-111111111111",
+        p_note: null,
+      },
+    },
+  ]);
+});
+
 test("admin cancel route normalizes blank note to null instead of rejecting body", async (t) => {
   setupAdminWorkflowEnv(t);
 
@@ -912,6 +987,20 @@ function createJsonRequest(payload: unknown, origin: string | null = "http://loc
     method: "POST",
     headers,
     body: JSON.stringify(payload),
+  });
+}
+
+function createJsonRequestWithoutBody(origin: string | null = "http://localhost:3000"): Request {
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+  };
+  if (origin !== null) {
+    headers.origin = origin;
+  }
+
+  return new Request("http://localhost:3000/api/admin/workflows/test", {
+    method: "POST",
+    headers,
   });
 }
 

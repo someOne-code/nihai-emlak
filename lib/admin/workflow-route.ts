@@ -240,7 +240,8 @@ function validateAdminWorkflowRequestEnvelope(
 ): { ok: true } | { ok: false; status: number; error: string } {
   return validateStateChangingJsonRequestEnvelope(request, config, {
     invalidConfigError: "Admin workflow trusted origin configuration is invalid",
-    strategy: "first-configured",
+    missingConfigError: "Admin workflow private SITE_URL must be configured outside development/test",
+    strategy: "site-url-only",
   });
 }
 
@@ -322,6 +323,7 @@ async function parseAdminNoteOnlyBody(
   const payloadResult = await readStateChangingJsonRequestPayload(
     request,
     ADMIN_WORKFLOW_JSON_ROUTE_CONFIG,
+    { emptyBodyValue: {} },
   );
   if (!payloadResult.ok) {
     return payloadResult;

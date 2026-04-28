@@ -7,11 +7,16 @@ export type StateChangingJsonRouteResult<T> =
   | { ok: true; value: T }
   | { ok: false; status: number; error: string };
 
-export type TrustedOriginsStrategy = "all-configured" | "first-configured";
+export type TrustedOriginsStrategy = "all-configured" | "first-configured" | "site-url-only";
 
 export type ResolveTrustedOriginsFromEnvironmentOptions = {
   invalidConfigError: string;
+  missingConfigError?: string;
   strategy?: TrustedOriginsStrategy;
+};
+
+export type ReadStateChangingJsonRequestPayloadOptions = {
+  emptyBodyValue?: unknown;
 };
 
 export function validateStateChangingJsonRequestEnvelope(
@@ -58,10 +63,18 @@ export function validateStateChangingJsonRequestEnvelope(
 export async function readStateChangingJsonRequestPayload(
   request: Request,
   config: StateChangingJsonRouteConfig,
+  options: ReadStateChangingJsonRequestPayloadOptions = {},
 ): Promise<StateChangingJsonRouteResult<unknown>> {
   const rawBodyResult = await readStateChangingJsonRawBody(request, config);
   if (!rawBodyResult.ok) {
     return rawBodyResult;
+  }
+
+  if (rawBodyResult.value.length === 0 && options.emptyBodyValue !== undefined) {
+    return {
+      ok: true,
+      value: options.emptyBodyValue,
+    };
   }
 
   try {
@@ -145,7 +158,7 @@ export function resolveTrustedOriginsFromEnvironment(
       return {
         ok: false,
         status: 500,
-        error: "SITE_URL or NEXT_PUBLIC_SITE_URL must be configured outside development/test",
+        error: options.missingConfigError ?? "SITE_URL or NEXT_PUBLIC_SITE_URL must be configured outside development/test",
       };
     }
 
@@ -181,8 +194,13 @@ function resolveConfiguredOrigins(input: {
   isDevOrTest: boolean;
   strategy: TrustedOriginsStrategy;
 }): string[] {
+  const siteUrl = asNonEmptyString(process.env.SITE_URL);
+  if (input.strategy === "site-url-only") {
+    return siteUrl ? [siteUrl] : [];
+  }
+
   const configuredOrigins = [
-    asNonEmptyString(process.env.SITE_URL),
+    siteUrl,
     asNonEmptyString(process.env.NEXT_PUBLIC_SITE_URL),
     ...(input.isDevOrTest ? [normalizeVercelUrl(process.env.VERCEL_URL)] : []),
   ].filter((value): value is string => value !== null);
