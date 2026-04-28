@@ -1408,6 +1408,64 @@ $$;
 reset role;
 
 -- ============================================================
+-- TEST 8A: admin reopen rejects succeeded-payment terminal drift and snapshot hides reopen CTA
+-- ============================================================
+update public.reservations
+set
+  status = 'expired',
+  updated_at = now()
+where id = 'eeeeeeee-ffff-4fff-8fff-fffffffff004'::uuid;
+
+update public.orders
+set
+  status = 'failed',
+  updated_at = now()
+where id = '11111111-2222-4222-8222-222222222004'::uuid;
+
+update public.payments
+set
+  status = 'succeeded',
+  updated_at = now()
+where id = '33333333-4444-4444-8444-444444444004'::uuid;
+
+update public.listings
+set
+  status = 'passive',
+  updated_at = now()
+where id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd004'::uuid;
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', 'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb001', false);
+select set_config('request.jwt.claim.role', 'authenticated', false);
+
+do $$
+declare
+  v_listing_snapshot jsonb;
+begin
+  v_listing_snapshot := public.get_admin_listing_workflow_snapshot(
+    'cccccccc-dddd-4ddd-8ddd-ddddddddd004'::uuid
+  );
+
+  if v_listing_snapshot #>> '{eligibility,can_reopen}' <> 'false' then
+    raise exception 'TEST 8A FAILED: succeeded-payment drift should not be reopenable, got %', v_listing_snapshot;
+  end if;
+
+  begin
+    perform public.admin_reopen_listing(
+      'cccccccc-dddd-4ddd-8ddd-ddddddddd004'::uuid,
+      'should_fail_succeeded_payment_drift',
+      null
+    );
+    raise exception 'TEST 8A FAILED: reopen should reject succeeded-payment drift as invariant';
+  exception
+    when sqlstate 'P0004' then null;
+  end;
+end;
+$$;
+
+reset role;
+
+-- ============================================================
 -- TEST 8: admin read models expose latest event and eligibility
 -- ============================================================
 set role authenticated;
