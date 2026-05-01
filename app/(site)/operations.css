@@ -1,0 +1,615 @@
+.opsContainer {
+  --ops-surface: #ffffff;
+  --ops-surface-muted: #f8fafc;
+  --ops-border: #d7e0ea;
+  --ops-border-strong: #c2d1e0;
+  --ops-text: #0f172a;
+  --ops-muted: #475569;
+  --ops-accent: #0f766e;
+  --ops-accent-soft: #ccfbf1;
+  --ops-shadow: 0 18px 40px -28px rgba(15, 23, 42, 0.35);
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: clamp(1rem, 2vw, 2rem);
+  color: #111827;
+  color: var(--ops-text);
+  font-family:
+    "Segoe UI",
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
+}
+
+.opsHeading {
+  margin: 0;
+  color: var(--ops-text);
+  font-size: clamp(1.625rem, 2.2vw, 2rem);
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.opsLead {
+  max-width: 60rem;
+  margin: 0.6rem 0 1.5rem;
+  color: var(--ops-muted);
+  font-size: 0.98rem;
+  line-height: 1.6;
+}
+
+.opsSubHeading {
+  margin: 0 0 1rem;
+  color: var(--ops-text);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.opsLoadingText {
+  color: var(--ops-muted);
+  font-style: italic;
+}
+
+.opsErrorBanner,
+.opsSuccessBanner {
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--ops-border);
+  border-radius: 14px;
+  box-shadow: var(--ops-shadow);
+}
+
+.opsErrorBanner {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: #b91c1c;
+}
+
+.opsSuccessBanner {
+  border-color: #a7f3d0;
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.opsRetryButton,
+.opsActionButton {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    color 0.18s ease,
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
+
+.opsRetryButton {
+  padding: 0.75rem 1rem;
+  background: #0f766e;
+}
+
+.opsRetryButton:hover,
+.opsActionButton:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.opsTableWrapper,
+.opsSnapshotCard,
+.opsActionsSection {
+  background: var(--ops-surface);
+  border: 1px solid var(--ops-border);
+  border-radius: 18px;
+  box-shadow: var(--ops-shadow);
+}
+
+.opsSummaryCard {
+  background: var(--ops-surface);
+  border: 1px solid var(--ops-border);
+  border-radius: 18px;
+  box-shadow: var(--ops-shadow);
+}
+
+.opsTableWrapper {
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+}
+
+.opsTable {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--ops-text);
+  font-size: 0.9rem;
+}
+
+.opsTable th {
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid var(--ops-border);
+  color: var(--ops-muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+  background: var(--ops-surface-muted);
+}
+
+.opsTable td {
+  padding: 1rem;
+  border-bottom: 1px solid #edf2f7;
+  color: var(--ops-text);
+  white-space: nowrap;
+}
+
+.opsTable tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.opsRow,
+.opsSelectedRow {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.opsRow:hover {
+  background: #f8fbff;
+}
+
+.opsSelectedRow {
+  background: #eefbf7;
+}
+
+.opsEmptyCell {
+  padding: 2.5rem 1rem;
+  color: var(--ops-muted);
+  text-align: center;
+}
+
+.opsBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.75rem;
+  padding: 0.15rem 0.65rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.opsBadgeWarning {
+  background: #fff4d8;
+  border-color: #fcd34d;
+  color: #9a6700;
+}
+
+.opsBadgeSuccess {
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #166534;
+}
+
+.opsBadgeDanger {
+  background: #ffe4e6;
+  border-color: #fda4af;
+  color: #be123c;
+}
+
+.opsBadgeNeutral {
+  background: #e2e8f0;
+  border-color: #cbd5e1;
+  color: #334155;
+}
+
+.opsMobileList {
+  display: none;
+}
+
+.opsMobileCard {
+  width: 100%;
+  padding: 1rem;
+  border: 1px solid var(--ops-border);
+  border-radius: 18px;
+  background: var(--ops-surface);
+  box-shadow: var(--ops-shadow);
+  text-align: left;
+  cursor: pointer;
+}
+
+.opsMobileSelectedCard {
+  border-color: #99f6e4;
+  background: #f0fdfa;
+}
+
+.opsMobileCardHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.opsMobileCardTitle {
+  margin: 0.2rem 0 0;
+  color: var(--ops-text);
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.opsMobileCardLabel,
+.opsLabel,
+.opsSnapshotDt,
+.opsSnapshotNestedKey {
+  color: var(--ops-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.opsMobileCardMeta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.opsMobileCardMetaItem {
+  display: grid;
+  gap: 0.3rem;
+  color: var(--ops-text);
+  font-size: 0.88rem;
+}
+
+.opsSnapshotGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.opsDecisionGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.opsSnapshotCard,
+.opsSummaryCard {
+  padding: 1rem;
+}
+
+.opsSummaryCard {
+  min-width: 0;
+}
+
+.opsSummaryHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.opsSnapshotTitle {
+  margin: 0 0 0.85rem;
+  color: var(--ops-text);
+  font-size: 0.98rem;
+  font-weight: 700;
+}
+
+.opsSnapshotEmpty {
+  color: var(--ops-muted);
+  font-style: italic;
+}
+
+.opsSnapshotDl {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.opsSummaryList {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.65rem;
+  margin: 0;
+}
+
+.opsSnapshotItem,
+.opsSnapshotNestedItem {
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: 0.65rem;
+  align-items: start;
+}
+
+.opsSummaryItem {
+  display: grid;
+  grid-template-columns: minmax(96px, 0.42fr) minmax(0, 1fr);
+  gap: 0.65rem;
+  align-items: start;
+}
+
+.opsSnapshotDd,
+.opsSnapshotNestedValue {
+  margin: 0;
+  color: var(--ops-text);
+  font-size: 0.84rem;
+  overflow-wrap: anywhere;
+}
+
+.opsSummaryMeta {
+  margin: 0;
+  color: var(--ops-text);
+  font-size: 0.88rem;
+  overflow-wrap: anywhere;
+}
+
+.opsSummaryValueStrong {
+  color: var(--ops-text);
+  font-weight: 650;
+}
+
+.opsSnapshotObject {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.opsAdvancedDetails {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  border: 1px dashed var(--ops-border-strong);
+  border-radius: 16px;
+  background: var(--ops-surface-muted);
+  color: var(--ops-text);
+}
+
+.opsAdvancedSummary {
+  cursor: pointer;
+  color: var(--ops-text);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.opsTechId {
+  font-family:
+    "Cascadia Mono",
+    Consolas,
+    monospace;
+  font-size: 0.78rem;
+}
+
+.opsEligibilityNote {
+  margin: -0.25rem 0 1rem;
+  color: var(--ops-muted);
+  font-size: 0.88rem;
+}
+
+.opsActionsSection {
+  padding: 1.25rem;
+}
+
+.opsInputGroup {
+  margin-bottom: 0.9rem;
+}
+
+.opsLabel {
+  display: block;
+  margin-bottom: 0.4rem;
+}
+
+.opsInput {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--ops-border-strong);
+  border-radius: 12px;
+  outline: none;
+  background: #ffffff;
+  color: var(--ops-text);
+  font-size: 0.94rem;
+}
+
+.opsInput:focus {
+  border-color: #14b8a6;
+  box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.14);
+}
+
+.opsActionButtons {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  align-items: start;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.opsActionReason {
+  margin: 0.45rem 0 0;
+  color: var(--ops-muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.opsActionButton {
+  min-height: 2.75rem;
+  padding: 0.8rem 1.1rem;
+}
+
+.opsActionButton:disabled {
+  background: #cbd5e1;
+  border-color: #cbd5e1;
+  color: #64748b;
+  cursor: not-allowed;
+  opacity: 1;
+  transform: none;
+}
+
+.opsActionCancel {
+  background: #be123c;
+}
+
+.opsActionConfirm {
+  background: #0f766e;
+}
+
+.opsActionReopen {
+  background: #1d4ed8;
+}
+
+@media (max-width: 900px) {
+  .opsSnapshotGrid,
+  .opsDecisionGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .opsSnapshotItem,
+  .opsSnapshotNestedItem,
+  .opsSummaryItem {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
+  }
+}
+
+@media (max-width: 760px) {
+  .opsContainer {
+    padding: 1rem;
+  }
+
+  .opsMobileList {
+    display: grid;
+    gap: 0.9rem;
+    margin-bottom: 1rem;
+  }
+
+  .opsTableWrapper {
+    display: none;
+  }
+
+  .opsMobileCardMeta {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .opsActionsSection {
+    padding: 1rem;
+  }
+
+  .opsActionButtons {
+    grid-template-columns: 1fr;
+  }
+
+  .opsActionButton,
+  .opsRetryButton {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 520px) {
+  .opsMobileCardHeader,
+  .opsMobileCardMeta {
+    grid-template-columns: 1fr;
+  }
+
+  .opsMobileCardHeader {
+    display: grid;
+  }
+
+  .opsMobileCardMeta {
+    gap: 0.65rem;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .opsContainer {
+    --ops-surface: #0b1220;
+    --ops-surface-muted: #111c2f;
+    --ops-border: #1e2a44;
+    --ops-border-strong: #2a3a5c;
+    --ops-text: #e2e8f0;
+    --ops-muted: #94a3b8;
+    --ops-accent: #2dd4bf;
+    --ops-accent-soft: #134e4a;
+    --ops-shadow: 0 18px 40px -28px rgba(0, 0, 0, 0.6);
+  }
+
+  .opsTable td {
+    border-bottom-color: #1e2a44;
+  }
+
+  .opsRow:hover {
+    background: #14213a;
+  }
+
+  .opsSelectedRow {
+    background: #0f2a36;
+  }
+
+  .opsErrorBanner {
+    border-color: #7f1d1d;
+    background: #2a0f12;
+    color: #fecaca;
+  }
+
+  .opsSuccessBanner {
+    border-color: #14532d;
+    background: #0f2a1d;
+    color: #bbf7d0;
+  }
+
+  .opsBadgeWarning {
+    background: #3b2a07;
+    border-color: #b45309;
+    color: #fcd34d;
+  }
+
+  .opsBadgeSuccess {
+    background: #052e1c;
+    border-color: #15803d;
+    color: #86efac;
+  }
+
+  .opsBadgeDanger {
+    background: #2a0f12;
+    border-color: #be123c;
+    color: #fda4af;
+  }
+
+  .opsBadgeNeutral {
+    background: #1e293b;
+    border-color: #334155;
+    color: #cbd5e1;
+  }
+
+  .opsMobileSelectedCard {
+    border-color: #2dd4bf;
+    background: #0f2a36;
+  }
+
+  .opsInput {
+    background: #0b1220;
+    border-color: #2a3a5c;
+    color: var(--ops-text);
+  }
+
+  .opsInput::placeholder {
+    color: #64748b;
+  }
+
+  .opsInput:focus {
+    border-color: #2dd4bf;
+    box-shadow: 0 0 0 4px rgba(45, 212, 191, 0.18);
+  }
+
+  .opsActionButton:disabled {
+    background: #1e293b;
+    border-color: #1e293b;
+    color: #64748b;
+  }
+}

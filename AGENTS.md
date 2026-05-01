@@ -28,14 +28,11 @@
 - Use these docs as the repo map:
   - `README.md`: quick orientation
   - `IMPLEMENTATION_PLAN.md`: phase order
-  - `PHASE_1_2_TASKS.md`: Phase 1 + Phase 2 task history and earlier backend work
-  - `PHASE_3_TASKS.md`: daily execution list for current checkout backend work
   - `BACKEND_PHASE_1.md`: backend engineering blueprint and phase limitations
   - `SUPABASE_CAPABILITY_AUDIT.md`: Supabase-first decision matrix (pre-implementation layer check)
   - `PROJECT_PLAN.md`: business/domain context
 - Do not reopen architecture debates that are already settled in these docs unless the user asks to revise them.
 - Execution order for daily work is:
-  1. select task from the active phase task document (`PHASE_3_TASKS.md` while Phase 3 is active)
   2. run a quick layer decision check in `SUPABASE_CAPABILITY_AUDIT.md`
   3. write or revise the test first
   4. implement the minimum code to satisfy the test
@@ -127,8 +124,26 @@
   - then run the task-specific green test after the change
   - then run broader repo validation only as needed
 
+## Output Discipline
+
+- Default to quiet or summary output.
+- Hide successful test and check output by default.
+- Show only warnings or errors for successful runs.
+- Cap warning and error excerpts to about 20 lines.
+- If 20 lines are not enough, increase the excerpt gradually until the root cause is clear.
+- Start diffs and searches with narrow or aggregate views.
+
+Examples:
+
+```bash
+cargo test -q > /tmp/cargo-test.log 2>&1; status=$?; rg -n "warning:error\[" /tmp/cargo-test.log | sed -n '1,20p'; exit $status
+npm test -- --silent > /tmp/npm-test.log 2>&1; status=$?; rg -n "warning|error" /tmp/npm-test.log | sed -n '1,20p'; exit $status
+git diff --stat
+git diff -U1 -- src-tauri/src/lib.rs
+git diff --unified=1 -- src-tauri/src/quick_read_portal.rs | sed -n '1,20p'
+rg -n "quick_read|portal" src-tauri/src
+```
+
 ## Current Execution Mode
 
-- Current execution focus is Phase 3 checkout backend contract work.
-- Use `PHASE_3_TASKS.md` as the daily task board.
 - Before implementing a selected task, use `SUPABASE_CAPABILITY_AUDIT.md` for a quick layer decision check (Supabase native vs thin custom vs external system).

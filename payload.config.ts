@@ -6,6 +6,9 @@ import { buildConfig } from "payload";
 
 import { resolvePayloadServerURL } from "./payload/server-url.ts";
 import { Users } from "./payload/collections/Users.ts";
+import { BlogCategories } from "./payload/collections/BlogCategories.ts";
+import { BlogPosts } from "./payload/collections/BlogPosts.ts";
+import { Consultants } from "./payload/collections/Consultants.ts";
 import { backfillLegacyUserRolesMigration } from "./payload/migrations/backfill-legacy-user-roles.ts";
 
 const filename = fileURLToPath(import.meta.url);
@@ -45,8 +48,14 @@ export const payloadProdMigrations = [backfillLegacyUserRolesMigration];
 export default buildConfig({
   secret: resolvedPayloadSecret,
   serverURL: payloadServerURL,
+  routes: {
+    admin: "/cms",
+  },
   admin: {
     user: Users.slug,
+    components: {
+      afterNavLinks: [],
+    },
     importMap: {
       baseDir: dirname,
     },
@@ -58,5 +67,8 @@ export default buildConfig({
     prodMigrations: payloadProdMigrations,
     schemaName: "payload",
   }),
-  collections: [Users],
+  typescript: {
+    autoGenerate: false,
+  },
+  collections: [Users, BlogCategories, BlogPosts, Consultants],
 });

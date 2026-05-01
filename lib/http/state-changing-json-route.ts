@@ -60,6 +60,39 @@ export function validateStateChangingJsonRequestEnvelope(
   return { ok: true };
 }
 
+export function validateStateChangingRequestOrigin(
+  request: Request,
+  config: StateChangingJsonRouteConfig,
+  options: ResolveTrustedOriginsFromEnvironmentOptions = {
+    invalidConfigError: "Checkout trusted origin configuration is invalid",
+  },
+): { ok: true } | { ok: false; status: number; error: string } {
+  const trustedOriginsResult = resolveTrustedOriginsFromEnvironment(options);
+  if (!trustedOriginsResult.ok) {
+    return trustedOriginsResult;
+  }
+
+  const originHeader = request.headers.get("origin");
+  if (!originHeader || originHeader.trim().length === 0) {
+    return {
+      ok: false,
+      status: 403,
+      error: `${config.routeLabel} Origin header is required`,
+    };
+  }
+
+  const requestOrigin = normalizeHttpOrigin(originHeader);
+  if (!requestOrigin || !trustedOriginsResult.origins.includes(requestOrigin)) {
+    return {
+      ok: false,
+      status: 403,
+      error: `${config.routeLabel} Origin is not trusted`,
+    };
+  }
+
+  return { ok: true };
+}
+
 export async function readStateChangingJsonRequestPayload(
   request: Request,
   config: StateChangingJsonRouteConfig,

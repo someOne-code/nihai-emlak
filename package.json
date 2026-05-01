@@ -7,10 +7,11 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "npm run test:payment-callback-security && npm run typecheck && npm run lint",
+    "test": "npm run test:payment-callback-security && npm run test:phase8-admin-listings && npm run typecheck && npm run lint",
     "test:payment-callback-smoke-launcher": "node --experimental-strip-types --test tests/payment-callback-smoke-launcher.test.mts",
-    "test:db-security": "bash .codex/scripts/test-db-security.sh",
-    "test:payment-callback-security": "bash .codex/scripts/test-payment-callback-security.sh",
+    "test:db-security": "node .codex/scripts/test-db-security-runner.mjs",
+    "test:phase8-admin-listings": "node --experimental-strip-types --test tests/phase8-admin-listings-route.test.mts tests/phase8-admin-listings-images-route.test.mts tests/phase8-admin-listings-pricing-route.test.mts tests/admin-listings-view-model.test.mts tests/admin-listings-controller.test.mts tests/admin-listings-client.test.mts",
+    "test:payment-callback-security": "node .codex/scripts/test-payment-callback-security-runner.mjs",
     "test:payment-callback-smoke": "node .codex/scripts/test-payment-callback-smoke-runner.mjs"
   },
   "dependencies": {
@@ -35,6 +36,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@playwright/mcp": "^0.0.71",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

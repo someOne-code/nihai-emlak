@@ -4,7 +4,8 @@ import { headers } from "next/headers";
 import { ThemeProvider } from "next-themes";
 import { Suspense } from "react";
 import { resolvePublicSiteOrigin } from "@/payload/server-url";
-import "./globals.css";
+import "../globals.css";
+import "./operations.css";
 
 const metadataBaseUrl = resolvePublicSiteOrigin({
   nodeEnv: process.env.NODE_ENV,

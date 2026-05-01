@@ -13,6 +13,11 @@ type SupabaseRpcResponse = {
   error: SupabaseError | null;
 };
 
+type SupabaseListResponse = {
+  data: unknown;
+  error: SupabaseError | null;
+};
+
 type SnapshotRpcName =
   | "get_admin_reservation_workflow_snapshot"
   | "get_admin_listing_workflow_snapshot";
@@ -24,9 +29,9 @@ type SupabaseClient = {
       error: SupabaseError | null;
     }>;
   };
-  from: (table: "profiles") => {
+  from: (table: "profiles" | "order_items") => {
     select: (columns: string) => {
-      eq: (column: string, value: string) => {
+      eq: (column: string, value: string) => Promise<SupabaseListResponse> | {
         maybeSingle: () => Promise<SupabaseMaybeSingleResponse>;
       };
     };
@@ -67,7 +72,12 @@ export async function handleAdminReservationWorkflowSnapshotGet(
     return jsonError("Invalid admin workflow snapshot RPC response", 500);
   }
 
-  return jsonSuccess(rpcResult.data);
+  const enriched = await enrichReservationSnapshotWithOrderItems(guard.supabase, rpcResult.data);
+  if (!enriched.ok) {
+    return jsonError(enriched.error, enriched.status);
+  }
+
+  return jsonSuccess(enriched.data);
 }
 
 export async function handleAdminListingWorkflowSnapshotGet(
@@ -114,11 +124,19 @@ async function guardAdminWorkflowSnapshotRequest(
     };
   }
 
-  const profileResult = await supabase
+  const profileQuery = supabase
     .from("profiles")
     .select("role")
-    .eq("id", userResult.data.user.id)
-    .maybeSingle();
+    .eq("id", userResult.data.user.id);
+
+  if (!("maybeSingle" in profileQuery)) {
+    return {
+      ok: false,
+      response: jsonError("Admin profile lookup failed", 500),
+    };
+  }
+
+  const profileResult = await profileQuery.maybeSingle();
 
   if (profileResult.error) {
     return {
@@ -139,6 +157,67 @@ async function guardAdminWorkflowSnapshotRequest(
     ok: true,
     supabase,
   };
+}
+
+async function enrichReservationSnapshotWithOrderItems(
+  supabase: SupabaseClient,
+  snapshot: Record<string, unknown>,
+): Promise<
+  | { ok: true; data: Record<string, unknown> }
+  | { ok: false; error: string; status: number }
+> {
+  const order = asRecord(snapshot.order);
+  const orderId = asUuid(order?.id);
+  if (!orderId) {
+    return {
+      ok: true,
+      data: snapshot,
+    };
+  }
+
+  const queryResult = await supabase
+    .from("order_items")
+    .select("item_type,code,label,amount")
+    .eq("order_id", orderId);
+
+  if (!isRecord(queryResult) || !("data" in queryResult) || !("error" in queryResult)) {
+    return {
+      ok: false,
+      error: "Admin workflow snapshot order items lookup failed",
+      status: 500,
+    };
+  }
+
+  if (queryResult.error) {
+    return {
+      ok: false,
+      error: "Admin workflow snapshot order items lookup failed",
+      status: 500,
+    };
+  }
+
+  return {
+    ok: true,
+    data: {
+      ...snapshot,
+      order_items: sanitizeOrderItems(queryResult.data),
+    },
+  };
+}
+
+function sanitizeOrderItems(value: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter(isRecord)
+    .map((item) => ({
+      item_type: asNonEmptyString(item.item_type) ?? "",
+      code: asNonEmptyString(item.code) ?? "",
+      label: asNonEmptyString(item.label) ?? "",
+      amount: typeof item.amount === "number" && Number.isFinite(item.amount) ? item.amount : null,
+    }));
 }
 
 function mapAdminWorkflowSnapshotRpcError(
@@ -201,6 +280,10 @@ function jsonResponse(payload: unknown, status: number): Response {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return isRecord(value) ? value : null;
 }
 
 function asUuid(value: unknown): string | null {

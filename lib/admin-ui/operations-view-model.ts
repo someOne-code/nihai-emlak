@@ -52,7 +52,7 @@ export type OperationsViewModel = {
 const ACTION_LABELS: Record<OperationsActionId, string> = {
   cancel: "Rezervasyonu iptal et",
   confirm: "Rezervasyonu onayla",
-  reopen: "İlanı yeniden aç",
+  reopen: "Ilani yeniden ac",
 };
 
 export function buildOperationsViewModel(input: OperationsViewModelInput): OperationsViewModel {
@@ -103,13 +103,13 @@ function buildOverviewRow(
   return {
     reservationId,
     listingId,
-    listingTitle: asString(listing?.title) ?? "İsimsiz ilan",
+    listingTitle: asString(listing?.title) ?? "Isimsiz ilan",
     locationLabel: [asString(listing?.city), asString(listing?.district)].filter(Boolean).join(" / "),
-    reservationStatus: asString(reservation.status) ?? "unknown",
+    reservationStatus: formatStatusLabel(asString(reservation.status)),
     orderId,
-    orderStatus: asString(order?.status) ?? "Yok",
+    orderStatus: formatStatusLabel(asString(order?.status), "Yok"),
     paymentId: asString(payment?.id),
-    paymentStatus: asString(payment?.status) ?? "Yok",
+    paymentStatus: formatStatusLabel(asString(payment?.status), "Yok"),
     amountLabel: formatAmount(amount, currency),
     moveInDate: asString(reservation.move_in_date) ?? "Belirtilmedi",
     stayMonthsLabel: formatStayMonths(asNumber(reservation.stay_months)),
@@ -125,12 +125,29 @@ function buildActions(input: {
   const reservationEligibility = nestedRecord(input.reservationSnapshot, "eligibility");
   const listingEligibility = nestedRecord(input.listingSnapshot, "eligibility");
   const actions: OperationsActionViewModel[] = [
-    createAction("cancel", asBoolean(reservationEligibility?.can_cancel), input.actionPending),
-    createAction("confirm", asBoolean(reservationEligibility?.can_confirm), input.actionPending),
+    createAction(
+      "cancel",
+      asBoolean(reservationEligibility?.can_cancel),
+      asString(reservationEligibility?.can_cancel_reason),
+      input.actionPending,
+    ),
+    createAction(
+      "confirm",
+      asBoolean(reservationEligibility?.can_confirm),
+      asString(reservationEligibility?.can_confirm_reason),
+      input.actionPending,
+    ),
   ];
 
   if (input.selectedListingId) {
-    actions.push(createAction("reopen", asBoolean(listingEligibility?.can_reopen), input.actionPending));
+    actions.push(
+      createAction(
+        "reopen",
+        asBoolean(listingEligibility?.can_reopen),
+        asString(listingEligibility?.can_reopen_reason),
+        input.actionPending,
+      ),
+    );
   }
 
   return actions;
@@ -139,6 +156,7 @@ function buildActions(input: {
 function createAction(
   id: OperationsActionId,
   allowed: boolean,
+  reason: string | null,
   actionPending: OperationsActionId | null,
 ): OperationsActionViewModel {
   if (actionPending) {
@@ -146,7 +164,7 @@ function createAction(
       id,
       label: ACTION_LABELS[id],
       enabled: false,
-      disabledReason: "İşlem devam ederken yeni aksiyon başlatılamaz.",
+      disabledReason: "Islem devam ederken yeni aksiyon baslatilamaz.",
     };
   }
 
@@ -154,7 +172,7 @@ function createAction(
     id,
     label: ACTION_LABELS[id],
     enabled: allowed,
-    disabledReason: allowed ? null : "Backend snapshot bu aksiyona izin vermiyor.",
+    disabledReason: allowed ? null : reason ?? "Backend snapshot bu aksiyona izin vermiyor.",
   };
 }
 
@@ -164,10 +182,18 @@ function sanitizeReservationSnapshot(value: unknown): Record<string, unknown> | 
   }
 
   return {
-    reservation: pickRecord(value.reservation, ["id", "status", "move_in_date", "stay_months"]),
+    reservation: pickRecord(value.reservation, [
+      "id",
+      "status",
+      "move_in_date",
+      "stay_months",
+      "guest_count",
+      "note",
+    ]),
     order: pickRecord(value.order, ["id", "status", "total_amount", "currency"]),
+    orderItems: sanitizeOrderItems(value.order_items),
     payment: pickRecord(value.payment, ["id", "status", "amount", "currency"]),
-    listing: pickRecord(value.listing, ["id", "status"]),
+    listing: pickRecord(value.listing, ["id", "status", "title", "city", "district"]),
     contact: pickRecord(value.contact, [
       "fullName",
       "phone",
@@ -179,7 +205,12 @@ function sanitizeReservationSnapshot(value: unknown): Record<string, unknown> | 
       "note",
     ]),
     latestEvent: pickRecord(value.latest_event, ["id", "workflow_name", "reason", "note", "created_at"]),
-    eligibility: pickRecord(value.eligibility, ["can_cancel", "can_confirm"]),
+    eligibility: pickRecord(value.eligibility, [
+      "can_cancel",
+      "can_cancel_reason",
+      "can_confirm",
+      "can_confirm_reason",
+    ]),
   };
 }
 
@@ -189,9 +220,9 @@ function sanitizeListingSnapshot(value: unknown): Record<string, unknown> | null
   }
 
   return {
-    listing: pickRecord(value.listing, ["id", "status"]),
+    listing: pickRecord(value.listing, ["id", "status", "title", "city", "district"]),
     latestEvent: pickRecord(value.latest_event, ["id", "workflow_name", "reason", "note", "created_at"]),
-    eligibility: pickRecord(value.eligibility, ["can_reopen"]),
+    eligibility: pickRecord(value.eligibility, ["can_reopen", "can_reopen_reason"]),
   };
 }
 
@@ -217,7 +248,8 @@ function formatAmount(amount: number | null, currency: string | null): string {
     return "Yok";
   }
 
-  return currency ? `${amount} ${currency}` : String(amount);
+  const formattedAmount = amount.toLocaleString("tr-TR");
+  return currency ? `${formattedAmount} ${currency}` : formattedAmount;
 }
 
 function formatStayMonths(stayMonths: number | null): string {
@@ -226,6 +258,46 @@ function formatStayMonths(stayMonths: number | null): string {
   }
 
   return `${stayMonths} ay`;
+}
+
+function sanitizeOrderItems(value: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter(isRecord)
+    .map((item) => ({
+      itemType: asString(item.item_type) ?? asString(item.itemType) ?? "unknown",
+      code: asString(item.code) ?? "",
+      label: asString(item.label) ?? "Isimsiz kalem",
+      amount: asNumber(item.amount),
+    }))
+    .filter((item) => item.amount !== null);
+}
+
+function formatStatusLabel(status: string | null, fallback = "Bilinmiyor"): string {
+  if (!status) {
+    return fallback;
+  }
+
+  const normalized = status.toLowerCase();
+  const statusMap: Record<string, string> = {
+    pending: "Beklemede",
+    confirmed: "Onaylandi",
+    succeeded: "Basarili",
+    completed: "Tamamlandi",
+    cancelled: "Iptal edildi",
+    failed: "Basarisiz",
+    refunded: "Iade edildi",
+    conflict: "Uyusmazlik",
+    expired: "Suresi doldu",
+    active: "Aktif",
+    passive: "Pasif",
+    unknown: "Bilinmiyor",
+  };
+
+  return statusMap[normalized] ?? status;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

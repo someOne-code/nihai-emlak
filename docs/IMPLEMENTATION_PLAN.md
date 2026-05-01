@@ -1,16 +1,17 @@
-# Implementation Plan: Backend-Only Emlak Platform V1
+# Implementation Plan: Emlak Platform Backend, Admin Operations ve Infrastructure V1
 
 ## Özet
 
-Bu plan, projeyi **backend odaklı**, **Supabase-first** ve **minimum custom code** ilkesiyle ilerletir.  
-Amaç, frontend ve admin UI ekiplerinin bağlanacağı güvenli bir operasyonel backend kurmaktır.
+Bu plan, projeyi **Supabase-first**, **minimum custom code** ve **operasyon paneli dahil kontrollu product backend** ilkesiyle ilerletir.  
+Amaç, public frontend'in bağlanacağı güvenli operasyonel backend'i, Payload content backend'i, ödeme/iletişim altyapısını ve bu repo içinde sahiplenilen admin operasyon yüzeylerini kurmaktır.
 
 Sabit mimari kararlar:
 - **Supabase** = operational backend
 - **Payload** = content backend
 - **İş Bankası** = payment layer
 - **Chatwoot** = communication layer
-- Frontend ve admin UI bu planın uygulama kapsamı dışında
+- Public frontend bu planın uygulama kapsamı dışında
+- Admin operasyon paneli bu repo kapsamındadır; authoritative kararlar Supabase/RPC tarafında kalır, UI yalnızca dar admin route/read/workflow yüzeylerini tüketir
 
 Bu revizyonda özellikle şu kararlar netleştirildi:
 - Faz 4 ödeme tamamlama akışı **tek transaction sınırında** çalışacak
@@ -18,6 +19,7 @@ Bu revizyonda özellikle şu kararlar netleştirildi:
 - `BEGIN/COMMIT` mantığı callback içinde ya da PL/pgSQL function gövdesinde elle kurulmayacak
 - Faz 1 migration disiplini resmi Supabase akışına göre versioned migration dosyalarıyla yürütülecek
 - Faz 7 Chatwoot entegrasyonunda **HMAC identity validation** zorunlu olacak
+- Faz 7.1 communication data contract ve Faz 7.2 Chatwoot identity/client helper işleri kodlandı; sıradaki uygulama kapısı Faz 7.3 conversation open route'tur
 - Uygulama yöntemi **TDD-first** olacak; davranış testle tanımlanmadan production kodu yazılmayacak
 
 ## Uygulama Yöntemi
@@ -47,8 +49,9 @@ Bu revizyonda özellikle şu kararlar netleştirildi:
   - ek hizmet ancak ana odeme varsa secilebilir
 - Sorumluluk sınırı sabittir:
   - frontend ayrı ekip
-  - admin UI ayrı ekip
-  - bu repo backend contracts, veri modeli ve business logic üretir
+  - admin operasyon paneli bu repo içinde kodlanır
+  - bu repo backend contracts, veri modeli, business logic, Payload content backend'i, communication backend'i ve admin operations UI üretir
+  - admin UI kritik state/eligibility kararı üretmez; bu kararlar DB/RPC ve route guard sınırında kalır
 
 ### Faz 0.5: Supabase capability audit
 - Faz 1 şema yazımından önce, ana backend ihtiyaçları için kısa bir capability audit çıkarılır.
@@ -156,6 +159,26 @@ Bu revizyonda özellikle şu kararlar netleştirildi:
   - fiyat ve request kontratı testleri geçmeden checkout implementasyonu tamamlanmış sayılmaz
 
 ### Faz 4: İş Bankası callback, atomiklik ve çakışma yönetimi
+
+Durum: tamamlandi. 2026-04-30 itibariyla Faz 4 odeme callback,
+atomiklik ve cakisma yonetimi kapisi gecildi.
+
+Kapanis ozeti:
+- Is Bankasi callback route'u imza/body normalize siniri olarak kalir.
+- Dogrulanmis callback sonrasi state transition tek DB function/RPC
+  sinirinda yurur.
+- Payment, order, reservation, listing ve event guncellemeleri route
+  icinde parca parca yapilmaz.
+- Duplicate callback, terminal state, conflict ve invariant drift
+  senaryolari fail-closed/audit davranisiyla korunur.
+- Uzun isler atomik DB function icine alinmaz; callback sonrasi
+  asenkron tarafta ele alinir.
+
+Kapanis dogrulamasi:
+- `npm run test:payment-callback-security`
+- `npm run test:db-security`
+- `npm test`
+
 - Callback handler önce imzayı doğrular, payload’ı normalize eder.
 - Doğrulanmış callback sonrası **tek bir DB function** çağrılır.
 - Bu function tek çağrıda şunları yapar:
@@ -187,6 +210,28 @@ Bu revizyonda özellikle şu kararlar netleştirildi:
   - callback route ve DB function bu testler yeşile dönmeden tamamlanmış kabul edilmez
 
 ### Faz 5: Backend read modelleri
+
+Durum: tamamlandi. 2026-04-30 itibariyla Faz 5 backend read modelleri,
+admin operasyon workflow'lari ve checkout intake operasyon yuzeyleri kapisi
+gecildi.
+
+Kapanis ozeti:
+- Public listing list/detail/services read yuzeyleri thin route + Supabase
+  RPC modeliyle hazirlandi.
+- Admin reservation/order/payment/payment-event read yuzeyleri admin guard
+  ve dar RPC contract'i uzerinden sunuldu.
+- Kritik backoffice state degisimleri direct tablo UPDATE yerine explicit
+  admin workflow RPC/route sinirinda tutuldu.
+- Operations admin yuzeyi Payload CMS'ten ayrildi; Supabase operasyon
+  siniri `/admin/operations` tarafinda kaldi.
+- Checkout intake bilgisi public read yuzeylerine sizdirilmeden admin
+  read/snapshot yuzeylerinde sanitize edildi.
+
+Kapanis dogrulamasi:
+- `node --experimental-strip-types --test tests/read-model-contract-doc.test.mts tests/read-model-route.test.mts tests/admin-workflow-route.test.mts tests/admin-workflow-snapshot-route.test.mts tests/admin-operations-client.test.mts tests/admin-operations-view-model.test.mts tests/phase5-operations-auth-boundary.test.mts tests/phase5-task3-payload-admin-config.test.mts tests/phase5-task4-operations-ui.test.mts tests/phase5-task5-admin-operations-validation.test.mts`
+- `npm run test:db-security`
+- `npm test`
+
 - Frontend/admin ekipleri için minimum read yüzeyleri hazırlanır:
   - listing listesi
   - listing detay
@@ -203,6 +248,24 @@ Bu revizyonda özellikle şu kararlar netleştirildi:
   - manuel süreç adımları explicit admin workflow RPC/function üzerinden yürütülür
 
 ### Faz 5.5: Admin operasyon workflow'ları
+
+Durum: tamamlandi. 2026-04-30 itibariyla Faz 5.5 admin operasyon
+workflow'lari kapisi gecildi.
+
+Kapanis ozeti:
+- `admin_cancel_reservation`, `admin_reopen_listing` ve
+  `admin_confirm_reservation` explicit DB workflow/RPC sinirinda tutuldu.
+- Admin route'lari auth/profile/origin/production config guard'larini
+  fail-closed uygular.
+- Snapshot route'lari workflow eligibility, son event ve invariant drift
+  durumlarini dar admin yuzeyinde dondurur.
+- Kritik state degisimleri direct tablo UPDATE ile degil, audit/event
+  yazan workflow siniriyle yurutulur.
+
+Kapanis dogrulamasi:
+- `node --experimental-strip-types --test tests/admin-workflow-route.test.mts tests/admin-workflow-snapshot-route.test.mts`
+- `npm run test:db-security`
+
 - Amaç:
   - gerçek hayattaki belge kontrolü, cayma, manuel iptal ve yeniden aktif etme ihtiyaçlarını authoritative DB sınırını bozmadan çözmek
 - Tasarım kuralı:
@@ -259,6 +322,23 @@ Bu revizyonda özellikle şu kararlar netleştirildi:
   - en son admin read/snapshot yuzeyine intake alanlari eklenir
 
 ### Faz 6: Content backend
+Durum: tamamlandi. 2026-04-30 itibariyla Faz 6 Payload content backend
+kapisi gecildi.
+
+Kapanis ozeti:
+- Payload CMS content siniri `/cms` altinda korundu.
+- `blog_categories`, `blog_posts` ve `consultants` koleksiyonlari eklendi.
+- Content read/write access helper'lari admin/public ayrimini net uygular.
+- Reservation/order/payment/listing gibi operasyonel Supabase cekirdegi Payload'a
+  alinmadi.
+- Phase 6 kapsam disi public API/UI ve MCP read yuzeyi eklenmedi.
+
+Kapanis dogrulamasi:
+- `node --experimental-strip-types --test tests/phase6-payload-content-config.test.mts`
+- `node --experimental-strip-types --test tests/phase6-payload-content-access.test.mts tests/phase6-payload-content-config.test.mts`
+- `node --experimental-strip-types --test tests/payload-security.test.mts tests/phase5-task3-payload-admin-config.test.mts`
+- `npm test`
+
 - Payload içerik backend’i olarak kalır.
 - İlk içerik modülleri:
   - `blog_posts`
@@ -268,6 +348,74 @@ Bu revizyonda özellikle şu kararlar netleştirildi:
 - Reservation/order/payment çekirdeği Payload içine alınmaz.
 
 ### Faz 7: Communication layer
+
+Durum: tamamlandi. 2026-04-30 itibariyla Faz 7.1 communication data
+contract, Faz 7.2 Chatwoot identity/client helper katmani, Faz 7.3
+conversation open route, Faz 7.4 conversation read + messages
+route'lari ve Faz 7.5 communication contract dokumantasyonu kodlandi.
+Faz 7.3 sonrasi claim race fix (`23505` -> 409, conflict-safe RPC
+insert) uygulandi.
+
+Aktif alt plan:
+- `docs/superpowers/plans/2026-04-30-phase7-communication-layer.md`
+- `docs/superpowers/plans/2026-04-30-chatwoot-conversation-claim-race-fix.md`
+
+Tamamlanan alt fazlar:
+- Faz 7.1:
+  - `chatwoot_conversations` mapping tablosu eklendi.
+  - Unique contract `user_id + listing_id` olarak sabitlendi.
+  - User-own read ve admin read RLS siniri kuruldu.
+  - Conversation claim/complete/fail RPC modeli eklendi.
+  - Fresh provisioning duplicate conversation acmayi engeller; stale
+    provisioning ve failed kayitlar reclaim edilebilir.
+- Faz 7.2:
+  - Chatwoot server-side helper katmani eklendi.
+  - `CHATWOOT_BASE_URL`, `CHATWOOT_INBOX_IDENTIFIER` ve
+    `CHATWOOT_HMAC_TOKEN` eksikse fail-closed davranir.
+  - HMAC identity token server-side uretilir; frontend secret veya token
+    uretim mantigi tasimaz.
+  - Contact, conversation ve message request helper'lari raw provider
+    response/secret sizdirmeyecek sekilde sinirlanir.
+- Faz 7.3:
+  - `POST /api/communications/listings/:listingId/conversation` route'u
+    TDD ile uygulandi.
+  - Supabase auth zorunlu; state-changing JSON POST icin trusted origin,
+    content-type ve body limit guard'lari uygulaniyor.
+  - existing ready mapping Chatwoot'a yeni network call yapmadan ayni
+    conversation dondurur.
+  - Mapping yoksa DB claim alinir, Chatwoot contact/conversation
+    olusturulur, opsiyonel initial message gonderilir ve mapping ready
+    yapilir.
+  - Chatwoot hatasinda mapping failed yapilir, response `502` olur ve
+    raw provider payload disari sizmaz.
+  - Claim race fix: `claim_chatwoot_conversation` RPC artik
+    `INSERT ... ON CONFLICT ON CONSTRAINT do nothing` + `SELECT FOR
+    UPDATE` fallback ile race-safe; route layer SQLSTATE `23505` icin
+    deterministik `409` mapping yapar.
+- Faz 7.4:
+  - `GET /api/communications/listings/:listingId/conversation` route'u
+    eklendi (sadece ready mapping veya 404).
+  - `GET /api/communications/conversations/:conversationId/messages`
+    route'u eklendi; ownership guard ve customer-facing sanitization
+    (private/activity/template filtreli) uygulandi.
+  - `POST /api/communications/conversations/:conversationId/messages`
+    route'u eklendi; provider response sanitize edilemezse `502`
+    fail-closed.
+  - Tum davranis `tests/phase7-communication-read-messages-route.test.mts`
+    altinda route-level testlerle korunuyor.
+- Faz 7.5:
+  - `docs/COMMUNICATION_CONTRACT.md` eklendi (endpoint reference,
+    status code haritasi, response envelope, sanitization kurallari,
+    concurrency contract, security boundaries, known limitations).
+  - Faz 7 kapanis dogrulamasi `phase7-chatwoot-client`,
+    `phase7-communication-route`,
+    `phase7-communication-read-messages-route`,
+    `phase7-chatwoot-concurrency-contract` testleri ve `npm test` ile
+    yapildi. SQL smoke runner bu kanonik workspace'te yok; kontrat ve
+    route testleri tek dogrulama katmani olarak kabul edildi ve
+    docs/COMMUNICATION_CONTRACT.md'de known limitation olarak
+    isaretlendi.
+
 - Chatwoot entegrasyonu backend sınırıyla uygulanır.
 - Ana veri Supabase’de kalır.
 - Chatwoot’a yalnızca conversation/inbox bağlamı verilir.
@@ -278,6 +426,250 @@ Bu revizyonda özellikle şu kararlar netleştirildi:
   - Chatwoot identity validation için HMAC zorunludur
   - HMAC token frontend’de üretilmez
   - token sunucu tarafında, gizli anahtarla üretilip istemciye verilir
+
+### Faz 8: Admin listing ve fiyat konfigurasyon yonetimi
+
+Durum: planlandi. Bu faz, admin panelin sadece operasyon dashboard'u
+olmaktan cikip ilani ve checkout konfigurasyonunu yonetebilir hale gelmesini
+saglar.
+
+Amaç:
+- Admin kullanicilar listing, listing image, main item ve service option
+  konfigurasyonlarini bu repo icindeki admin yuzeyinden yonetebilir.
+- Public frontend yine ayri kapsamdir; burada yalnizca admin write yuzeyi,
+  route/RPC boundary ve read model etkileri ele alinir.
+
+Katman karari:
+- Supabase source-of-truth olmaya devam eder.
+- Listing fiyatlari, main item katalogu, listing main item option'lari,
+  service catalog ve listing service option'lari DB/RPC veya dar admin route
+  sinirinda yonetilir.
+- Payload content backend'i operasyonel listing source-of-truth'u olmaz.
+- Admin UI direct tablo write yapmaz; route/RPC guard ve RLS/constraint
+  sinirindan gecer.
+
+Kapsam:
+- Listing create/update/deactivate/reactivate icin admin route/RPC kontrati.
+- Listing image ekleme/silme/siralama icin minimum admin kontrat.
+- Main item option aktif/pasif, fiyat override ve label yonetimi.
+- Service option aktif/pasif, fiyat override ve listing baglantisi.
+- Satis/kiralik ayrimi:
+  - satilik listing icin checkout/main item/service konfigurasyonu beklenmez.
+  - kiralik listing icin checkout eligibility DB konfigurasyonundan gelir.
+- Admin operations UI icinde veya ayri `/admin/listings` yuzeyinde bu
+  kontrollerin gorunmesi.
+
+TDD kapisi:
+- Admin olmayan kullanici write route'larini kullanamaz.
+- Invalid price, duplicate code, inactive listing ve sale/rent uyumsuzluklari
+  DB constraint/RPC testleriyle reddedilir.
+- Admin UI helper/view model raw private alan veya service-role-only veri
+  tasimaz.
+- Public read modelleri admin-only konfigurasyon detaylarini gereksiz
+  sizdirmaz.
+
+#### Faz 8.5: Functional admin listings UI completion
+
+Durum: uygulanmakta. Bu alt faz, admin listing UI'nin backend kontratlarini
+kullanabildigini kanitlar; ancak Phase 8 kapanis kalitesi icin tek basina
+yeterli degildir.
+
+Kapsam:
+- `/admin/listings` ekraninda listing secme, create/update, image add/delete,
+  main item config ve service config aksiyonlari calisir.
+- Admin mevcut `main_item_catalog` ve `service_catalog` kayitlarini listing'e
+  baglayabilir.
+- Bu alt faz global katalog yonetimi yapmaz; sadece mevcut katalogdan ilana
+  baglama akisidir.
+
+Kapanis kapisi:
+- Admin listing client/controller/view-model testleri yesildir.
+- Phase 8 route testleri yesildir.
+- Ekranin urun kalitesi Faz 8.6'da ayrica ele alinir.
+
+#### Faz 8.6: Admin listings product UX upgrade
+
+Durum: tamamlandi (2026-05-01). Mevcut teknik/admin listing ekrani
+profesyonel, anlasilir ve guven veren bir operasyon yuzeyine cevrildi.
+
+Kapsam:
+- Ortak admin shell/sidebar ve `/admin` dashboard iskeleti.
+- `/admin/listings` bilgi mimarisinin yeniden duzenlenmesi.
+- Ana odeme kalemi ve ek hizmet baglama akislarinin admin tarafindan net
+  anlasilir hale getirilmesi.
+- Checkout-ready eksiklerinin checklist ve yonlendirme olarak gosterilmesi.
+- TailAdmin ve shadcn kaynaklari yalnizca UI donor/reference olarak kullanilir;
+  backend/RPC/RLS karar modeli degismez.
+
+Kapanis kapisi (tumunu gecti):
+- Admin browser'da katalogdan ana odeme kalemi ekleyebilir ve eklenen kalemi
+  listede gorur. (dogrulandi: seed'deki `smoke-admin@example.test` ile
+  `Phase 8 Rent With Main` uzerinde 2 ana kalem + 1 hizmet baglanmis halde
+  listede gorundu)
+- Admin browser'da katalogdan ek hizmet ekleyebilir ve eklenen hizmeti listede
+  gorur. (dogrulandi: ayni smoke oturumu)
+- Katalog bos veya tum ogeler bagliysa UI bunu teknik olmayan bir empty state
+  ile aciklar. (dogrulandi: `Phase 8 Rent With Main` icin
+  `Eklenebilir ana odeme kalemi yok...` empty state gorundu)
+- Kiralik listing checkout-ready degilse eksikler ekranda net gorunur.
+  (dogrulandi: `Phase 8 Rent Without Main` icin tab ve side panel ayni
+  checklist'i gosterdi: `Aktif ana odeme kalemi eksik`,
+  `Aktif ek hizmet eksik`)
+- Desktop ve mobile browser smoke yapildi.
+
+Smoke notu (2026-05-01, Playwright MCP):
+- `/admin` dashboard: sidebar (Dashboard/Ilanlar/Operasyonlar/CMS), header,
+  Hizli erisim ve Operasyon yuzeyleri kartlari dogru linklerle render.
+- `/admin/listings` desktop: liste, filtreler, 5 tab (Genel Bilgiler,
+  Gorseller, Ana Odeme Kalemleri, Ek Hizmetler, Checkout Hazirligi) ve side
+  readiness paneli tutarli. Genel Bilgiler gruplari (Temel/Konum/Fiyat/
+  Ozellikler/Aciklama), status action satiri (`Su an aktif/pasif` chip +
+  `Aktiflestir`/`Pasife al` ile dogru disabled durumu), `Ilan bilgilerini
+  kaydet` butonu gorunuyor.
+- Gorseller paneli URL-only helper not'u, empty state ve `Gorsel ekle`
+  kutusu ile cikti.
+- Ana Odeme Kalemleri ve Ek Hizmetler panelleri raw sayi label'lari
+  (`Varsayilan tutar: Yok`, `Varsayilan carpan: 1.5`, `Varsayilan fiyat:
+  500`) kullandi; currency uydurmadi.
+- Readiness mapping: SALE icin `Checkout uygulanmaz` + not-applicable
+  mesaji; ready rent icin `Checkout hazir`; missing rent icin
+  `Hazir degil` + missing key checklist.
+
+Residual risk:
+- Mobile viewport (420x900) smoke'unda shell sidebar fixed kaliyor,
+  dedicated hamburger toggle yok. Icerik stack ediliyor ve erisilebilir
+  ama mobile collapse bir sonraki polish turunde ele alinabilir. Bu
+  kapanis kapilarini bloklamaz.
+
+Plan:
+- Ayrintili uygulama plani:
+  `docs/superpowers/plans/2026-05-01-phase8-6-admin-ui-productization.md`
+
+#### Faz 8.7: Phase 8 hardening, docs and closure
+
+Durum: planlandi. Faz 8.5 ve Faz 8.6 gecmeden Phase 8 kapanmis sayilmaz.
+
+Kapsam:
+- `docs/ADMIN_LISTING_CONFIG_CONTRACT.md` son haline getirilir.
+- Phase 8 narrow testleri, `npm test`, gerekirse `npm run build` calistirilir.
+- Browser smoke sonucu dokumante edilir.
+- Verification gap varsa komut ve gerekce acik yazilir.
+
+Kapanis kapisi:
+- Admin listing konfigurasyonu hem backend kontratlari hem de kullanilabilir
+  admin UI acisindan dogrulanmistir.
+
+### Faz 9: Belge sureci ve backoffice takip modeli
+
+Durum: planlandi. Bu faz, odeme sonrasi gercek hayatta yurutulen belge ve
+kontrat takip surecinin admin tarafinda gorunur ve denetlenebilir olmasini
+saglar.
+
+Amaç:
+- Admin panelde `belge istendi`, `bekleniyor`, `tamamlandi`,
+  `basarisiz/eksik` gibi operasyonel durumlar gorulur ve kontrollu sekilde
+  degistirilir.
+- V1'de hassas belge upload'i, TC/pasaport/oturum izni dosyalari, banka
+  dokumu, maas bordrosu veya imzali kontrat dosyasi toplanmaz.
+
+Katman karari:
+- Belge sureci durumlari Supabase operasyonel backend'de tutulur.
+- Kritik state degisiklikleri explicit workflow RPC/route ile audit/event
+  yazar.
+- Payload yalnizca icerik/CMS icin kalir; belge state source-of-truth'u olmaz.
+
+Kapsam:
+- Reservation/order ile iliskili belge takip durumu.
+- Admin notu, son guncelleyen admin ve timestamp bilgisi.
+- `admin_request_documents`, `admin_mark_documents_waiting`,
+  `admin_mark_documents_completed`, `admin_mark_documents_failed` benzeri
+  explicit workflow'lar.
+- Admin snapshot/read modelde belge durumunun gorunmesi.
+- Operations UI'da belge durum butonlari ve son event ozeti.
+
+TDD kapisi:
+- Normal kullanici baska kullanicinin belge takip bilgisini okuyamaz.
+- Admin disi kullanici belge workflow cagiramaz.
+- Terminal/cancelled reservation icin uygunsuz belge transition reddedilir.
+- Workflow event/audit kaydi yazilmadan state degismez.
+
+### Faz 10: Iade, kapora ve conflict operasyon modeli
+
+Durum: planlandi. Bu faz hukuki/product karar netlestirme gerektirir; karar
+netlesmeden otomatik finansal state machine implementasyonu yapilmaz.
+
+Amaç:
+- Basarisiz odeme, conflict callback, musteri caymasi ve kapora yanma
+  durumlari admin panelde gorunur ve kontrollu operasyon akisi olusturur.
+- Is Bankasi tarafinda otomatik refund entegrasyonu ancak provider kontrati ve
+  hukuk/product karari netlestikten sonra eklenir.
+
+Karar bekleyen konu:
+- `iade tam olacak` ile `kapora yanar` ayrimi kesinlestirilecek.
+- Kaporanin hangi sure boyunca evi tuttugu ve hangi iptal zamaninda yanacagi
+  tarih/saat bazli test edilebilir kurala cevrilecek.
+- Emlak komisyonu ve provider fee davranisi yazili hale getirilecek.
+
+Kapsam:
+- Payment/order/reservation icin `refund_required`, `refund_requested`,
+  `refund_completed`, `deposit_forfeited`, `manual_resolution_required`
+  gibi operasyon durumlari veya event tipleri.
+- Conflict payment gorunurlugu ve manuel takip aksiyonu.
+- Admin UI'da failed/conflict/refund bekleyen islerin filtrelenmesi.
+- Audit trail: kim, neden, hangi tutar/kalem icin karar verdi.
+
+TDD kapisi:
+- Hukuki karar metni olmadan para iadesi otomatik tetiklenmez.
+- Admin disi refund/forfeit workflow cagiramaz.
+- Amount drift, missing payment, terminal state ve ownership drift
+  fail-closed davranir.
+- Event yazilmadan refund/forfeit state'i degismez.
+
+### Faz 11: Satilik ilan lead/basvuru akisi
+
+Durum: planlandi. Proje sadece kiralik degildir; satilik ilanlarda odeme ve
+ek hizmet yoktur, temel akis iletisim/basvuru odaklidir.
+
+Amaç:
+- Satilik listing public read modelde gorunur.
+- Satilik listing icin checkout acilmaz.
+- Kullanici satilik ilan hakkinda iletisim/basvuru/konusma baslatabilir.
+
+Katman karari:
+- Satilik lead/basvuru verisi Supabase'de tutulur veya Faz 7 Chatwoot
+  conversation mapping ile iliskilendirilir.
+- Chatwoot conversation, listing baglamini tasir; ana is verisinin sahibi
+  Chatwoot olmaz.
+
+Kapsam:
+- Satilik ilan icin contact/lead route veya communication route davranisi.
+- Admin panelde satilik lead/conversation gorunurlugu.
+- Satilik ilanlarda service/main item/payment alanlarinin UI/API tarafinda
+  beklenmemesi.
+
+TDD kapisi:
+- Sale listing checkout create/quote akisi reddedilir.
+- Sale listing conversation/lead akisi listing ile iliskili kayit uretir.
+- Admin disi kullanici baska kullanicinin sale lead kaydini okuyamaz.
+
+### Faz 12: Launch hardening ve production readiness
+
+Durum: planlandi. Faz 7-11 tamamlanmadan production release hazir sayilmaz.
+
+Kapsam:
+- CI tarafinda DB/RLS/security suite gate'i netlestirilir; migration/RPC
+  degisikliklerinde `npm run test:db-security` PR seviyesinde kosulur.
+- Production canonical origin eksikse localhost fallback'e dusen yuzeyler
+  fail-closed hale getirilir.
+- `/api/payment/callback` icin Cloudflare/WAF rate limit, method/content-type
+  allowlist ve body-size guard'lari deploy checklist'ine eklenir.
+- Required production env vars eksikse auth, payment, Payload server URL,
+  Chatwoot ve trusted-origin yuzeyleri sessiz fallback kullanmaz.
+- Production migration chain temiz veritabaninda kurulabilir ve test-only
+  hook/sentinel barindirmaz.
+- Privileged write surface'ler tek authoritative route/RPC sinirinda kalir;
+  direct client-executable bypass yollari revoke edilir veya intentional
+  olarak dokumante edilir.
 
 ## Arayüzler ve Davranışlar
 
@@ -297,6 +689,17 @@ Bu revizyonda özellikle şu kararlar netleştirildi:
   - satılık akışta ödeme/hizmet alanı beklenmez
 - Admin read modeli:
   - reservation/order/payment/event verisi okunabilir halde sunulur
+- Admin operations UI:
+  - bu repo kapsamindadir
+  - `/admin/operations` Payload admin altinda operasyonel yuzey olarak kalir
+  - eligibility ve critical state kararlarini UI hesaplamaz; snapshot/RPC
+    boolean'larini ve workflow route sonucunu kullanir
+- Communication:
+  - ayni user + ayni listing icin tek conversation mapping hedeflenir
+  - HMAC identity token server-side uretilir
+  - Chatwoot provider response'u sanitize edilmeden client'a donmez
+  - raw provider payload, HMAC secret ve service-role-only veri UI/API
+    response'larina sizmaz
 
 ## Test Planı
 
@@ -338,6 +741,26 @@ Bu revizyonda özellikle şu kararlar netleştirildi:
 - `payment_events` log kaydı oluşur
 - function içindeki herhangi bir hata partial update bırakmaz
 
+### Communication
+- `chatwoot_conversations` user/listing uniqueness ve RLS davranisi SQL
+  testleriyle dogrulanir
+- Chatwoot HMAC helper deterministik uretim, eksik env fail-closed ve secret
+  sizdirmeme testlerinden gecer
+- conversation open route unauthenticated, invalid UUID, non-json,
+  untrusted origin, oversized body ve provider failure senaryolarini testler
+  ile sabitler
+- existing ready mapping yeni Chatwoot conversation network call'i yapmaz
+- Chatwoot failure halinde mapping failed olur ve raw provider payload donmez
+
+### Admin operations
+- Admin UI client helper'lari `credentials: "same-origin"` ve
+  `cache: "no-store"` kullanir
+- Operations view model raw callback payload, exact address ve service-role-only
+  veri tasimaz
+- Workflow butonlari yalnizca snapshot eligibility boolean'larindan acilir
+- State-changing admin route'lar auth/profile/origin/body guard'larini
+  fail-closed uygular
+
 ### Sistem sağlığı
 - `bash .codex/scripts/test.sh`
 - `npm run build`
@@ -349,7 +772,9 @@ Bu revizyonda özellikle şu kararlar netleştirildi:
 
 - Payload kaldırılmayacak; içerik backend olarak kalacak.
 - Inngest çekirdek modelin temeli olmayacak; sadece gerçekten gereken orchestration alanında kullanılacak.
-- Blog ve Chatwoot, çekirdek Faz 1-4 tamamlanmadan uygulanmayacak.
+- Blog/content backend Faz 6'da Payload uzerinde tamamlandi; public content API/UI ayri kapsamdir.
+- Chatwoot Faz 7'de backend contract olarak uygulanir; widget/custom chat UI ve anonymous lead chat V1 Faz 7 kapsaminda degildir.
+- Admin operasyon paneli bu repo kapsamindadir; public frontend yine ayri ekip/scope olarak kalir.
 - Migration tarafında temel ekip standardı versioned Supabase migration dosyaları olacak.
 - `supabase db diff`, migration üretimini kolaylaştıran yardımcı araç olarak kullanılabilir; ancak tek kaynak gerçeklik migration dosyalarıdır.
 - Atomik ödeme tamamlama akışı, callback handler içinde değil, tek DB function çağrısında çözülecek.

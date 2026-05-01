@@ -48,6 +48,20 @@ const SNAPSHOT_SURFACES: SnapshotSurface[] = [
         total_amount: 25000,
         currency: "TRY",
       },
+      order_items: [
+        {
+          item_type: "main_item",
+          code: "deposit",
+          label: "Kapora",
+          amount: 17000,
+        },
+        {
+          item_type: "service_item",
+          code: "cleaning",
+          label: "Temizlik",
+          amount: 2200,
+        },
+      ],
       payment: {
         id: "33333333-3333-4333-8333-333333333333",
         status: "succeeded",
@@ -78,6 +92,8 @@ const SNAPSHOT_SURFACES: SnapshotSurface[] = [
       eligibility: {
         can_cancel: false,
         can_confirm: true,
+        can_cancel_reason: "Rezervasyon zaten iptal edilmis veya suresi dolmus.",
+        can_confirm_reason: null,
       },
     },
   },
@@ -107,6 +123,7 @@ const SNAPSHOT_SURFACES: SnapshotSurface[] = [
       },
       eligibility: {
         can_reopen: false,
+        can_reopen_reason: "Ilan durumu bu islem icin uygun degil.",
       },
     },
   },
@@ -241,6 +258,9 @@ test("admin reservation workflow snapshot route calls RPC and returns no-store p
   const response = await surface.handle(
     createGetRequest(),
     createDependencies({
+      orderItems: Array.isArray(surface.successPayload.order_items)
+        ? (surface.successPayload.order_items as Array<Record<string, unknown>>)
+        : [],
       rpc: (functionName, args) => {
         calls.push({ functionName, args });
         return {
@@ -265,6 +285,128 @@ test("admin reservation workflow snapshot route calls RPC and returns no-store p
   const payload = await response.json();
   assert.equal(payload.success, true);
   assert.deepEqual(payload.data, surface.successPayload);
+});
+
+test("admin reservation workflow snapshot route enriches response with sanitized order item breakdown", async () => {
+  const surface = SNAPSHOT_SURFACES[0]!;
+  const response = await surface.handle(
+    createGetRequest(),
+    createDependencies({
+      orderItems: [
+        {
+          item_type: "main_item",
+          code: "deposit",
+          label: "Kapora",
+          amount: 17000,
+          payload: "do-not-expose",
+        },
+        {
+          item_type: "service_item",
+          code: "cleaning",
+          label: "Temizlik",
+          amount: 2200,
+        },
+      ],
+      rpc: () => ({
+        data: {
+          reservation: {
+            id: "11111111-1111-4111-8111-111111111111",
+            status: "pending",
+          },
+          order: {
+            id: "22222222-2222-4222-8222-222222222222",
+            status: "pending",
+            total_amount: 25000,
+            currency: "TRY",
+          },
+          payment: {
+            id: "33333333-3333-4333-8333-333333333333",
+            status: "pending",
+            amount: 25000,
+            currency: "TRY",
+          },
+          listing: {
+            id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            status: "active",
+          },
+          latest_event: {},
+          eligibility: {
+            can_cancel: true,
+            can_confirm: false,
+            can_cancel_reason: null,
+            can_confirm_reason: "Odeme henuz basarili degil.",
+          },
+        },
+        error: null,
+      }),
+    }),
+  );
+
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.success, true);
+  assert.deepEqual(payload.data.order_items, [
+    {
+      item_type: "main_item",
+      code: "deposit",
+      label: "Kapora",
+      amount: 17000,
+    },
+    {
+      item_type: "service_item",
+      code: "cleaning",
+      label: "Temizlik",
+      amount: 2200,
+    },
+  ]);
+});
+
+test("admin reservation workflow snapshot route fails closed when order item query fails", async () => {
+  const surface = SNAPSHOT_SURFACES[0]!;
+  const response = await surface.handle(
+    createGetRequest(),
+    createDependencies({
+      orderItemsError: {
+        code: "57014",
+        message: "statement timeout",
+      },
+      rpc: () => ({
+        data: {
+          reservation: {
+            id: "11111111-1111-4111-8111-111111111111",
+            status: "pending",
+          },
+          order: {
+            id: "22222222-2222-4222-8222-222222222222",
+            status: "pending",
+            total_amount: 25000,
+            currency: "TRY",
+          },
+          payment: {
+            id: "33333333-3333-4333-8333-333333333333",
+            status: "pending",
+            amount: 25000,
+            currency: "TRY",
+          },
+          listing: {
+            id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            status: "active",
+          },
+          latest_event: {},
+          eligibility: {
+            can_cancel: true,
+            can_confirm: false,
+            can_cancel_reason: null,
+            can_confirm_reason: "Odeme henuz basarili degil.",
+          },
+        },
+        error: null,
+      }),
+    }),
+  );
+
+  assert.equal(response.status, 500);
+  assert.equal((await response.json()).error, "Admin workflow snapshot order items lookup failed");
 });
 
 test("admin listing workflow snapshot route calls RPC and returns no-store payload", async () => {
@@ -310,6 +452,8 @@ function createDependencies(options: {
   userId?: string | null;
   getProfileRole?: () => string | null;
   profileError?: { code?: string | null; message?: string | null } | null;
+  orderItems?: Array<Record<string, unknown>>;
+  orderItemsError?: { code?: string | null; message?: string | null } | null;
   rpc: (
     functionName: "get_admin_reservation_workflow_snapshot" | "get_admin_listing_workflow_snapshot",
     args: Record<string, unknown>,
@@ -327,20 +471,33 @@ function createDependencies(options: {
           error: null,
         }),
       },
-      from: () => ({
-        select: () => ({
-          eq: () => ({
-            maybeSingle: async () => ({
-              data: options.profileError
-                ? null
-                : {
-                    role: options.getProfileRole?.() ?? "admin",
-                  },
-              error: options.profileError ?? null,
+      from: (table: "profiles" | "order_items") => {
+        if (table === "profiles") {
+          return {
+            select: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({
+                  data: options.profileError
+                    ? null
+                    : {
+                        role: options.getProfileRole?.() ?? "admin",
+                      },
+                  error: options.profileError ?? null,
+                }),
+              }),
+            }),
+          };
+        }
+
+        return {
+          select: () => ({
+            eq: async () => ({
+              data: options.orderItems ?? [],
+              error: options.orderItemsError ?? null,
             }),
           }),
-        }),
-      }),
+        };
+      },
       rpc: async (
         functionName: "get_admin_reservation_workflow_snapshot" | "get_admin_listing_workflow_snapshot",
         args: Record<string, unknown>,

@@ -1,0 +1,761 @@
+/* Phase 8.5: /admin/listings page-specific styles. Reuses operations.css
+   tokens and adds listing-specific layout for the two-column workspace. */
+
+.lstWorkspace {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: minmax(280px, 360px) 1fr;
+  align-items: start;
+}
+
+@media (max-width: 960px) {
+  .lstWorkspace {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Phase 8.6 Task 4: product panel layout. Adds the page header,
+   three-column workspace (list / detail tabs / readiness), tab strip,
+   and readiness side panel styles on top of the existing tokens. */
+
+.lstPageHeader {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.lstPageHeaderText {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-width: 720px;
+}
+
+.lstPageHeaderActions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.lstProductShell {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns:
+    minmax(260px, 320px)
+    minmax(0, 1fr)
+    minmax(260px, 320px);
+  align-items: start;
+}
+
+@media (max-width: 1180px) {
+  .lstProductShell {
+    grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  }
+  .lstProductShell > .lstReadinessPanel {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 960px) {
+  .lstProductShell {
+    grid-template-columns: 1fr;
+  }
+}
+
+.lstToolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.lstTabs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.lstTabList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  border-bottom: 1px solid var(--ops-border, #d7e0ea);
+  padding-bottom: 0.4rem;
+}
+
+.lstTabButton {
+  background: var(--ops-surface, #fff);
+  color: var(--ops-text, #0f172a);
+  border: 1px solid var(--ops-border, #d7e0ea);
+  border-radius: 999px;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.lstTabButton:hover {
+  border-color: #94a3b8;
+}
+
+.lstTabButtonActive {
+  background: rgba(37, 99, 235, 0.1);
+  border-color: #2563eb;
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
+.lstTabPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.lstTabPanelHidden {
+  display: none;
+}
+
+.lstReadinessPanel {
+  background: var(--ops-surface, #fff);
+  border: 1px solid var(--ops-border, #d7e0ea);
+  border-radius: 12px;
+  padding: 1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  position: sticky;
+  top: 4.5rem;
+}
+
+.lstReadinessBadgeRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.lstReadinessHint {
+  font-size: 0.8rem;
+  color: var(--ops-text-muted, #475569);
+  margin: 0;
+}
+
+.lstReadinessMissing {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .lstTabButton {
+    background: var(--ops-surface, #0b1220);
+    color: var(--ops-text, #e2e8f0);
+  }
+  .lstReadinessPanel {
+    background: var(--ops-surface, #0b1220);
+    color: var(--ops-text, #e2e8f0);
+  }
+}
+
+/* Phase 8.6 Task 5: main item attach panel styles. Keeps the attach
+   box, helper note, and per-row layout consistent with the existing
+   listing panel tokens without touching the service panel. */
+
+.lstPanelDescription {
+  font-size: 0.85rem;
+  color: var(--ops-text-muted, #475569);
+  margin: 0 0 0.5rem;
+}
+
+.lstHelperNote {
+  font-size: 0.75rem;
+  color: var(--ops-text-muted, #475569);
+  background: rgba(37, 99, 235, 0.08);
+  border: 1px solid rgba(37, 99, 235, 0.25);
+  border-radius: 6px;
+  padding: 0.45rem 0.6rem;
+  margin: 0.5rem 0 0.75rem;
+}
+
+.lstMainItemAddBox {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  gap: 0.5rem;
+  align-items: end;
+  padding: 0.6rem 0.7rem;
+  border: 1px dashed var(--ops-border, #d7e0ea);
+  border-radius: 8px;
+  background: var(--ops-surface-muted, #f8fafc);
+}
+
+@media (max-width: 720px) {
+  .lstMainItemAddBox {
+    grid-template-columns: 1fr;
+  }
+}
+
+.lstMainItemList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.lstMainItemRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.75rem;
+  border: 1px solid var(--ops-border, #d7e0ea);
+  border-radius: 10px;
+  background: var(--ops-surface, #fff);
+}
+
+.lstMainItemHeader {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.lstMainItemTitleGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.lstMainItemTitleGroup strong {
+  font-size: 0.95rem;
+  color: var(--ops-text, #0f172a);
+}
+
+.lstTechnicalCode {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  background: var(--ops-surface-muted, #f1f5f9);
+  color: var(--ops-text-muted, #475569);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  border: 1px solid var(--ops-border, #d7e0ea);
+}
+
+.lstMainItemBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.lstMainItemFacts {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.25rem 0.75rem;
+  font-size: 0.78rem;
+  color: var(--ops-text-muted, #475569);
+}
+
+.lstMainItemControls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .lstMainItemRow {
+    background: var(--ops-surface, #0b1220);
+    color: var(--ops-text, #e2e8f0);
+  }
+  .lstTechnicalCode {
+    background: rgba(148, 163, 184, 0.12);
+    color: #cbd5e1;
+  }
+}
+
+.lstSidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  background: var(--ops-surface, #fff);
+  border: 1px solid var(--ops-border, #d7e0ea);
+  border-radius: 12px;
+  padding: 1rem;
+}
+
+.lstFilterRow {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.lstFilterRow select,
+.lstFilterRow input {
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--ops-border, #d7e0ea);
+  border-radius: 6px;
+  background: var(--ops-surface, #fff);
+  color: var(--ops-text, #0f172a);
+  font-size: 0.875rem;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.lstListingItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--ops-border, #d7e0ea);
+  border-radius: 8px;
+  background: var(--ops-surface-muted, #f8fafc);
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+}
+
+.lstListingItem:hover {
+  border-color: #94a3b8;
+}
+
+.lstListingItemSelected {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #2563eb;
+  border-radius: 8px;
+  background: rgba(37, 99, 235, 0.08);
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+}
+
+.lstListingItemHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.lstListingItemTitle {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--ops-text, #0f172a);
+  margin: 0;
+}
+
+.lstListingItemMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--ops-text-muted, #475569);
+}
+
+.lstDetail {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.lstPanel {
+  background: var(--ops-surface, #fff);
+  border: 1px solid var(--ops-border, #d7e0ea);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+}
+
+.lstPanelHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.lstPanelTitle {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--ops-text, #0f172a);
+}
+
+.lstFormGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.75rem;
+}
+
+.lstField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.lstField label {
+  font-size: 0.78rem;
+  color: var(--ops-text-muted, #475569);
+  font-weight: 500;
+}
+
+.lstField input,
+.lstField select,
+.lstField textarea {
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--ops-border, #d7e0ea);
+  border-radius: 6px;
+  background: var(--ops-surface, #fff);
+  color: var(--ops-text, #0f172a);
+  font-size: 0.875rem;
+  font-family: inherit;
+}
+
+.lstField textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.lstButtonRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.lstPrimaryButton {
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.5rem 0.9rem;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.lstPrimaryButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.lstSecondaryButton {
+  background: var(--ops-surface, #fff);
+  color: var(--ops-text, #0f172a);
+  border: 1px solid var(--ops-border, #d7e0ea);
+  border-radius: 6px;
+  padding: 0.5rem 0.9rem;
+  font-weight: 500;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.lstDangerButton {
+  background: #dc2626;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.4rem 0.75rem;
+  font-weight: 500;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.lstDangerButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.lstInlineRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.5rem;
+  align-items: end;
+}
+
+.lstOptionRow {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) auto;
+  gap: 0.75rem;
+  align-items: start;
+  padding: 0.6rem 0;
+  border-bottom: 1px dashed var(--ops-border, #d7e0ea);
+}
+
+.lstOptionRow:last-child {
+  border-bottom: none;
+}
+
+.lstOptionMeta {
+  font-size: 0.75rem;
+  color: var(--ops-text-muted, #475569);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.lstImageList {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.75rem;
+}
+
+.lstImageCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  border: 1px solid var(--ops-border, #d7e0ea);
+  border-radius: 8px;
+  padding: 0.5rem;
+  background: var(--ops-surface-muted, #f8fafc);
+  font-size: 0.8rem;
+}
+
+.lstImageCardThumb {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 6px;
+  background: #e2e8f0;
+}
+
+.lstImageCardActions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.lstEmpty {
+  font-size: 0.85rem;
+  color: var(--ops-text-muted, #475569);
+  padding: 0.5rem 0;
+}
+
+.lstChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: var(--ops-surface-muted, #f8fafc);
+  border: 1px solid var(--ops-border, #d7e0ea);
+  color: var(--ops-text, #0f172a);
+}
+
+.lstChipSuccess {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.5);
+  color: #166534;
+}
+
+.lstChipDanger {
+  background: rgba(220, 38, 38, 0.12);
+  border-color: rgba(220, 38, 38, 0.5);
+  color: #b91c1c;
+}
+
+.lstChipWarning {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.5);
+  color: #92400e;
+}
+
+.lstMissingList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .lstSidebar,
+  .lstPanel,
+  .lstImageCard,
+  .lstChip {
+    background: var(--ops-surface, #0b1220);
+    color: var(--ops-text, #e2e8f0);
+  }
+  .lstSecondaryButton {
+    background: var(--ops-surface, #0b1220);
+    color: var(--ops-text, #e2e8f0);
+  }
+  .lstField input,
+  .lstField select,
+  .lstField textarea,
+  .lstFilterRow input,
+  .lstFilterRow select {
+    background: #0b1220;
+    color: #e2e8f0;
+  }
+}
+
+/* Phase 8.6 Task 7: general bilgiler / görseller / readiness polish.
+   Adds field group fieldsets, status action row, image add box,
+   image card meta block, neutral chip variant, and the readiness
+   checklist layout used by both side aside and tab section. */
+
+.lstGeneralPanelTitleGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.lstStatusActionRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.lstFieldGroup {
+  border: 1px solid var(--ops-border, #d7e0ea);
+  border-radius: 10px;
+  padding: 0.75rem 1rem 1rem;
+  margin: 0 0 1rem;
+  background: var(--ops-surface, #fff);
+}
+
+.lstFieldGroupTitle {
+  padding: 0 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ops-text-muted, #475569);
+}
+
+.lstReadOnlyValue {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.55rem;
+  border: 1px dashed var(--ops-border, #d7e0ea);
+  border-radius: 6px;
+  background: var(--ops-surface-muted, #f8fafc);
+  font-size: 0.875rem;
+  color: var(--ops-text, #0f172a);
+  min-height: 2.1rem;
+}
+
+.lstCheckboxRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding-top: 0.25rem;
+  font-size: 0.875rem;
+  color: var(--ops-text, #0f172a);
+}
+
+.lstImageAddBox {
+  display: grid;
+  grid-template-columns: minmax(220px, 2fr) minmax(160px, 2fr) minmax(140px, 1fr) auto;
+  gap: 0.6rem;
+  align-items: end;
+  padding: 0.7rem 0.8rem;
+  border: 1px dashed var(--ops-border, #d7e0ea);
+  border-radius: 8px;
+  background: var(--ops-surface-muted, #f8fafc);
+  margin-bottom: 0.6rem;
+}
+
+@media (max-width: 720px) {
+  .lstImageAddBox {
+    grid-template-columns: 1fr;
+  }
+}
+
+.lstImageCardMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.lstImageCardAlt {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--ops-text-muted, #475569);
+  word-break: break-word;
+}
+
+.lstChipNeutral {
+  background: var(--ops-surface-muted, #f1f5f9);
+  border-color: var(--ops-border, #d7e0ea);
+  color: var(--ops-text-muted, #475569);
+}
+
+.lstReadinessHeader {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.lstReadinessChecklistGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.lstReadinessChecklist {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.lstReadinessChecklistItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--ops-border, #d7e0ea);
+  border-radius: 6px;
+  background: var(--ops-surface-muted, #f8fafc);
+}
+
+.lstReadinessChecklistMarker {
+  color: #b45309;
+  font-size: 0.85rem;
+  line-height: 1.2;
+  margin-top: 0.1rem;
+}
+
+.lstReadinessChecklistBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.lstReadinessChecklistMessage {
+  font-size: 0.85rem;
+  color: var(--ops-text, #0f172a);
+  font-weight: 500;
+}
+
+@media (prefers-color-scheme: dark) {
+  .lstFieldGroup,
+  .lstReadOnlyValue,
+  .lstReadinessChecklistItem {
+    background: var(--ops-surface, #0b1220);
+    color: var(--ops-text, #e2e8f0);
+  }
+  .lstReadinessChecklistMessage {
+    color: var(--ops-text, #e2e8f0);
+  }
+  .lstChipNeutral {
+    background: rgba(148, 163, 184, 0.12);
+    color: #cbd5e1;
+  }
+}

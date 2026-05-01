@@ -699,6 +699,10 @@ begin
     raise exception 'TEST 6A FAILED: partial terminal drift should not be confirmable, got %', v_snapshot;
   end if;
 
+  if v_snapshot #>> '{eligibility,can_confirm_reason}' <> 'Ilan durumu bu islem icin uygun degil.' then
+    raise exception 'TEST 6A FAILED: expected confirm reason for terminal drift, got %', v_snapshot;
+  end if;
+
   if v_reservation_status <> 'pending'
      or v_order_status <> 'completed'
      or v_payment_status <> 'succeeded'
@@ -742,6 +746,10 @@ begin
 
   if v_snapshot #>> '{eligibility,can_confirm}' <> 'false' then
     raise exception 'TEST 6AA FAILED: already-finalized reservation should not be confirmable, got %', v_snapshot;
+  end if;
+
+  if v_snapshot #>> '{eligibility,can_confirm_reason}' <> 'Rezervasyon zaten onaylanmis.' then
+    raise exception 'TEST 6AA FAILED: expected already-confirmed reason, got %', v_snapshot;
   end if;
 
   begin
@@ -870,6 +878,10 @@ begin
 
   if v_snapshot #>> '{eligibility,can_confirm}' <> 'false' then
     raise exception 'TEST 6B FAILED: stale occupied reservation should not be confirmable, got %', v_snapshot;
+  end if;
+
+  if v_snapshot #>> '{eligibility,can_confirm_reason}' <> 'Bu ilan icin baska tamamlanmis rezervasyon var.' then
+    raise exception 'TEST 6B FAILED: expected occupant conflict reason, got %', v_snapshot;
   end if;
 
   if v_reservation_status <> 'pending'
@@ -1284,6 +1296,14 @@ begin
     raise exception 'TEST 6E FAILED: amount/currency drift should not be cancelable, got %', v_snapshot;
   end if;
 
+  if v_snapshot #>> '{eligibility,can_confirm_reason}' <> 'Odeme tutari siparis toplamiyla eslesmiyor.' then
+    raise exception 'TEST 6E FAILED: expected amount/currency reason on confirm, got %', v_snapshot;
+  end if;
+
+  if v_snapshot #>> '{eligibility,can_cancel_reason}' <> 'Odeme tutari siparis toplamiyla eslesmiyor.' then
+    raise exception 'TEST 6E FAILED: expected amount/currency reason on cancel, got %', v_snapshot;
+  end if;
+
   begin
     perform public.admin_confirm_reservation(
       'eeeeeeee-ffff-4fff-8fff-fffffffff008'::uuid,
@@ -1392,7 +1412,21 @@ select set_config('request.jwt.claim.sub', 'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb001
 select set_config('request.jwt.claim.role', 'authenticated', false);
 
 do $$
+declare
+  v_snapshot jsonb;
 begin
+  v_snapshot := public.get_admin_reservation_workflow_snapshot(
+    'eeeeeeee-ffff-4fff-8fff-fffffffff004'::uuid
+  );
+
+  if v_snapshot #>> '{eligibility,can_confirm}' <> 'false' then
+    raise exception 'TEST 7 FAILED: non-succeeded payment should not be confirmable, got %', v_snapshot;
+  end if;
+
+  if v_snapshot #>> '{eligibility,can_confirm_reason}' <> 'Odeme henuz basarili degil.' then
+    raise exception 'TEST 7 FAILED: expected pending payment reason, got %', v_snapshot;
+  end if;
+
   begin
     perform public.admin_confirm_reservation(
       'eeeeeeee-ffff-4fff-8fff-fffffffff004'::uuid,
@@ -1402,6 +1436,54 @@ begin
   exception
     when sqlstate 'P0001' then null;
   end;
+end;
+$$;
+
+reset role;
+
+update public.reservations
+set
+  status = 'pending',
+  updated_at = now()
+where id = 'eeeeeeee-ffff-4fff-8fff-fffffffff004'::uuid;
+
+update public.orders
+set
+  status = 'failed',
+  updated_at = now()
+where id = '11111111-2222-4222-8222-222222222004'::uuid;
+
+update public.payments
+set
+  status = 'succeeded',
+  updated_at = now()
+where id = '33333333-4444-4444-8444-444444444004'::uuid;
+
+update public.listings
+set
+  status = 'active',
+  updated_at = now()
+where id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd004'::uuid;
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', 'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb001', false);
+select set_config('request.jwt.claim.role', 'authenticated', false);
+
+do $$
+declare
+  v_snapshot jsonb;
+begin
+  v_snapshot := public.get_admin_reservation_workflow_snapshot(
+    'eeeeeeee-ffff-4fff-8fff-fffffffff004'::uuid
+  );
+
+  if v_snapshot #>> '{eligibility,can_confirm}' <> 'false' then
+    raise exception 'TEST 7A FAILED: failed order should not be confirmable, got %', v_snapshot;
+  end if;
+
+  if v_snapshot #>> '{eligibility,can_confirm_reason}' <> 'Siparis iptal/basarisiz/uyusmazlik durumunda.' then
+    raise exception 'TEST 7A FAILED: expected failed order reason, got %', v_snapshot;
+  end if;
 end;
 $$;
 
@@ -1450,6 +1532,10 @@ begin
     raise exception 'TEST 8A FAILED: succeeded-payment drift should not be reopenable, got %', v_listing_snapshot;
   end if;
 
+  if v_listing_snapshot #>> '{eligibility,can_reopen_reason}' <> 'Bu ilana bagli tamamlanmis odeme kaydi var.' then
+    raise exception 'TEST 8A FAILED: expected reopen reason for succeeded drift, got %', v_listing_snapshot;
+  end if;
+
   begin
     perform public.admin_reopen_listing(
       'cccccccc-dddd-4ddd-8ddd-ddddddddd004'::uuid,
@@ -1489,6 +1575,10 @@ begin
     raise exception 'TEST 8 FAILED: cancelled reservation should not be cancelable again, got %', v_reservation_snapshot;
   end if;
 
+  if v_reservation_snapshot #>> '{eligibility,can_cancel_reason}' <> 'Rezervasyon zaten iptal edilmis veya suresi dolmus.' then
+    raise exception 'TEST 8 FAILED: expected cancel reason for cancelled reservation, got %', v_reservation_snapshot;
+  end if;
+
   if v_reservation_snapshot #>> '{contact,fullName}' <> 'Phase45 Contact User'
      or v_reservation_snapshot #>> '{contact,phone}' <> '+905551112244'
      or v_reservation_snapshot #>> '{contact,email}' <> 'phase45-contact@example.com'
@@ -1510,6 +1600,10 @@ begin
 
   if v_listing_snapshot #>> '{eligibility,can_reopen}' <> 'false' then
     raise exception 'TEST 8 FAILED: active listing should not be reopenable, got %', v_listing_snapshot;
+  end if;
+
+  if v_listing_snapshot #>> '{eligibility,can_reopen_reason}' <> 'Ilan durumu bu islem icin uygun degil.' then
+    raise exception 'TEST 8 FAILED: expected active listing reopen reason, got %', v_listing_snapshot;
   end if;
 end;
 $$;

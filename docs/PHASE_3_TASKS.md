@@ -1,5 +1,26 @@
 # Faz 3 Somut Gelistirme Gorevleri
 
+## Durum
+
+Tamamlandi. 2026-04-30 itibariyla Faz 3 checkout backend contract kapisi
+gecildi.
+
+Kapanis ozeti:
+- `POST /api/checkout`, yeni checkout kayitlarini olusturan ince route
+  siniridir.
+- `POST /api/checkout/init`, yalnizca mevcut pending order/payment icin
+  Is Bankasi hosted checkout payload'i uretir.
+- Request parse/origin/auth davranisi uygulama katmaninda kalir.
+- Listing uygunlugu, item secilebilirligi, fiyat hesabi ve atomik
+  reservation/order/order_items/payment olusturma DB/RPC tarafinda kalir.
+- Frontend toplam fiyat gondermez; gonderirse route request'i reddeder.
+- Ayni listing icin ikinci pending checkout engellenir.
+
+Kapanis dogrulamasi:
+- `node --experimental-strip-types --test tests/checkout-create-validator.test.mts tests/checkout-create-route.test.mts tests/checkout-init-route-helper.test.mts tests/checkout-init-route.test.mts`
+- `npm run test:db-security`
+- `npm test`
+
 ## Ozet
 
 Amac, Faz 1 ve Faz 2'de kurulan Supabase veri modeli uzerine checkout backend contract'ini tamamlamaktir.

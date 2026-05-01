@@ -4,9 +4,9 @@ import path from "node:path";
 import test from "node:test";
 
 const PACKAGE_JSON_PATH = path.resolve(process.cwd(), "package.json");
-const BASELINE_LINUX_SCRIPT_PATH = path.resolve(
+const BASELINE_RUNNER_PATH = path.resolve(
   process.cwd(),
-  ".codex/scripts/test-payment-callback-security-linux.sh",
+  ".codex/scripts/test-payment-callback-security-runner.mjs",
 );
 
 test("node baseline script remains wired through npm test", async () => {
@@ -17,16 +17,16 @@ test("node baseline script remains wired through npm test", async () => {
 
   assert.equal(
     packageJson.scripts?.test,
-    "npm run test:payment-callback-security && npm run typecheck && npm run lint",
+    "npm run test:payment-callback-security && npm run test:phase8-admin-listings && npm run typecheck && npm run lint",
   );
   assert.equal(
     packageJson.scripts?.["test:payment-callback-security"],
-    "bash .codex/scripts/test-payment-callback-security.sh",
+    "node .codex/scripts/test-payment-callback-security-runner.mjs",
   );
 });
 
 test("node baseline script includes read-model and supabase proxy regression tests", async () => {
-  const baselineScript = await readFile(BASELINE_LINUX_SCRIPT_PATH, "utf8");
+  const baselineScript = await readFile(BASELINE_RUNNER_PATH, "utf8");
 
   assert.match(baselineScript, /\btests\/read-model-route\.test\.mts\b/);
   assert.match(baselineScript, /\btests\/read-model-contract-doc\.test\.mts\b/);
