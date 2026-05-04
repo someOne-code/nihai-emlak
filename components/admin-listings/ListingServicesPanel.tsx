@@ -1,7 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { Plus, Save } from "lucide-react";
 
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import {
   buildAdminListingServiceDisplay,
   getAvailableServiceAddCandidates,
@@ -40,44 +47,43 @@ export default function ListingServicesPanel({
   const candidates = getAvailableServiceAddCandidates(detail);
 
   return (
-    <div className="lstPanel">
-      <div className="lstPanelHeader">
-        <h2 className="lstPanelTitle">Ek Hizmetler</h2>
-        <span className="lstOptionMeta">{services.length} kayıt</span>
-      </div>
-
-      <p className="lstPanelDescription">
-        Temizlik, taşıma gibi ek hizmetleri bu ilana bağla.
-      </p>
-
-      <ServiceAddControl
-        candidates={candidates}
-        busy={busy}
-        onConfigure={onConfigure}
-      />
-
-      <p className="lstHelperNote">
-        Bu işlem global hizmet katalogu oluşturmaz; seçili hizmeti
-        sadece bu ilana bağlar.
-      </p>
-
-      {services.length === 0 ? (
-        <div className="lstEmpty">
-          Bu ilana henüz ek hizmet bağlanmadı.
+    <Card>
+      <CardHeader>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex flex-col gap-1">
+            <CardTitle>Ek Hizmetler</CardTitle>
+            <CardDescription>
+              Temizlik, taşıma gibi ek hizmetleri bu ilana bağlayın.
+            </CardDescription>
+          </div>
+          <Badge variant="outline">{services.filter((s) => s.isEnabled).length} hizmet</Badge>
         </div>
-      ) : (
-        <div className="lstMainItemList">
-          {services.map((service) => (
-            <ServiceRow
-              key={service.code}
-              service={service}
-              busy={busy}
-              onConfigure={onConfigure}
-            />
-          ))}
-        </div>
-      )}
-    </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <ServiceAddControl
+          candidates={candidates}
+          busy={busy}
+          onConfigure={onConfigure}
+        />
+
+        {services.filter((s) => s.isEnabled).length === 0 ? (
+          <div className="text-sm text-muted-foreground py-4 text-center">
+            Bu ilana henüz ek hizmet bağlanmadı.
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {services.filter((s) => s.isEnabled).map((service) => (
+              <ServiceRow
+                key={service.code}
+                service={service}
+                busy={busy}
+                onConfigure={onConfigure}
+              />
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -94,9 +100,8 @@ function ServiceAddControl({
 
   if (candidates.length === 0) {
     return (
-      <div className="lstEmpty">
-        Eklenebilir hizmet yok. Tüm aktif katalog hizmetleri bu ilana
-        bağlı olabilir veya global katalog boş olabilir.
+      <div className="text-sm text-muted-foreground py-3 text-center rounded-lg border border-dashed bg-muted/30">
+        Eklenebilir hizmet kalmadı.
       </div>
     );
   }
@@ -106,12 +111,10 @@ function ServiceAddControl({
     : candidates[0].code;
 
   return (
-    <div className="lstMainItemAddBox">
-      <div className="lstField">
-        <label htmlFor="lstServiceAddSelect">
-          Katalogdan ek hizmet seç
-        </label>
-        <select
+    <div className="flex flex-wrap gap-3 items-end p-4 rounded-lg border border-dashed bg-muted/30">
+      <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
+        <Label htmlFor="lstServiceAddSelect">Katalogdan seç</Label>
+        <Select
           id="lstServiceAddSelect"
           value={selectedCode}
           disabled={busy}
@@ -122,18 +125,17 @@ function ServiceAddControl({
               {candidate.name || candidate.code}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
-      <div className="lstButtonRow" style={{ marginTop: 0 }}>
-        <button
-          type="button"
-          className="lstPrimaryButton"
-          disabled={busy}
-          onClick={() => onConfigure(selectedCode, { is_enabled: true })}
-        >
-          İlana ekle
-        </button>
-      </div>
+      <Button
+        type="button"
+        size="sm"
+        disabled={busy}
+        onClick={() => onConfigure(selectedCode, { is_enabled: true })}
+      >
+        <Plus className="h-4 w-4" />
+        Ekle
+      </Button>
     </div>
   );
 }
@@ -160,70 +162,60 @@ function ServiceRow({
   };
 
   return (
-    <div className="lstMainItemRow">
-      <div className="lstMainItemHeader">
-        <div className="lstMainItemTitleGroup">
-          <strong>{display.primaryLabel}</strong>
-          <code className="lstTechnicalCode">{display.codeLabel}</code>
+    <div className="rounded-lg border p-4 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-col gap-0.5">
+          <strong className="text-sm">{display.primaryLabel}</strong>
+          <code className="font-mono text-xs text-muted-foreground">{display.codeLabel}</code>
         </div>
-        <div className="lstMainItemBadges">
-          <span
-            className={
-              service.isEnabled
-                ? "lstChip lstChipSuccess"
-                : "lstChip lstChipWarning"
-            }
-          >
+        <div className="flex flex-wrap gap-1">
+          <Badge variant={service.isEnabled ? "success" : "warning"} className="text-[10px]">
             {display.enabledLabel}
-          </span>
-          <span
-            className={
-              service.catalogIsActive
-                ? "lstChip"
-                : "lstChip lstChipDanger"
-            }
-          >
+          </Badge>
+          <Badge variant={service.catalogIsActive ? "secondary" : "destructive"} className="text-[10px]">
             {display.catalogStatusLabel}
-          </span>
+          </Badge>
         </div>
       </div>
 
-      <ul className="lstMainItemFacts">
-        <li>{display.basePriceLabel}</li>
-        <li>{display.overridePriceLabel}</li>
-      </ul>
-
-      <div className="lstInlineRow" style={{ marginTop: "0.5rem" }}>
-        <div className="lstField">
-          <label>Override fiyat</label>
-          <input
-            type="number"
-            min={0}
-            value={overridePrice}
-            onChange={(event) => setOverridePrice(event.target.value)}
-          />
-        </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+        <span>{display.basePriceLabel}</span>
+        <span>{display.customPriceLabel}</span>
       </div>
 
-      <div className="lstMainItemControls">
-        <button
+      <div className="flex flex-col gap-1.5 max-w-xs pt-1">
+        <Label className="text-xs">Özel fiyat</Label>
+        <Input
+          type="number"
+          min={0}
+          value={overridePrice}
+          onChange={(event) => setOverridePrice(event.target.value)}
+          placeholder="Varsayılan"
+        />
+        <p className="text-xs text-muted-foreground">
+          Boş bırakırsanız katalog varsayılanı geçerlidir.
+        </p>
+      </div>
+
+      <div className="flex gap-2 justify-end">
+        <Button
           type="button"
-          className="lstSecondaryButton"
+          variant="outline"
+          size="sm"
           disabled={busy}
-          onClick={() =>
-            onConfigure(service.code, { is_enabled: !service.isEnabled })
-          }
+          onClick={() => onConfigure(service.code, { is_enabled: false })}
         >
-          {service.isEnabled ? "Devre dışı bırak" : "Aktifleştir"}
-        </button>
-        <button
+          Kaldır
+        </Button>
+        <Button
           type="button"
-          className="lstPrimaryButton"
+          size="sm"
           disabled={busy}
           onClick={handleSave}
         >
-          Override kaydet
-        </button>
+          <Save className="h-3 w-3" />
+          Kaydet
+        </Button>
       </div>
     </div>
   );

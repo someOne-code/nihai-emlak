@@ -92,6 +92,7 @@ function createResponseWithSecurityHeaders(
 ) {
   const responseRequestHeaders = new Headers(request.headers);
   const contentSecurityPolicy = buildContentSecurityPolicy({
+    allowUnsafeEval: process.env.NODE_ENV === "development",
     isbankCheckoutUrl: process.env.ISBANK_HOSTED_CHECKOUT_URL,
     nonce,
     pathname: request.nextUrl.pathname,

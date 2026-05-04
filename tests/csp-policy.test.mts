@@ -96,3 +96,21 @@ test("admin routes use nonce-based strict script policy", () => {
   assert.doesNotMatch(connectSrc, /\bhttps:\b/);
   assert.doesNotMatch(connectSrc, /\bwss:\b/);
 });
+
+test("development mode can opt into unsafe-eval for Next.js React debugging", () => {
+  const policy = buildContentSecurityPolicy({
+    allowUnsafeEval: true,
+    nonce: "nonce-dev",
+    pathname: "/admin",
+    siteUrl: "http://localhost:3000",
+    supabaseUrl: "http://127.0.0.1:54321",
+  });
+
+  const directives = getDirectiveMap(policy);
+  const scriptSrc = directives.get("script-src") ?? "";
+
+  assert.match(scriptSrc, /'nonce-nonce-dev'/);
+  assert.match(scriptSrc, /'strict-dynamic'/);
+  assert.match(scriptSrc, /'unsafe-eval'/);
+  assert.doesNotMatch(scriptSrc, /'unsafe-inline'/);
+});

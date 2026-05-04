@@ -666,7 +666,7 @@ function createDependencies(options: {
       from(table: string) {
         const filter: FromCall["filter"] = [];
         const builder = {
-          select(_columns: string) {
+          select() {
             return builder;
           },
           eq(column: string, value: string) {

@@ -1,5 +1,9 @@
 "use client";
 
+import { AlertCircle, CheckCircle2 } from "lucide-react";
+
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   buildAdminListingCheckoutReadinessDisplay,
   type AdminListingCheckoutReadinessDisplay,
@@ -27,27 +31,39 @@ export default function CheckoutReadinessPanel({
   const display = buildAdminListingCheckoutReadinessDisplay(detail);
   const isSide = variant === "side";
 
-  const wrapperClassName = isSide ? "lstReadinessPanel" : "lstPanel";
-  const Wrapper = isSide ? "aside" : "section";
-  const wrapperProps = isSide
-    ? { "aria-label": "Checkout hazırlığı" }
-    : ({} as Record<string, never>);
+  if (isSide) {
+    return (
+      <aside
+        className="flex flex-col gap-3 rounded-xl border bg-card p-4 sticky top-4"
+        aria-label="Checkout hazırlığı"
+      >
+        <div className="flex flex-wrap gap-2 items-center justify-between">
+          <h2 className="font-semibold text-sm">Checkout Hazırlığı</h2>
+          <ReadinessBadge display={display} />
+        </div>
+        {display.summary && (
+          <p className="text-xs text-muted-foreground">{display.summary}</p>
+        )}
+        {display.isApplicable && <ReadinessChecklist display={display} />}
+      </aside>
+    );
+  }
 
   return (
-    <Wrapper className={wrapperClassName} {...wrapperProps}>
-      <div className="lstReadinessHeader">
-        <h2 className="lstPanelTitle">Checkout hazırlığı</h2>
-        <ReadinessBadge display={display} />
-      </div>
-
-      {display.summary && (
-        <p className="lstReadinessHint">{display.summary}</p>
-      )}
-
-      {display.isApplicable && (
-        <ReadinessChecklist display={display} />
-      )}
-    </Wrapper>
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex flex-wrap gap-2 items-center justify-between">
+          <CardTitle className="text-base">Checkout Hazırlığı</CardTitle>
+          <ReadinessBadge display={display} />
+        </div>
+      </CardHeader>
+      <CardContent>
+        {display.summary && (
+          <p className="text-sm text-muted-foreground mb-3">{display.summary}</p>
+        )}
+        {display.isApplicable && <ReadinessChecklist display={display} />}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -56,13 +72,11 @@ function ReadinessBadge({
 }: {
   display: AdminListingCheckoutReadinessDisplay;
 }) {
+  const variant = badgeVariantForStatus(display.status);
   return (
-    <span
-      className={`lstChip ${chipModifierForStatus(display.status)}`}
-      aria-label={`Checkout durumu: ${display.badgeLabel}`}
-    >
+    <Badge variant={variant} aria-label={`Checkout durumu: ${display.badgeLabel}`}>
       {display.badgeLabel}
-    </span>
+    </Badge>
   );
 }
 
@@ -73,32 +87,31 @@ function ReadinessChecklist({
 }) {
   if (display.missing.length === 0) {
     return (
-      <p className="lstReadinessHint">
-        Bu ilan için bilinen eksik konfigürasyon yok.
-      </p>
+      <div className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400">
+        <CheckCircle2 className="h-4 w-4" />
+        <span>Tüm gereksinimler karşılandı.</span>
+      </div>
     );
   }
 
   return (
-    <div className="lstReadinessChecklistGroup">
-      <p className="lstReadinessHint">
-        Eksiklikleri çözmek için ilgili sekmeleri kullan:
+    <div className="flex flex-col gap-2">
+      <p className="text-xs text-muted-foreground">
+        Eksiklikleri çözmek için ilgili sekmeleri kullanın:
       </p>
-      <ul className="lstReadinessChecklist">
+      <ul className="flex flex-col gap-1.5">
         {display.missing.map((item) => (
-          <li key={item.rawKey} className="lstReadinessChecklistItem">
-            <span
-              className="lstReadinessChecklistMarker"
-              aria-hidden="true"
-            >
-              ●
-            </span>
-            <div className="lstReadinessChecklistBody">
-              <span className="lstReadinessChecklistMessage">
-                {item.message}
-              </span>
+          <li
+            key={item.rawKey}
+            className="flex items-start gap-2 px-3 py-2 rounded-md border bg-muted/50 text-sm"
+          >
+            <AlertCircle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+            <div className="flex flex-col gap-0.5">
+              <span className="font-medium">{item.message}</span>
               {!item.isKnown && (
-                <code className="lstTechnicalCode">{item.rawKey}</code>
+                <code className="font-mono text-xs text-muted-foreground">
+                  {item.rawKey}
+                </code>
               )}
             </div>
           </li>
@@ -108,18 +121,17 @@ function ReadinessChecklist({
   );
 }
 
-function chipModifierForStatus(
+function badgeVariantForStatus(
   status: AdminListingCheckoutReadinessStatus,
-): string {
+): "success" | "warning" | "secondary" {
   switch (status) {
     case "ready":
-      return "lstChipSuccess";
+      return "success";
     case "not-ready":
-      return "lstChipWarning";
+      return "warning";
     case "not-applicable":
-      return "lstChipNeutral";
     case "unknown":
     default:
-      return "lstChipNeutral";
+      return "secondary";
   }
 }

@@ -116,7 +116,8 @@ Bu repo TDD ile ilerler:
 
 ## Onemli route'lar
 
-- `/admin`: Payload admin
+- `/admin`: custom admin panel (icerik, ilanlar, operasyonlar)
+- `/cms`: Payload CMS fallback admin
 - `/api/[...slug]`: Payload REST API
 - `/api/graphql`: Payload GraphQL
 - `/api/inngest`: Inngest endpoint

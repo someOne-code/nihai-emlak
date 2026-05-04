@@ -1,0 +1,296 @@
+/* Phase 9A Task 8.5: Posts UI polish — scoped to /admin/content/posts.
+   Extends the shared lst* / ops* admin tokens from listings.css and
+   operations.css. Only posts-specific additions live here; the base
+   admin visual language is NOT duplicated. */
+
+/* ── Empty state card (list sidebar + detail area) ──────────────────── */
+
+.postsEmptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+}
+
+.postsEmptyIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 12px;
+  background: var(--ops-surface-muted, #f1f5f9);
+  border: 1px solid var(--ops-border, #d7e0ea);
+  color: var(--ops-muted, #475569);
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.postsEmptyTitle {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--ops-text, #0f172a);
+}
+
+.postsEmptyBody {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--ops-muted, #475569);
+  max-width: 320px;
+  line-height: 1.55;
+}
+
+/* ── Form layout helpers ─────────────────────────────────────────────── */
+
+.postsFieldFull {
+  grid-column: 1 / -1;
+}
+
+/* ── Field group separator (Genel / SEO / Meta) ──────────────────────── */
+
+.postsFieldGroupLabel {
+  grid-column: 1 / -1;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ops-muted, #475569);
+  border-bottom: 1px solid var(--ops-border, #d7e0ea);
+  padding-bottom: 0.35rem;
+  margin-top: 0.25rem;
+}
+
+/* ── Field helper text (slug hint) ───────────────────────────────────── */
+
+.postsFieldHelper {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--ops-muted, #64748b);
+  margin-top: 0.25rem;
+  line-height: 1.4;
+}
+
+/* ── Checkbox row (shared: active, published) ────────────────────────── */
+
+.postsCheckboxRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.postsCheckboxRow input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--ops-accent, #2563eb);
+  cursor: pointer;
+}
+
+/* ── Cover image upload control ───────────────────────────────────────── */
+
+.postsCoverUpload {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.postsCoverPreview {
+  position: relative;
+  width: min(100%, 360px);
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--ops-border, #d7e0ea);
+  background: var(--ops-surface-muted, #f1f5f9);
+}
+
+.postsCoverPreview img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.postsCoverHelper {
+  font-size: 0.72rem;
+  color: var(--ops-muted, #64748b);
+  line-height: 1.5;
+}
+
+.postsCoverActions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.postsCoverFileInput {
+  display: none;
+}
+
+.postsCoverUploadBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.82rem;
+  font-weight: 500;
+  border: 1px solid var(--ops-border, #d7e0ea);
+  border-radius: 6px;
+  background: var(--ops-surface-muted, #f8fafc);
+  color: var(--ops-text, #0f172a);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.postsCoverUploadBtn:hover {
+  background: var(--ops-surface, #e2e8f0);
+  border-color: #94a3b8;
+}
+
+.postsCoverUploadBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.postsCoverStatus {
+  font-size: 0.75rem;
+  color: var(--ops-muted, #64748b);
+}
+
+.postsCoverError {
+  font-size: 0.75rem;
+  color: #dc2626;
+}
+
+/* ── Focus ring polish for content admin form controls ────────────────── */
+
+.lstField input:focus,
+.lstField select:focus,
+.lstField textarea:focus,
+.lstFilterRow input:focus,
+.lstFilterRow select:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* ── Filter search input should grow ─────────────────────────────────── */
+
+.lstFilterRow input[type="search"] {
+  flex: 2 1 140px;
+}
+
+.lstFilterRow select {
+  flex: 1 1 120px;
+}
+
+/* ── Dark mode ────────────────────────────────────────────────────────── */
+
+@media (prefers-color-scheme: dark) {
+  .postsEmptyIcon {
+    background: rgba(148, 163, 184, 0.1);
+    color: #94a3b8;
+  }
+  .postsEmptyTitle {
+    color: var(--ops-text, #e2e8f0);
+  }
+  .postsFieldGroupLabel {
+    color: #94a3b8;
+    border-bottom-color: var(--ops-border, #1e2a44);
+  }
+  .lstField input:focus,
+  .lstField select:focus,
+  .lstField textarea:focus,
+  .lstFilterRow input:focus,
+  .lstFilterRow select:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  }
+  .postsFieldHelper {
+    color: #94a3b8;
+  }
+  .postsCoverUploadBtn {
+    background: rgba(148, 163, 184, 0.1);
+    color: #e2e8f0;
+    border-color: var(--ops-border, #1e2a44);
+  }
+  .postsCoverUploadBtn:hover {
+    background: rgba(148, 163, 184, 0.2);
+  }
+  .postsCoverPreview {
+    border-color: var(--ops-border, #1e2a44);
+  }
+}
+
+/* ── Consultant UI enhancements ───────────────────────────────────────── */
+
+/* Initials avatar circle in list sidebar */
+.cnAvatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  min-width: 1.75rem;
+  border-radius: 50%;
+  background: rgba(37, 99, 235, 0.1);
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  color: #2563eb;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  line-height: 1;
+  user-select: none;
+}
+
+.lstListingItemSelected .cnAvatar {
+  background: rgba(37, 99, 235, 0.18);
+  border-color: rgba(37, 99, 235, 0.4);
+}
+
+/* Section divider with icon (İletişim / Yayın) */
+.cnSectionDivider {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ops-muted, #475569);
+  border-bottom: 1px solid var(--ops-border, #d7e0ea);
+  padding-bottom: 0.35rem;
+  margin-top: 0.25rem;
+}
+
+.cnSectionDivider svg {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+/* Field label icon */
+.cnFieldIcon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--ops-muted, #64748b);
+  opacity: 0.8;
+}
+
+@media (prefers-color-scheme: dark) {
+  .cnAvatar {
+    background: rgba(37, 99, 235, 0.15);
+    border-color: rgba(37, 99, 235, 0.3);
+    color: #60a5fa;
+  }
+  .cnSectionDivider {
+    border-color: var(--ops-border, #1e293b);
+    color: #64748b;
+  }
+}

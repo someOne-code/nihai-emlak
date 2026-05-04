@@ -1,7 +1,16 @@
 "use client";
 
 import { useState, type FormEvent, type ReactNode } from "react";
+import { Save } from "lucide-react";
 
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 import type { AdminListingDetail } from "@/lib/admin-ui/listings-view-model";
 
 // Phase 8.6 Task 7: presentational panel for the "Genel Bilgiler" tab.
@@ -81,160 +90,173 @@ export default function ListingGeneralPanel({
   const typeLabel = detail.listing.type === "rent" ? "Kiralık" : "Satılık";
 
   return (
-    <div className="lstPanel">
-      <div className="lstPanelHeader">
-        <div className="lstGeneralPanelTitleGroup">
-          <h2 className="lstPanelTitle">Genel bilgiler</h2>
-          <p className="lstPanelDescription">
-            Bu ilanın temel bilgilerini, konumunu, fiyatını ve özelliklerini
-            buradan yönet.
-          </p>
+    <Card>
+      <CardHeader>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex flex-col gap-1">
+            <CardTitle>Genel Bilgiler</CardTitle>
+            <CardDescription>
+              İlanın temel bilgilerini, konumunu ve fiyatını buradan düzenleyin.
+            </CardDescription>
+          </div>
+          <div className="flex flex-wrap gap-2 items-center">
+            <Badge variant={isActive ? "success" : "warning"} aria-label="Mevcut durum">
+              {isActive ? "Aktif" : "Pasif"}
+            </Badge>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={busy || isActive}
+              onClick={() => onStatusChange("active")}
+            >
+              Aktifleştir
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={busy || !isActive}
+              onClick={() => onStatusChange("passive")}
+            >
+              Pasife al
+            </Button>
+          </div>
         </div>
-        <div className="lstStatusActionRow">
-          <span
-            className={
-              isActive
-                ? "lstChip lstChipSuccess"
-                : "lstChip lstChipWarning"
-            }
-            aria-label="Mevcut durum"
-          >
-            {isActive ? "Şu an aktif" : "Şu an pasif"}
-          </span>
-          <button
-            type="button"
-            className="lstSecondaryButton"
-            disabled={busy || isActive}
-            onClick={() => onStatusChange("active")}
-          >
-            Aktifleştir
-          </button>
-          <button
-            type="button"
-            className="lstSecondaryButton"
-            disabled={busy || !isActive}
-            onClick={() => onStatusChange("passive")}
-          >
-            Pasife al
-          </button>
-        </div>
-      </div>
-
-      <form onSubmit={handleSubmit}>
-        <FieldGroup title="Temel bilgiler">
-          <Field label="İlan başlığı">
-            <input
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              required
-            />
-          </Field>
-          <Field label="İlan türü">
-            <ReadOnlyValue>{typeLabel}</ReadOnlyValue>
-          </Field>
-          <Field label="Slug">
-            <ReadOnlyValue>
-              <code className="lstTechnicalCode">{detail.listing.slug}</code>
-            </ReadOnlyValue>
-          </Field>
-        </FieldGroup>
-
-        <FieldGroup title="Konum">
-          <Field label="Şehir">
-            <input
-              value={city}
-              onChange={(event) => setCity(event.target.value)}
-            />
-          </Field>
-          <Field label="İlçe">
-            <input
-              value={district}
-              onChange={(event) => setDistrict(event.target.value)}
-            />
-          </Field>
-        </FieldGroup>
-
-        <FieldGroup title="Fiyat">
-          <Field label="Fiyat">
-            <input
-              type="number"
-              min={0}
-              value={price}
-              onChange={(event) => setPrice(event.target.value)}
-            />
-          </Field>
-          <Field label="Para birimi">
-            <input
-              value={currency}
-              onChange={(event) => setCurrency(event.target.value)}
-              placeholder="Örn. TRY"
-            />
-          </Field>
-        </FieldGroup>
-
-        <FieldGroup title="Özellikler">
-          <Field label="Oda sayısı">
-            <input
-              type="number"
-              min={0}
-              value={roomCount}
-              onChange={(event) => setRoomCount(event.target.value)}
-            />
-          </Field>
-          <Field label="Banyo sayısı">
-            <input
-              type="number"
-              min={0}
-              value={bathroomCount}
-              onChange={(event) => setBathroomCount(event.target.value)}
-            />
-          </Field>
-          <Field label="Brüt alan (m²)">
-            <input
-              type="number"
-              min={0}
-              value={grossArea}
-              onChange={(event) => setGrossArea(event.target.value)}
-            />
-          </Field>
-          <Field label="Mobilyalı">
-            <label className="lstCheckboxRow">
-              <input
-                type="checkbox"
-                checked={isFurnished}
-                onChange={(event) => setIsFurnished(event.target.checked)}
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <FieldGroup title="Temel Bilgiler">
+            <Field label="İlan başlığı">
+              <Input
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                required
               />
-              <span>Mobilyalı</span>
-            </label>
-          </Field>
-        </FieldGroup>
+            </Field>
+            <Field label="İlan türü">
+              <ReadOnlyValue>{typeLabel}</ReadOnlyValue>
+            </Field>
+            <Field label="URL Adresi (Slug)">
+              <ReadOnlyValue>
+                <code className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">
+                  {detail.listing.slug}
+                </code>
+              </ReadOnlyValue>
+            </Field>
+          </FieldGroup>
 
-        <FieldGroup title="Açıklama">
-          <Field label="Özet">
-            <textarea
-              value={summary}
-              onChange={(event) => setSummary(event.target.value)}
-            />
-          </Field>
-          <Field label="Açıklama">
-            <textarea
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-            />
-          </Field>
-        </FieldGroup>
+          <Separator />
 
-        <div className="lstButtonRow">
-          <button
-            type="submit"
-            className="lstPrimaryButton"
-            disabled={busy}
-          >
-            İlan bilgilerini kaydet
-          </button>
-        </div>
-      </form>
-    </div>
+          <FieldGroup title="Konum">
+            <Field label="Şehir">
+              <Input
+                value={city}
+                onChange={(event) => setCity(event.target.value)}
+                placeholder="Örn: İstanbul"
+              />
+            </Field>
+            <Field label="İlçe">
+              <Input
+                value={district}
+                onChange={(event) => setDistrict(event.target.value)}
+                placeholder="Örn: Kadıköy"
+              />
+            </Field>
+          </FieldGroup>
+
+          <Separator />
+
+          <FieldGroup title="Fiyat">
+            <Field label="Fiyat">
+              <Input
+                type="number"
+                min={0}
+                value={price}
+                onChange={(event) => setPrice(event.target.value)}
+              />
+            </Field>
+            <Field label="Para birimi">
+              <Select
+                value={currency}
+                onChange={(event) => setCurrency(event.target.value)}
+              >
+                <option value="TRY">TRY (₺)</option>
+                <option value="USD">USD ($)</option>
+                <option value="EUR">EUR (€)</option>
+                <option value="">Belirtilmedi</option>
+              </Select>
+            </Field>
+          </FieldGroup>
+
+          <Separator />
+
+          <FieldGroup title="Özellikler">
+            <Field label="Oda sayısı">
+              <Input
+                type="number"
+                min={0}
+                value={roomCount}
+                onChange={(event) => setRoomCount(event.target.value)}
+              />
+            </Field>
+            <Field label="Banyo sayısı">
+              <Input
+                type="number"
+                min={0}
+                value={bathroomCount}
+                onChange={(event) => setBathroomCount(event.target.value)}
+              />
+            </Field>
+            <Field label="Brüt alan (m²)">
+              <Input
+                type="number"
+                min={0}
+                value={grossArea}
+                onChange={(event) => setGrossArea(event.target.value)}
+              />
+            </Field>
+            <Field label="Mobilyalı">
+              <label className="inline-flex items-center gap-2 pt-1 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isFurnished}
+                  onChange={(event) => setIsFurnished(event.target.checked)}
+                  className="h-4 w-4 rounded border-input"
+                />
+                <span>Mobilyalı</span>
+              </label>
+            </Field>
+          </FieldGroup>
+
+          <Separator />
+
+          <FieldGroup title="Açıklama">
+            <Field label="Özet">
+              <Textarea
+                value={summary}
+                onChange={(event) => setSummary(event.target.value)}
+                rows={3}
+              />
+            </Field>
+            <Field label="Detaylı açıklama">
+              <Textarea
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                rows={5}
+              />
+            </Field>
+          </FieldGroup>
+
+          <div className="flex justify-end pt-2">
+            <Button type="submit" disabled={busy}>
+              <Save className="h-4 w-4" />
+              Kaydet
+            </Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -246,24 +268,30 @@ function FieldGroup({
   children: ReactNode;
 }) {
   return (
-    <fieldset className="lstFieldGroup">
-      <legend className="lstFieldGroupTitle">{title}</legend>
-      <div className="lstFormGrid">{children}</div>
+    <fieldset className="space-y-3">
+      <legend className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        {title}
+      </legend>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">{children}</div>
     </fieldset>
   );
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="lstField">
-      <label>{label}</label>
+    <div className="flex flex-col gap-1.5">
+      <Label className="text-sm font-medium">{label}</Label>
       {children}
     </div>
   );
 }
 
 function ReadOnlyValue({ children }: { children: ReactNode }) {
-  return <div className="lstReadOnlyValue">{children}</div>;
+  return (
+    <div className="flex items-center h-9 px-3 rounded-md border border-dashed border-input bg-muted/50 text-sm">
+      {children}
+    </div>
+  );
 }
 
 function numericFieldValue(value: number | null): string {

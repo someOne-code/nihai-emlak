@@ -50,14 +50,27 @@
 ## Supabase-First Rules
 
 - Prefer Supabase native features before writing custom application code.
-- Use:
-  - Supabase Auth for identity/session/JWT
-  - RLS for row-level authorization
-  - DB functions/RPC for data-intensive transactional logic
-  - Views/RPC for read models when sufficient
+- Decision order for every task:
+  1. Auth/session → Supabase Auth
+  2. Row-level authorization & ownership → RLS policies
+  3. Data state/transactions → Postgres functions / RPC
+  4. List/read models → Views / RPC + RLS
+  5. File/image storage → Supabase Storage (buckets + storage policies)
+  6. Realtime (if needed) → Supabase Realtime
+  7. Scheduled/background DB jobs → pg_cron / Supabase Cron, or existing Inngest decision
+  8. Privileged operations → Never expose `service_role` to client
+- Use Next.js route/controller only as a thin boundary for: auth check, validation, origin/body guards, and external-system orchestration.
 - Do not use `service_role` as the default access model.
 - Do not use `db_pre_request` as the general authorization strategy.
 - Keep source of truth in versioned migration files; `supabase db diff` is only a helper.
+
+### Media & Image Assets
+
+- Do not treat manual image URL entry as final UX. Current `coverImageUrl` text input is a Phase 9A placeholder.
+- Target: admin uploads via custom UI → Supabase Storage bucket → post stores path/URL.
+- Access policy managed via Storage RLS/policies, not application-layer guards.
+- Payload CMS remains content engine; visual asset storage belongs to Supabase Storage.
+- Applies to all content types (posts, consultants, categories) needing image assets.
 
 ## Security & Data Integrity
 

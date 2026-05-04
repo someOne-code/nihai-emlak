@@ -1,4 +1,5 @@
 export type BuildContentSecurityPolicyInput = {
+  allowUnsafeEval?: boolean;
   isbankCheckoutUrl?: string | null;
   nonce: string;
   pathname: string;
@@ -38,13 +39,19 @@ function buildRouteContentSecurityPolicy(input: BuildContentSecurityPolicyInput)
   const imgSrc = ["'self'", "data:", "blob:", ...trustedHttpOrigins].join(" ");
   const fontSrc = ["'self'", "data:", ...trustedHttpOrigins].join(" ");
   const styleSrc = ["'self'", `'nonce-${nonce}'`, PAYLOAD_ROOT_LAYOUT_STYLE_HASH].join(" ");
+  const scriptSrc = [
+    "'self'",
+    `'nonce-${nonce}'`,
+    "'strict-dynamic'",
+    ...(input.allowUnsafeEval ? ["'unsafe-eval'"] : []),
+  ].join(" ");
 
   return [
     ...STATIC_BASE_DIRECTIVES,
     `form-action ${formAction}`,
     `img-src ${imgSrc}`,
     `font-src ${fontSrc}`,
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
+    `script-src ${scriptSrc}`,
     `style-src ${styleSrc}`,
     `connect-src ${connectSrc}`,
     "frame-src 'self'",

@@ -157,6 +157,42 @@ The matching DB/RPC contract names reserved for Phase 8 are:
 - Public read models MUST NOT expose admin-only image fields
   (e.g. `is_disabled`, internal notes) added later in Phase 8.
 
+## Listing Image Binary Upload Contract
+
+- Binary upload for admin listing images uses `POST /api/admin/content/uploads/listing-image`.
+- This route is a thin auth/validation/storage boundary only. It uploads the
+  selected file to Supabase Storage and returns canonical storage metadata.
+- The authoritative listing image record write remains
+  `POST /api/admin/listings/:listingId/images` backed by
+  `admin_add_listing_image(...)`. Upload and DB record creation are separate on
+  purpose.
+- Storage bucket is `content-media`.
+- Listing image object paths MUST start with `listing-images/`.
+- Allowed MIME types are `image/jpeg`, `image/png`, and `image/webp`.
+- Maximum file size is `5 MB`.
+
+Successful upload response contract:
+
+```json
+{
+  "success": true,
+  "data": {
+    "url": "https://<project>/storage/v1/object/public/content-media/listing-images/<generated-name>.png",
+    "path": "listing-images/<generated-name>.png",
+    "bucket": "content-media"
+  }
+}
+```
+
+Rules:
+
+- `url` is the public Storage URL that the follow-up listing image add route
+  stores in `public.listing_images.image_url`.
+- `path` is the canonical Storage object path for cleanup/audit/reference.
+- `bucket` is pinned to `content-media`; callers must not invent a different
+  bucket name.
+- Raw Supabase storage errors must not be returned to the admin client.
+
 ## Main Item and Service Option Rules
 
 - Each `(listing_id, normalized_code)` pair is unique per option type.

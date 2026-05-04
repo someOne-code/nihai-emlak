@@ -209,8 +209,10 @@ function buildDetail(
 export function getAvailableMainItemAddCandidates(
   detail: AdminListingDetail,
 ): AdminListingAvailableMainItem[] {
-  const attachedCodes = new Set(detail.mainItems.map((item) => item.code));
-  return detail.availableMainItems.filter((item) => !attachedCodes.has(item.code));
+  const enabledCodes = new Set(
+    detail.mainItems.filter((item) => item.isEnabled).map((item) => item.code),
+  );
+  return detail.availableMainItems.filter((item) => !enabledCodes.has(item.code));
 }
 
 export type AdminListingMainItemDisplay = {
@@ -220,9 +222,9 @@ export type AdminListingMainItemDisplay = {
   enabledLabel: string;
   catalogStatusLabel: string;
   defaultAmountLabel: string;
-  overrideAmountLabel: string;
+  customAmountLabel: string;
   defaultMultiplierLabel: string;
-  overrideMultiplierLabel: string;
+  customMultiplierLabel: string;
 };
 
 // Phase 8.6 Task 5: admin-facing display helper for a single main item
@@ -246,13 +248,13 @@ export function buildAdminListingMainItemDisplay(
     enabledLabel: item.isEnabled ? "Aktif" : "Pasif",
     catalogStatusLabel: item.catalogIsActive ? "Katalog aktif" : "Katalog pasif",
     defaultAmountLabel: formatRawNumberLabel("Varsayılan tutar", item.defaultAmount),
-    overrideAmountLabel: formatRawNumberLabel("Override tutar", item.overrideAmount),
+    customAmountLabel: formatCustomNumberLabel("Bu ilana özel tutar", item.overrideAmount),
     defaultMultiplierLabel: formatRawNumberLabel(
       "Varsayılan çarpan",
       item.defaultMultiplier,
     ),
-    overrideMultiplierLabel: formatRawNumberLabel(
-      "Override çarpan",
+    customMultiplierLabel: formatCustomNumberLabel(
+      "Bu ilana özel çarpan",
       item.overrideMultiplier,
     ),
   };
@@ -268,7 +270,15 @@ function trimOrNull(value: string | null | undefined): string | null {
 
 function formatRawNumberLabel(prefix: string, value: number | null): string {
   if (value === null || !Number.isFinite(value)) {
-    return `${prefix}: Yok`;
+    return `${prefix}: Belirtilmedi`;
+  }
+  return `${prefix}: ${String(value)}`;
+}
+
+// For per-listing custom (override) values: null means fallback to catalog default.
+function formatCustomNumberLabel(prefix: string, value: number | null): string {
+  if (value === null || !Number.isFinite(value)) {
+    return `${prefix}: katalog varsayılanı kullanılır`;
   }
   return `${prefix}: ${String(value)}`;
 }
@@ -276,8 +286,10 @@ function formatRawNumberLabel(prefix: string, value: number | null): string {
 export function getAvailableServiceAddCandidates(
   detail: AdminListingDetail,
 ): AdminListingAvailableService[] {
-  const attachedCodes = new Set(detail.services.map((service) => service.code));
-  return detail.availableServices.filter((service) => !attachedCodes.has(service.code));
+  const enabledCodes = new Set(
+    detail.services.filter((service) => service.isEnabled).map((service) => service.code),
+  );
+  return detail.availableServices.filter((service) => !enabledCodes.has(service.code));
 }
 
 export type AdminListingServiceDisplay = {
@@ -287,7 +299,7 @@ export type AdminListingServiceDisplay = {
   enabledLabel: string;
   catalogStatusLabel: string;
   basePriceLabel: string;
-  overridePriceLabel: string;
+  customPriceLabel: string;
 };
 
 export type AdminListingCheckoutReadinessStatus =
@@ -400,7 +412,7 @@ export function buildAdminListingServiceDisplay(
     enabledLabel: service.isEnabled ? "Aktif" : "Pasif",
     catalogStatusLabel: service.catalogIsActive ? "Katalog aktif" : "Katalog pasif",
     basePriceLabel: formatRawNumberLabel("Varsayılan fiyat", service.basePrice),
-    overridePriceLabel: formatRawNumberLabel("Override fiyat", service.overridePrice),
+    customPriceLabel: formatCustomNumberLabel("Bu ilana özel fiyat", service.overridePrice),
   };
 }
 

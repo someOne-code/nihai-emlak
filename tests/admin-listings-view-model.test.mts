@@ -276,6 +276,34 @@ test("admin listings view-model returns add candidates excluding already attache
   );
 });
 
+test("admin listings view-model returns disabled items back as add candidates", () => {
+  const snapshot = createSnapshot();
+  // Mark the attached main item as disabled
+  snapshot.main_item_options[0].is_enabled = false;
+  // Mark the attached service as disabled
+  snapshot.service_options[0].is_enabled = false;
+
+  const model = buildAdminListingsViewModel({
+    list: createList(),
+    selectedListingId: LISTING_ID,
+    snapshot,
+  });
+
+  assert.ok(model.detail);
+
+  const mainCandidateCodes = getAvailableMainItemAddCandidates(model.detail).map((item) => item.code);
+  assert.ok(
+    mainCandidateCodes.includes("phase8_main"),
+    "disabled main item should appear as add candidate",
+  );
+
+  const serviceCandidateCodes = getAvailableServiceAddCandidates(model.detail).map((s) => s.code);
+  assert.ok(
+    serviceCandidateCodes.includes("phase8_service"),
+    "disabled service should appear as add candidate",
+  );
+});
+
 test("admin listings view-model exposes missing reasons for non-ready rent listings", () => {
   const snapshot = createSnapshot();
   snapshot.checkout_eligibility = {
@@ -393,9 +421,9 @@ test("main item display helper renders Turkish amount and multiplier labels with
   );
 
   assert.equal(display.defaultAmountLabel, "Varsayılan tutar: 12000");
-  assert.equal(display.overrideAmountLabel, "Override tutar: 1500");
+  assert.equal(display.customAmountLabel, "Bu ilana özel tutar: 1500");
   assert.equal(display.defaultMultiplierLabel, "Varsayılan çarpan: 1.5");
-  assert.equal(display.overrideMultiplierLabel, "Override çarpan: 1.2");
+  assert.equal(display.customMultiplierLabel, "Bu ilana özel çarpan: 1.2");
 });
 
 test("main item display helper returns Yok for missing amount or multiplier values", () => {
@@ -408,10 +436,10 @@ test("main item display helper returns Yok for missing amount or multiplier valu
     }),
   );
 
-  assert.equal(display.defaultAmountLabel, "Varsayılan tutar: Yok");
-  assert.equal(display.overrideAmountLabel, "Override tutar: Yok");
-  assert.equal(display.defaultMultiplierLabel, "Varsayılan çarpan: Yok");
-  assert.equal(display.overrideMultiplierLabel, "Override çarpan: Yok");
+  assert.equal(display.defaultAmountLabel, "Varsayılan tutar: Belirtilmedi");
+  assert.equal(display.customAmountLabel, "Bu ilana özel tutar: katalog varsayılanı kullanılır");
+  assert.equal(display.defaultMultiplierLabel, "Varsayılan çarpan: Belirtilmedi");
+  assert.equal(display.customMultiplierLabel, "Bu ilana özel çarpan: katalog varsayılanı kullanılır");
 });
 
 test("main item display helper never invents a currency when formatting amounts", () => {
@@ -420,7 +448,7 @@ test("main item display helper never invents a currency when formatting amounts"
   );
 
   assert.ok(!display.defaultAmountLabel.includes("TRY"));
-  assert.ok(!display.overrideAmountLabel.includes("TRY"));
+  assert.ok(!display.customAmountLabel.includes("TRY"));
 });
 
 function createService(overrides: Partial<AdminListingService> = {}): AdminListingService {
@@ -472,7 +500,7 @@ test("service display helper renders Turkish base and override price labels with
   );
 
   assert.equal(display.basePriceLabel, "Varsayılan fiyat: 12000");
-  assert.equal(display.overridePriceLabel, "Override fiyat: 1500");
+  assert.equal(display.customPriceLabel, "Bu ilana özel fiyat: 1500");
 });
 
 test("service display helper returns Yok for missing base or override price values", () => {
@@ -480,8 +508,8 @@ test("service display helper returns Yok for missing base or override price valu
     createService({ basePrice: null, overridePrice: null }),
   );
 
-  assert.equal(display.basePriceLabel, "Varsayılan fiyat: Yok");
-  assert.equal(display.overridePriceLabel, "Override fiyat: Yok");
+  assert.equal(display.basePriceLabel, "Varsayılan fiyat: Belirtilmedi");
+  assert.equal(display.customPriceLabel, "Bu ilana özel fiyat: katalog varsayılanı kullanılır");
 });
 
 test("service display helper never invents a currency when formatting prices", () => {
@@ -490,7 +518,7 @@ test("service display helper never invents a currency when formatting prices", (
   );
 
   assert.ok(!display.basePriceLabel.includes("TRY"));
-  assert.ok(!display.overridePriceLabel.includes("TRY"));
+  assert.ok(!display.customPriceLabel.includes("TRY"));
 });
 
 function createReadinessDetail(overrides: {

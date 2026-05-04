@@ -30,7 +30,14 @@ export type AdminListingsRpcName =
   | "admin_reorder_listing_images"
   | "admin_delete_listing_image"
   | "admin_configure_listing_main_item"
-  | "admin_configure_listing_service";
+  | "admin_configure_listing_service"
+  // Phase 9B: global catalog management
+  | "admin_list_main_item_catalog"
+  | "admin_create_main_item_catalog"
+  | "admin_update_main_item_catalog"
+  | "admin_list_service_catalog"
+  | "admin_create_service_catalog"
+  | "admin_update_service_catalog";
 
 export type AdminListingsSupabaseClient = {
   auth: {
@@ -104,6 +111,7 @@ export async function guardAdminListingsRequest(
 export function mapAdminListingRpcError(
   error: AdminListingsSupabaseError,
   notFoundError: string,
+  genericError: string = "Admin listing RPC failed",
 ): [string, number] {
   const code = asNonEmptyString(error.code);
 
@@ -131,7 +139,15 @@ export function mapAdminListingRpcError(
     return ["Invalid admin listing request", 400];
   }
 
-  return ["Admin listing RPC failed", 500];
+  // 42883 = undefined_function: migration not applied to this database.
+  if (code === "42883") {
+    return [
+      "Gerekli veritaban\u0131 fonksiyonu bulunamad\u0131. Migrasyonlar\u0131n uyguland\u0131\u011f\u0131ndan emin olun.",
+      500,
+    ];
+  }
+
+  return [genericError, 500];
 }
 
 export function jsonError(error: string, status: number): Response {

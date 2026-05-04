@@ -1,7 +1,23 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  Building2,
+  ImageIcon,
+  MapPin,
+  Plus,
+  Tag,
+  X,
+} from "lucide-react";
 
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 import {
   AdminListingsClientError,
   addAdminListingImage,
@@ -23,8 +39,11 @@ import {
 import {
   AdminListingRow,
   AdminListingsViewModel,
+  buildAdminListingsViewModel,
 } from "@/lib/admin-ui/listings-view-model.ts";
+import { slugify } from "@/lib/admin-ui/slugify";
 
+import type { AdminListingDetailTabId } from "@/lib/admin-ui/listings-product-layout";
 import CheckoutReadinessPanel from "./CheckoutReadinessPanel";
 import ListingDetailTabs from "./ListingDetailTabs";
 import ListingGeneralPanel from "./ListingGeneralPanel";
@@ -40,51 +59,6 @@ const INITIAL_VIEW_MODEL: AdminListingsViewModel = {
   detail: null,
 };
 
-const styles = {
-  container: "opsContainer",
-  heading: "opsHeading",
-  lead: "opsLead",
-  errorBanner: "opsErrorBanner",
-  successBanner: "opsSuccessBanner",
-  loadingText: "opsLoadingText",
-  retryButton: "opsRetryButton",
-  badge: "opsBadge",
-  badgeSuccess: "opsBadgeSuccess",
-  badgeWarning: "opsBadgeWarning",
-  badgeDanger: "opsBadgeDanger",
-  badgeNeutral: "opsBadgeNeutral",
-  workspace: "lstWorkspace",
-  sidebar: "lstSidebar",
-  filterRow: "lstFilterRow",
-  listingItem: "lstListingItem",
-  listingItemSelected: "lstListingItemSelected",
-  listingItemHeader: "lstListingItemHeader",
-  listingItemTitle: "lstListingItemTitle",
-  listingItemMeta: "lstListingItemMeta",
-  detail: "lstDetail",
-  panel: "lstPanel",
-  panelHeader: "lstPanelHeader",
-  panelTitle: "lstPanelTitle",
-  formGrid: "lstFormGrid",
-  field: "lstField",
-  buttonRow: "lstButtonRow",
-  primaryButton: "lstPrimaryButton",
-  secondaryButton: "lstSecondaryButton",
-  dangerButton: "lstDangerButton",
-  inlineRow: "lstInlineRow",
-  optionRow: "lstOptionRow",
-  optionMeta: "lstOptionMeta",
-  imageList: "lstImageList",
-  imageCard: "lstImageCard",
-  imageCardThumb: "lstImageCardThumb",
-  imageCardActions: "lstImageCardActions",
-  empty: "lstEmpty",
-  chip: "lstChip",
-  chipSuccess: "lstChipSuccess",
-  chipDanger: "lstChipDanger",
-  chipWarning: "lstChipWarning",
-  missingList: "lstMissingList",
-} as const;
 
 type FilterState = {
   status: "" | "active" | "passive";
@@ -103,6 +77,7 @@ export default function AdminListingsView() {
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+  const [initialDetailTab, setInitialDetailTab] = useState<AdminListingDetailTabId>("general");
 
   const mountedRef = useRef(true);
   useEffect(() => {
@@ -120,15 +95,23 @@ export default function AdminListingsView() {
         const cachedList = await fetchListFn(filterStateToQuery(nextFilters));
         if (!mountedRef.current) return;
         setList(cachedList);
-        const model = await selectAdminListing(
-          { fetchAdminListingSnapshot: fetchSnapshotFn },
-          {
+        if (selectedListingId) {
+          const model = await selectAdminListing(
+            { fetchAdminListingSnapshot: fetchSnapshotFn },
+            {
+              list: cachedList,
+              listingId: selectedListingId,
+            },
+          );
+          if (!mountedRef.current) return;
+          setViewModel(model);
+        } else {
+          setViewModel(buildAdminListingsViewModel({
             list: cachedList,
-            listingId: selectedListingId ?? firstListingIdInList(cachedList) ?? "",
-          },
-        );
-        if (!mountedRef.current) return;
-        setViewModel(model);
+            selectedListingId: null,
+            snapshot: null,
+          }));
+        }
       } catch (err) {
         if (!mountedRef.current) return;
         setError(safeErrorMessage(err));
@@ -148,6 +131,8 @@ export default function AdminListingsView() {
   const handleSelectListing = useCallback(
     async (listingId: string) => {
       if (!list) return;
+      setShowCreate(false);
+      setInitialDetailTab("general");
       setActionError(null);
       setActionSuccess(null);
       setBusy(true);
@@ -206,25 +191,34 @@ export default function AdminListingsView() {
 
   if (loading && viewModel.rows.length === 0) {
     return (
-      <div className={styles.container}>
+      <div className="space-y-6">
         <ListingsPageHeader disabled onCreateClick={() => setShowCreate(true)} />
-        <p className={styles.loadingText}>Yukleniyor...</p>
+        <div className="flex items-center justify-center py-12">
+          <div className="flex flex-col items-center gap-2">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+            <p className="text-sm text-muted-foreground">Yükleniyor...</p>
+          </div>
+        </div>
       </div>
     );
   }
 
   if (error && viewModel.rows.length === 0) {
     return (
-      <div className={styles.container}>
+      <div className="space-y-6">
         <ListingsPageHeader disabled onCreateClick={() => setShowCreate(true)} />
-        <div className={styles.errorBanner}>{error}</div>
-        <button
-          type="button"
-          className={styles.retryButton}
-          onClick={() => loadAllAndCacheList(null, filters)}
-        >
-          Tekrar dene
-        </button>
+        <Card className="border-destructive/50 bg-destructive/5">
+          <CardContent className="flex items-center justify-between p-4">
+            <p className="text-sm text-destructive font-medium">{error}</p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => loadAllAndCacheList(null, filters)}
+            >
+              Tekrar dene
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -232,15 +226,36 @@ export default function AdminListingsView() {
   const detail = viewModel.detail;
 
   return (
-    <div className={styles.container}>
+    <div className="space-y-6">
       <ListingsPageHeader
         disabled={busy || loading}
-        onCreateClick={() => setShowCreate(true)}
+        onCreateClick={() => {
+          setShowCreate(true);
+          setViewModel((prev) => ({ ...prev, selectedListingId: null, detail: null }));
+        }}
       />
 
-      {error && <div className={styles.errorBanner}>{error}</div>}
-      {actionError && <div className={styles.errorBanner}>{actionError}</div>}
-      {actionSuccess && <div className={styles.successBanner}>{actionSuccess}</div>}
+      {error && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+          {error}
+        </div>
+      )}
+      {actionError && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/5 px-4 py-3 text-sm text-destructive flex items-center justify-between">
+          <span>{actionError}</span>
+          <button type="button" onClick={() => setActionError(null)} className="text-destructive/60 hover:text-destructive" aria-label="Hatayı kapat">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+      {actionSuccess && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400 flex items-center justify-between">
+          <span>{actionSuccess}</span>
+          <button type="button" onClick={() => setActionSuccess(null)} className="text-emerald-600/60 hover:text-emerald-700" aria-label="Bildirimi kapat">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       <div className="lstProductShell">
         <ListingsList
@@ -264,15 +279,16 @@ export default function AdminListingsView() {
           ))}
         </ListingsList>
 
-        <section className={styles.detail}>
+        <section className="flex flex-col gap-5">
           {showCreate && (
             <CreateListingPanel
               busy={busy}
               onCancel={() => setShowCreate(false)}
               onCreate={(payload) =>
-                runAction("Yeni ilan olusturuldu.", async () => {
+                runAction("Yeni ilan oluşturuldu.", async () => {
                   const created = await createAdminListing(payload);
                   setShowCreate(false);
+                  setInitialDetailTab("images");
                   return readListingIdFromMutation(created);
                 })
               }
@@ -282,20 +298,21 @@ export default function AdminListingsView() {
           {detail ? (
             <ListingDetailTabs
               key={`tabs-${detail.listing.id}`}
+              initialTab={initialDetailTab}
               general={
                 <ListingGeneralPanel
                   key={`detail-${detail.listing.id}`}
                   detail={detail}
                   busy={busy}
                   onSave={(payload) =>
-                    runAction("Ilan bilgileri guncellendi.", async () => {
+                    runAction("İlan bilgileri güncellendi.", async () => {
                       if (!viewModel.detail) return null;
                       await updateAdminListing(viewModel.detail.listing.id, payload);
                       return viewModel.detail.listing.id;
                     })
                   }
                   onStatusChange={(nextStatus) =>
-                    runAction(`Durum guncellendi: ${nextStatus}`, async () => {
+                    runAction(`Durum güncellendi: ${nextStatus}`, async () => {
                       if (!viewModel.detail) return null;
                       await setAdminListingStatus(viewModel.detail.listing.id, nextStatus);
                       return viewModel.detail.listing.id;
@@ -309,14 +326,14 @@ export default function AdminListingsView() {
                   images={detail.images}
                   busy={busy}
                   onAddImage={(payload) =>
-                    runAction("Gorsel eklendi.", async () => {
+                    runAction("Görsel eklendi.", async () => {
                       if (!viewModel.detail) return null;
                       await addAdminListingImage(viewModel.detail.listing.id, payload);
                       return viewModel.detail.listing.id;
                     })
                   }
                   onDeleteImage={(imageId) =>
-                    runAction("Gorsel silindi.", async () => {
+                    runAction("Görsel silindi.", async () => {
                       if (!viewModel.detail) return null;
                       await deleteAdminListingImage(
                         viewModel.detail.listing.id,
@@ -326,7 +343,7 @@ export default function AdminListingsView() {
                     })
                   }
                   onReorder={(orderedIds) =>
-                    runAction("Gorsel sirasi guncellendi.", async () => {
+                    runAction("Görsel sırası güncellendi.", async () => {
                       if (!viewModel.detail) return null;
                       await reorderAdminListingImages(
                         viewModel.detail.listing.id,
@@ -344,7 +361,7 @@ export default function AdminListingsView() {
                   items={detail.mainItems}
                   busy={busy}
                   onConfigure={(code, payload) =>
-                    runAction(`Ana kalem guncellendi: ${code}`, async () => {
+                    runAction(`Ana kalem güncellendi: ${code}`, async () => {
                       if (!viewModel.detail) return null;
                       await configureAdminListingMainItem(
                         viewModel.detail.listing.id,
@@ -363,7 +380,7 @@ export default function AdminListingsView() {
                   services={detail.services}
                   busy={busy}
                   onConfigure={(code, payload) =>
-                    runAction(`Hizmet guncellendi: ${code}`, async () => {
+                    runAction(`Hizmet güncellendi: ${code}`, async () => {
                       if (!viewModel.detail) return null;
                       await configureAdminListingService(
                         viewModel.detail.listing.id,
@@ -381,16 +398,19 @@ export default function AdminListingsView() {
             />
           ) : (
             !showCreate && (
-              <div className={styles.panel}>
-                <p className={styles.empty}>
-                  Detayi goruntulemek icin soldan bir ilan secin veya yeni bir ilan olusturun.
-                </p>
-              </div>
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                  <Building2 className="h-12 w-12 text-muted-foreground/40 mb-3" />
+                  <p className="text-muted-foreground text-sm">
+                    Detayı görüntülemek için soldan bir ilan seçin<br />veya yeni bir ilan oluşturun.
+                  </p>
+                </CardContent>
+              </Card>
             )
           )}
         </section>
 
-        <CheckoutReadinessPanel detail={detail} variant="side" />
+        {detail && <CheckoutReadinessPanel detail={detail} variant="side" />}
       </div>
     </div>
   );
@@ -406,29 +426,29 @@ function FilterControls({
   onChange: (filters: FilterState) => void;
 }) {
   return (
-    <div className={styles.filterRow}>
-      <select
+    <div className="flex gap-2 flex-wrap">
+      <Select
         value={filters.status}
         disabled={disabled}
         onChange={(event) =>
           onChange({ ...filters, status: event.target.value as FilterState["status"] })
         }
       >
-        <option value="">Tum durumlar</option>
+        <option value="">Tüm durumlar</option>
         <option value="active">Aktif</option>
         <option value="passive">Pasif</option>
-      </select>
-      <select
+      </Select>
+      <Select
         value={filters.type}
         disabled={disabled}
         onChange={(event) =>
           onChange({ ...filters, type: event.target.value as FilterState["type"] })
         }
       >
-        <option value="">Tum turler</option>
-        <option value="rent">Kiralik</option>
-        <option value="sale">Satilik</option>
-      </select>
+        <option value="">Tüm türler</option>
+        <option value="rent">Kiralık</option>
+        <option value="sale">Satılık</option>
+      </Select>
     </div>
   );
 }
@@ -445,45 +465,56 @@ function ListingItem({
   return (
     <button
       type="button"
-      className={selected ? styles.listingItemSelected : styles.listingItem}
+      className={`w-full text-left rounded-lg border p-3 transition-colors ${
+        selected
+          ? "border-primary bg-primary/5 ring-1 ring-primary/20"
+          : "border-border bg-card hover:border-primary/30 hover:bg-accent/50"
+      }`}
       onClick={() => onSelect(row.listingId)}
     >
-      <div className={styles.listingItemHeader}>
-        <h3 className={styles.listingItemTitle}>{row.title}</h3>
-        <StatusChip statusLabel={row.statusLabel} />
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <h3 className="font-semibold text-sm truncate">{row.title}</h3>
+        <StatusBadge statusLabel={row.statusLabel} />
       </div>
-      <div className={styles.listingItemMeta}>
-        <span>{row.typeLabel}</span>
-        <span>{row.locationLabel || "Konum yok"}</span>
-        <span>{row.priceLabel}</span>
+      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground mb-1.5">
+        <span className="flex items-center gap-1">
+          <Tag className="h-3 w-3" />
+          {row.typeLabel}
+        </span>
+        <span className="flex items-center gap-1">
+          <MapPin className="h-3 w-3" />
+          {row.locationLabel || "Konum yok"}
+        </span>
       </div>
-      <div className={styles.listingItemMeta}>
-        <span>{row.imageCount} gorsel</span>
-        <span>{row.mainItemCount} ana kalem</span>
-        <span>{row.serviceOptionCount} hizmet</span>
-        <CheckoutReadyChip ready={row.isCheckoutReady} />
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Badge variant="outline" className="text-[10px] px-1.5 py-0 tabular-nums">
+          {row.priceLabel}
+        </Badge>
+        <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+          <ImageIcon className="h-2.5 w-2.5 mr-0.5" />
+          {row.imageCount}
+        </Badge>
+        <CheckoutReadyBadge ready={row.isCheckoutReady} />
       </div>
     </button>
   );
 }
 
-function StatusChip({ statusLabel }: { statusLabel: string }) {
-  const className =
+function StatusBadge({ statusLabel }: { statusLabel: string }) {
+  const variant =
     statusLabel === "Aktif"
-      ? `${styles.chip} ${styles.chipSuccess}`
+      ? "success" as const
       : statusLabel === "Pasif"
-        ? `${styles.chip} ${styles.chipDanger}`
-        : `${styles.chip}`;
-  return <span className={className}>{statusLabel}</span>;
+        ? "destructive" as const
+        : "secondary" as const;
+  return <Badge variant={variant} className="text-[10px] px-1.5 py-0">{statusLabel}</Badge>;
 }
 
-function CheckoutReadyChip({ ready }: { ready: boolean }) {
+function CheckoutReadyBadge({ ready }: { ready: boolean }) {
   return (
-    <span
-      className={`${styles.chip} ${ready ? styles.chipSuccess : styles.chipWarning}`}
-    >
-      {ready ? "Checkout hazir" : "Checkout eksik"}
-    </span>
+    <Badge variant={ready ? "success" : "warning"} className="text-[10px] px-1.5 py-0">
+      {ready ? "Hazır" : "Eksik"}
+    </Badge>
   );
 }
 
@@ -498,83 +529,268 @@ function CreateListingPanel({
 }) {
   const [type, setType] = useState<"rent" | "sale">("rent");
   const [title, setTitle] = useState("");
+  const [slugManual, setSlugManual] = useState(false);
   const [slug, setSlug] = useState("");
   const [city, setCity] = useState("");
   const [district, setDistrict] = useState("");
   const [price, setPrice] = useState("");
   const [currency, setCurrency] = useState("TRY");
+  const [summary, setSummary] = useState("");
+  const [description, setDescription] = useState("");
+  const [roomCount, setRoomCount] = useState("");
+  const [bathroomCount, setBathroomCount] = useState("");
+  const [grossArea, setGrossArea] = useState("");
+  const [isFurnished, setIsFurnished] = useState(false);
+
+  const computedSlug = slugManual ? slug : slugify(title);
+
+  const handleTitleChange = (value: string) => {
+    setTitle(value);
+    if (!slugManual) {
+      setSlug(slugify(value));
+    }
+  };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     onCreate({
       type,
       title: title.trim(),
-      slug: slug.trim(),
+      slug: computedSlug.trim(),
       city: city.trim() || null,
       district: district.trim() || null,
       price: Number(price) || 0,
       currency: currency.trim() || "TRY",
+      summary: summary.trim() || null,
+      description: description.trim() || null,
+      room_count: roomCount ? Number(roomCount) : null,
+      bathroom_count: bathroomCount ? Number(bathroomCount) : null,
+      gross_area_m2: grossArea ? Number(grossArea) : null,
+      is_furnished: isFurnished,
     });
   };
 
   return (
-    <div className={styles.panel}>
-      <div className={styles.panelHeader}>
-        <h2 className={styles.panelTitle}>Yeni ilan</h2>
-        <button
-          type="button"
-          className={styles.secondaryButton}
-          onClick={onCancel}
-          disabled={busy}
-        >
-          Iptal
-        </button>
-      </div>
-      <form onSubmit={handleSubmit} className={styles.formGrid}>
-        <Field label="Tur">
-          <select value={type} onChange={(event) => setType(event.target.value as "rent" | "sale")}>
-            <option value="rent">Kiralik</option>
-            <option value="sale">Satilik</option>
-          </select>
-        </Field>
-        <Field label="Baslik">
-          <input value={title} onChange={(event) => setTitle(event.target.value)} required />
-        </Field>
-        <Field label="Slug">
-          <input value={slug} onChange={(event) => setSlug(event.target.value)} required />
-        </Field>
-        <Field label="Sehir">
-          <input value={city} onChange={(event) => setCity(event.target.value)} />
-        </Field>
-        <Field label="Ilce">
-          <input value={district} onChange={(event) => setDistrict(event.target.value)} />
-        </Field>
-        <Field label="Fiyat (kucuk birim)">
-          <input
-            type="number"
-            min={0}
-            value={price}
-            onChange={(event) => setPrice(event.target.value)}
-          />
-        </Field>
-        <Field label="Para birimi">
-          <input value={currency} onChange={(event) => setCurrency(event.target.value)} />
-        </Field>
-        <div className={styles.buttonRow}>
-          <button type="submit" className={styles.primaryButton} disabled={busy}>
-            Olustur
-          </button>
+    <Card>
+      <CardHeader className="pb-4">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-lg text-balance">Yeni İlan Oluştur</CardTitle>
+          <Button variant="ghost" size="sm" onClick={onCancel} disabled={busy} aria-label="Kapat">
+            <X className="h-4 w-4" />
+          </Button>
         </div>
-      </form>
-    </div>
+        <p className="text-xs text-muted-foreground text-pretty">
+          Temel bilgileri doldurun. Görseller ve ödeme kalemlerini oluşturduktan sonra düzenleyebilirsiniz.
+        </p>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {/* TEMEL */}
+          <fieldset className="space-y-4">
+            <legend className="text-xs font-semibold uppercase text-muted-foreground tracking-wide">Temel Bilgiler</legend>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <FormField label="İlan Türü">
+                <Select
+                  value={type}
+                  onChange={(event) => setType(event.target.value as "rent" | "sale")}
+                >
+                  <option value="rent">Kiralık</option>
+                  <option value="sale">Satılık</option>
+                </Select>
+              </FormField>
+              <FormField label="İlan Başlığı">
+                <Input
+                  value={title}
+                  onChange={(event) => handleTitleChange(event.target.value)}
+                  placeholder="Örn: Kadıköy 2+1 Daire"
+                  required
+                />
+              </FormField>
+            </div>
+
+            <FormField label="URL Adresi (Slug)" hint="Başlıktan otomatik oluşturulur.">
+              <div className="flex gap-2 items-center">
+                <Input
+                  value={computedSlug}
+                  onChange={(event) => {
+                    setSlugManual(true);
+                    setSlug(event.target.value);
+                  }}
+                  className="font-mono text-xs"
+                  required
+                />
+                {slugManual && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs whitespace-nowrap"
+                    onClick={() => {
+                      setSlugManual(false);
+                      setSlug(slugify(title));
+                    }}
+                  >
+                    Otomatik
+                  </Button>
+                )}
+              </div>
+            </FormField>
+          </fieldset>
+
+          <Separator />
+
+          {/* KONUM */}
+          <fieldset className="space-y-4">
+            <legend className="text-xs font-semibold uppercase text-muted-foreground tracking-wide">Konum</legend>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <FormField label="Şehir">
+                <Input
+                  value={city}
+                  onChange={(event) => setCity(event.target.value)}
+                  placeholder="Örn: İstanbul"
+                />
+              </FormField>
+              <FormField label="İlçe">
+                <Input
+                  value={district}
+                  onChange={(event) => setDistrict(event.target.value)}
+                  placeholder="Örn: Kadıköy"
+                />
+              </FormField>
+            </div>
+          </fieldset>
+
+          <Separator />
+
+          {/* FİYAT */}
+          <fieldset className="space-y-4">
+            <legend className="text-xs font-semibold uppercase text-muted-foreground tracking-wide">Fiyat</legend>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <FormField label="Fiyat">
+                <Input
+                  type="number"
+                  min={0}
+                  value={price}
+                  onChange={(event) => setPrice(event.target.value)}
+                  placeholder="0"
+                />
+              </FormField>
+              <FormField label="Para Birimi">
+                <Select
+                  value={currency}
+                  onChange={(event) => setCurrency(event.target.value)}
+                >
+                  <option value="TRY">TRY (₺)</option>
+                  <option value="USD">USD ($)</option>
+                  <option value="EUR">EUR (€)</option>
+                </Select>
+              </FormField>
+            </div>
+          </fieldset>
+
+          <Separator />
+
+          {/* ÖZELLİKLER */}
+          <fieldset className="space-y-4">
+            <legend className="text-xs font-semibold uppercase text-muted-foreground tracking-wide">Özellikler</legend>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <FormField label="Oda sayısı">
+                <Input
+                  type="number"
+                  min={0}
+                  value={roomCount}
+                  onChange={(event) => setRoomCount(event.target.value)}
+                  placeholder="Örn: 3"
+                />
+              </FormField>
+              <FormField label="Banyo sayısı">
+                <Input
+                  type="number"
+                  min={0}
+                  value={bathroomCount}
+                  onChange={(event) => setBathroomCount(event.target.value)}
+                  placeholder="Örn: 1"
+                />
+              </FormField>
+              <FormField label="Brüt alan (m²)">
+                <Input
+                  type="number"
+                  min={0}
+                  value={grossArea}
+                  onChange={(event) => setGrossArea(event.target.value)}
+                  placeholder="Örn: 120"
+                />
+              </FormField>
+            </div>
+            <label className="inline-flex items-center gap-2 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isFurnished}
+                onChange={(event) => setIsFurnished(event.target.checked)}
+                className="size-4 rounded border-input"
+              />
+              <span>Mobilyalı</span>
+            </label>
+          </fieldset>
+
+          <Separator />
+
+          {/* AÇIKLAMA */}
+          <fieldset className="space-y-4">
+            <legend className="text-xs font-semibold uppercase text-muted-foreground tracking-wide">Açıklama</legend>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <FormField label="Özet" hint="Kısa tanıtım metni.">
+                <Textarea
+                  value={summary}
+                  onChange={(event) => setSummary(event.target.value)}
+                  placeholder="Kısa açıklama..."
+                  rows={3}
+                />
+              </FormField>
+              <FormField label="Detaylı açıklama">
+                <Textarea
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                  placeholder="Detaylı ilan metni..."
+                  rows={3}
+                />
+              </FormField>
+            </div>
+          </fieldset>
+
+          <Separator />
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
+              İptal
+            </Button>
+            <Button type="submit" disabled={busy}>
+              <Plus className="h-4 w-4" />
+              Oluştur
+            </Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function FormField({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div className={styles.field}>
-      <label>{label}</label>
+    <div className="flex flex-col gap-1.5">
+      <Label className="text-sm font-medium">{label}</Label>
       {children}
+      {hint && (
+        <p className="text-xs text-muted-foreground">{hint}</p>
+      )}
     </div>
   );
 }
@@ -594,18 +810,6 @@ function readListingIdFromMutation(value: unknown): string | null {
   if (listing && typeof listing === "object") {
     const id = (listing as Record<string, unknown>).id;
     if (typeof id === "string") return id;
-  }
-  return null;
-}
-
-function firstListingIdInList(list: AdminListingsListResponse): string | null {
-  for (const item of list.items) {
-    if (item && typeof item === "object" && !Array.isArray(item)) {
-      const id = (item as Record<string, unknown>).id;
-      if (typeof id === "string" && id.trim().length > 0) {
-        return id;
-      }
-    }
   }
   return null;
 }

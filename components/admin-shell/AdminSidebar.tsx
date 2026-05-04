@@ -6,7 +6,7 @@ import { X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-import { ADMIN_SIDEBAR_LINKS } from "./admin-shell-nav";
+import { ADMIN_SIDEBAR_ITEMS, type AdminSidebarItem } from "./admin-shell-nav";
 
 type AdminSidebarProps = {
   isMobileOpen: boolean;
@@ -19,6 +19,63 @@ function isActive(pathname: string, href: string): boolean {
     return pathname === "/admin";
   }
   return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+function renderSidebarItem(
+  item: AdminSidebarItem,
+  pathname: string,
+  onNavigate: (() => void) | undefined,
+) {
+  if (item.kind === "link") {
+    const active = isActive(pathname, item.href);
+    return (
+      <li key={item.href}>
+        <Link
+          href={item.href}
+          onClick={onNavigate}
+          aria-current={active ? "page" : undefined}
+          className={cn(
+            "flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors",
+            active
+              ? "bg-accent text-accent-foreground"
+              : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+          )}
+        >
+          {item.label}
+        </Link>
+      </li>
+    );
+  }
+
+  return (
+    <li key={item.label}>
+      <div className="mb-1 mt-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        {item.label}
+      </div>
+      <ul className="flex flex-col gap-1">
+        {item.children.map((child) => {
+          const active = isActive(pathname, child.href);
+          return (
+            <li key={child.href}>
+              <Link
+                href={child.href}
+                onClick={onNavigate}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "flex items-center rounded-md px-3 py-2 pl-6 text-sm font-medium transition-colors",
+                  active
+                    ? "bg-accent text-accent-foreground"
+                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                )}
+              >
+                {child.label}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </li>
+  );
 }
 
 export default function AdminSidebar({
@@ -58,26 +115,9 @@ export default function AdminSidebar({
 
       <nav className="flex-1 overflow-y-auto p-3" aria-label="Admin bölümleri">
         <ul className="flex flex-col gap-1">
-          {ADMIN_SIDEBAR_LINKS.map((link) => {
-            const active = isActive(pathname, link.href);
-            return (
-              <li key={link.href}>
-                <Link
-                  href={link.href}
-                  onClick={onNavigate}
-                  aria-current={active ? "page" : undefined}
-                  className={cn(
-                    "flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                    active
-                      ? "bg-accent text-accent-foreground"
-                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-                  )}
-                >
-                  {link.label}
-                </Link>
-              </li>
-            );
-          })}
+          {ADMIN_SIDEBAR_ITEMS.map((item) =>
+            renderSidebarItem(item, pathname, onNavigate),
+          )}
         </ul>
       </nav>
     </aside>

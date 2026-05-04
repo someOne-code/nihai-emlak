@@ -559,6 +559,95 @@ Kapanis kapisi:
 - Admin listing konfigurasyonu hem backend kontratlari hem de kullanilabilir
   admin UI acisindan dogrulanmistir.
 
+### Faz 9A: Custom Content Admin
+
+Durum: uygulanmakta. Bu faz, Payload CMS icerik motoru olarak kalirken icerik
+yonetimi yuzunu custom `/admin` shell icine tasir. Ilk teslimat `Posts`,
+`Categories` ve `Consultants` modullerini birlikte kapsar.
+
+Amac:
+- Payload content backend olarak kalir; Payload admin UI birincil editor yuzeyi
+  olmaz.
+- Custom content admin `/admin/content/*` altinda insa edilir.
+- UI dogrudan Payload REST/GraphQL'e gitmez; `Next route proxy -> Payload
+  Local API` modeli kullanilir.
+- `/cms` fallback admin olarak korunur.
+
+Katman karari:
+- Payload = content engine/backend
+- Next.js route handler = admin content API boundary
+- Supabase Auth = admin identity ve session
+- Payload users auth custom admin UI icin kullanilmaz
+
+Kapsam:
+- `/admin/content/posts`: blog yazilari listeleme, olusturma, duzenleme, silme
+- `/admin/content/categories`: blog kategorileri listeleme, olusturma,
+  duzenleme, silme
+- `/admin/content/consultants`: danisman profilleri listeleme, olusturma,
+  duzenleme, silme
+- `/api/admin/content/*` route proxy katmani
+- Sidebar'a yeni `Icerik` bolumu (Posts, Categories, Consultants alt
+  hedefleriyle)
+- Admin UX karari: bu ekranlar yazilimci olmayan ofis kullanicilari icindir.
+  `slug` ham teknik alan olarak manuel zorunluluk olmaz; UI'da `URL adi`
+  olarak baslik/ad bilgisinden otomatik uretilir ve yalnizca gerekirse
+  duzenlenir.
+- Supabase-first medya karari: blog kapak gorseli ve danisman fotografi icin
+  kalici UX manuel harici URL yapistirma degildir. Once Supabase Storage
+  upload akisi tercih edilir; Payload kaydinda mevcut contract geregi URL/path
+  tutulabilir.
+- v1 kapsam disi: rich text editor ve SEO preview. Auto-slug ve admin-dostu
+  medya upload hedefleri faz kapsaminda tutulur.
+
+TDD kapisi:
+- Her modul icin dar route contract testleri
+- Admin disi kullanici content admin route'larini kullanamaz
+- Anon kullanici redirect edilir
+- Mevcut admin shell, listings ve operations testleri bozulmaz
+- Browser smoke: `/admin/content/posts`, `/admin/content/categories`,
+  `/admin/content/consultants`, `/cms` fallback link
+
+Ayrintili uygulama plani:
+`docs/superpowers/plans/2026-05-02-phase9a-custom-content-admin.md`
+
+### Faz 9B: Listing Catalog & Per-Listing Pricing Admin
+
+Durum: planlandi. Bu faz, `/admin/listings` icindeki ana odeme kalemi ve
+ek hizmet fiyatlandirma yuzeyini admin-dostu hale getirir ve global katalog
+yonetimini custom admin shell icine tasir.
+
+Amac:
+- Admin global ana odeme kalemlerini ve ek hizmetleri olusturup yonetebilir.
+- Admin her ilanda ana kalem ve ek hizmet fiyatlarini o ilana ozel
+  ayarlayabilir.
+- UI'da teknik `override` dili gosterilmez; "Bu ilana ozel fiyat/tutar"
+  dili kullanilir.
+- Checkout fiyat source-of-truth'u DB/RPC tarafinda kalir.
+
+Katman karari:
+- Supabase = listing catalog ve pricing source-of-truth
+- Next.js route/controller = admin catalog/pricing boundary
+- Custom admin UI = katalog yonetimi ve ilan bazli fiyat girisi
+- Payload bu fazin parcası degildir
+
+Kapsam:
+- `/admin/listing-catalog`: global ana odeme kalemleri ve ek hizmetler
+- `/admin/listings`: ilan bazli fiyatlandirma UX polish
+- Mevcut listing pricing route/RPC kontratlarini koruyarak genisletme
+- Katalog fiyatlari varsayilan, ilan bazli fiyatlar override olarak
+  checkout hesaplamasinda oncelikli kalir
+
+TDD kapisi:
+- Admin olmayan kullanici katalog create/update yapamaz
+- Negatif fiyat/tutar/carpan reddedilir
+- Ilan bazli ozel fiyat varsa katalog varsayilanini ezer
+- Ozel fiyat bos/null ise katalog varsayilani kullanilir
+- Browser smoke: katalog kalemi olustur, ilana bagla, ilana ozel fiyat
+  kaydet, yeniden acildiginda persist ettigini dogrula
+
+Ayrintili uygulama plani:
+`docs/superpowers/plans/2026-05-03-phase9b-listing-catalog-pricing-admin.md`
+
 ### Faz 9: Belge sureci ve backoffice takip modeli
 
 Durum: planlandi. Bu faz, odeme sonrasi gercek hayatta yurutulen belge ve

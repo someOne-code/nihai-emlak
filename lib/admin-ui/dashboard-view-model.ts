@@ -6,6 +6,8 @@
 // when real metrics arrive they belong in a separate task with their
 // own DB/RPC contract.
 
+import type { AdminDashboardSummaryDto } from "./dashboard-summary-view-model";
+
 export type AdminDashboardActionCard = {
   readonly title: string;
   readonly description: string;
@@ -20,6 +22,15 @@ export type AdminDashboardStatusCard = {
     readonly label: string;
     readonly href: string;
   };
+};
+
+export type AdminDashboardMetricCard = {
+  readonly title: string;
+  readonly valueText: string;
+  readonly isNull: boolean;
+  readonly description: string;
+  readonly href: string;
+  readonly ctaLabel: string;
 };
 
 export const ADMIN_DASHBOARD_ACTION_CARDS: ReadonlyArray<AdminDashboardActionCard> =
@@ -86,3 +97,83 @@ export const ADMIN_DASHBOARD_STATUS_CARDS: ReadonlyArray<AdminDashboardStatusCar
       }),
     }),
   ]);
+
+export function buildAdminDashboardMetricCards(
+  summary: AdminDashboardSummaryDto,
+): ReadonlyArray<AdminDashboardMetricCard> {
+  return Object.freeze([
+    createMetricCard(
+      "Toplam İlan",
+      summary.listingTotal,
+      "Sistemdeki toplam ilan sayısı",
+      "/admin/listings",
+      "İlanları aç",
+    ),
+    createMetricCard(
+      "Aktif İlan",
+      summary.listingActive,
+      "Yayında olan aktif ilan sayısı",
+      "/admin/listings",
+      "Aktif ilanları aç",
+    ),
+    createMetricCard(
+      "Pasif İlan",
+      summary.listingPassive,
+      "Yayında olmayan pasif ilan sayısı",
+      "/admin/listings",
+      "Pasif ilanları aç",
+    ),
+    createMetricCard(
+      "Görselsiz İlan",
+      summary.listingWithoutImages,
+      "Hiç görseli olmayan ilan sayısı",
+      "/admin/listings",
+      "Görselsiz ilanları aç",
+    ),
+    createMetricCard(
+      "Checkout Hazır Değil",
+      summary.rentListingsNotCheckoutReady,
+      "Kiralık ilanlardan checkout hazır olmayanlar",
+      "/admin/listings",
+      "Hazırlık sorunlarını aç",
+    ),
+    createMetricCard(
+      "Bekleyen Rezervasyon",
+      summary.pendingReservations,
+      "Onay veya takip bekleyen rezervasyon sayısı",
+      "/admin/operations",
+      "Rezervasyonları aç",
+    ),
+    createMetricCard(
+      "Ödeme Sorunu",
+      summary.failedOrConflictPayments,
+      "Başarısız veya çakışmalı ödeme sayısı",
+      "/admin/operations",
+      "Ödeme sorunlarını aç",
+    ),
+    createMetricCard(
+      "Manuel İnceleme",
+      summary.manualResolutionRequired,
+      "Manuel operasyon incelemesi bekleyen kayıtlar",
+      "/admin/operations",
+      "İnceleme kuyruğunu aç",
+    ),
+  ]);
+}
+
+function createMetricCard(
+  title: string,
+  value: number | null,
+  description: string,
+  href: string,
+  ctaLabel: string,
+): AdminDashboardMetricCard {
+  return Object.freeze({
+    title,
+    valueText: value === null ? "Alınamadı" : String(value),
+    isNull: value === null,
+    description,
+    href,
+    ctaLabel,
+  });
+}

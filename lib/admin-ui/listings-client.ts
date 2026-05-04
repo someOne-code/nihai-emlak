@@ -312,3 +312,51 @@ function asNonEmptyString(value: unknown): string | null {
 
   return value.trim();
 }
+
+// ── Listing image file upload ───────────────────────────────────────────────
+
+export type ListingImageUploadResult = {
+  url: string;
+  path: string;
+  bucket: string;
+};
+
+export async function uploadListingImage(
+  file: File,
+  options: AdminListingsClientOptions = {},
+): Promise<ListingImageUploadResult> {
+  const fetcher = options.fetcher ?? globalThis.fetch.bind(globalThis);
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetcher("/api/admin/content/uploads/listing-image", {
+    method: "POST",
+    credentials: "same-origin",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    let message = `Upload failed (${response.status})`;
+    try {
+      const body = await response.json();
+      if (isRecord(body) && typeof body.error === "string") {
+        message = body.error;
+      }
+    } catch {
+      // ignore parse errors
+    }
+    throw new AdminListingsClientError(message, response.status);
+  }
+
+  const body = await response.json();
+  if (!isRecord(body) || !isRecord(body.data)) {
+    throw new AdminListingsClientError("Invalid upload response", 500);
+  }
+
+  const data = body.data as Record<string, unknown>;
+  return {
+    url: String(data.url ?? ""),
+    path: String(data.path ?? ""),
+    bucket: String(data.bucket ?? ""),
+  };
+}

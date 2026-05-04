@@ -17,7 +17,7 @@ test("node baseline script remains wired through npm test", async () => {
 
   assert.equal(
     packageJson.scripts?.test,
-    "npm run test:payment-callback-security && npm run test:phase8-admin-listings && npm run typecheck && npm run lint",
+    "npm run test:payment-callback-security && npm run test:phase8-admin-listings && npm run test:admin-dashboard && npm run test:admin-users && npm run test:phase9a-content && npm run test:phase9b-catalog && npm run typecheck && npm run lint",
   );
   assert.equal(
     packageJson.scripts?.["test:payment-callback-security"],

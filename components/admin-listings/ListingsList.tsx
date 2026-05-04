@@ -27,16 +27,23 @@ export default function ListingsList({
   children,
 }: ListingsListProps) {
   return (
-    <aside className="lstSidebar" aria-label="İlan listesi">
-      {toolbar ? <div className="lstToolbar">{toolbar}</div> : null}
+    <aside
+      className="flex flex-col gap-3 rounded-xl border bg-card p-4 sticky top-4"
+      aria-label="İlan listesi"
+    >
+      {toolbar ? <div className="flex flex-col gap-2">{toolbar}</div> : null}
 
       {rowsCount === 0 ? (
-        <div className="lstEmpty">{emptyText}</div>
+        <div className="text-sm text-muted-foreground py-4 text-center">{emptyText}</div>
       ) : (
-        <div className="flex flex-col gap-2">{children}</div>
+        <div className="flex flex-col gap-2 max-h-[calc(100vh-12rem)] overflow-y-auto pr-1">
+          {children}
+        </div>
       )}
 
-      {loading && <p className="opsLoadingText">{loadingText}</p>}
+      {loading && (
+        <p className="text-xs text-muted-foreground text-center animate-pulse">{loadingText}</p>
+      )}
     </aside>
   );
 }

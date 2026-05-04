@@ -22,6 +22,7 @@ Bu audit, [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) icindeki Faz 0.5'in
 | İçerik yönetimi | Payload CMS | Dış sistem |
 | Mesajlaşma kimlik doğrulama | Chatwoot + server-side HMAC | Dış sistem + ince custom |
 | Checkout intake / pre-payment contact bilgisi | DB table + checkout RPC + RLS | Supabase native + ince custom |
+| Görsel/dosya asset yönetimi (blog kapak, danışman fotoğrafı vb.) | Supabase Storage + storage policies | Supabase native |
 
 ## Detaylı Karar Matrisi
 
@@ -129,6 +130,16 @@ Bu audit, [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) icindeki Faz 0.5'in
 - **Uygulama:** kullanıcı ID'sinden HMAC üretip frontend'e güvenli şekilde verme
 - **Neden:** Chatwoot konuşma sahipliği ve impersonation riski bu şekilde çözülür.
 - **Ne yapmayacağız:** HMAC token frontend'de üretmeyeceğiz.
+
+### 13. Görsel / Dosya Asset Yönetimi
+
+- **Karar:** Admin'in URL yapıştırması yerine custom admin UI'dan görsel seçip Supabase Storage'a yüklemesi hedefleniyor.
+- **Sınıf:** Supabase native
+- **Uygulama:** Supabase Storage bucket, Storage RLS/policies, admin upload component, post `coverImageUrl` / `coverImagePath` alanı.
+- **Mevcut durum:** Phase 9A'da `coverImageUrl` text input placeholder olarak mevcut. Gerçek upload UX sonraki fazda uygulanacak.
+- **Neden:** Görsel depolama Supabase Storage'ın doğal uzmanlık alanıdır; erişim politikası uygulama katmanı yerine Storage RLS ile yönetilmelidir.
+- **Ne yapmayacağız:** Admin'den harici URL yapıştırmasını final UX olarak kabul etmeyeceğiz. Payload CMS içerik motoru olarak kalır ancak görsel asset storage Supabase'e taşınır.
+- **Kapsam:** Posts, categories, consultants — görsel ihtiyacı olan tüm content type'lar.
 
 ## Negatif Kararlar
 

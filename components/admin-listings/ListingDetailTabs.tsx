@@ -43,8 +43,12 @@ export default function ListingDetailTabs({
   };
 
   return (
-    <div className="lstTabs">
-      <div role="tablist" aria-label="İlan detay tablari" className="lstTabList">
+    <div className="flex flex-col gap-4">
+      <div
+        role="tablist"
+        aria-label="İlan detay sekmeleri"
+        className="flex flex-wrap gap-1 border-b border-border pb-1"
+      >
         {ADMIN_LISTING_DETAIL_TABS.map((tab) => {
           const isActive = tab.id === activeTab;
           return (
@@ -56,9 +60,11 @@ export default function ListingDetailTabs({
               aria-selected={isActive}
               aria-controls={`lstTabPanel-${tab.id}`}
               tabIndex={isActive ? 0 : -1}
-              className={
-                isActive ? "lstTabButton lstTabButtonActive" : "lstTabButton"
-              }
+              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                isActive
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              }`}
               onClick={() => setActiveTab(tab.id)}
             >
               {tab.label}
@@ -76,9 +82,7 @@ export default function ListingDetailTabs({
             role="tabpanel"
             aria-labelledby={`lstTabButton-${tab.id}`}
             hidden={!isActive}
-            className={
-              isActive ? "lstTabPanel" : "lstTabPanel lstTabPanelHidden"
-            }
+            className={isActive ? "flex flex-col gap-4" : "hidden"}
           >
             {panels[tab.id]}
           </div>
