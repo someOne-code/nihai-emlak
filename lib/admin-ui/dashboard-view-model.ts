@@ -50,11 +50,11 @@ export const ADMIN_DASHBOARD_ACTION_CARDS: ReadonlyArray<AdminDashboardActionCar
       ctaLabel: "Operasyonlara git",
     }),
     Object.freeze({
-      title: "CMS İçerik Yönetimi",
+      title: "İçerik Yönetimi",
       description:
         "Blog yazıları, kategoriler ve danışman profilleri için Payload içerik yönetimi.",
-      href: "/cms",
-      ctaLabel: "CMS'e git",
+      href: "/admin/content/posts",
+      ctaLabel: "İçeriğe git",
     }),
   ]);
 
@@ -90,10 +90,10 @@ export const ADMIN_DASHBOARD_STATUS_CARDS: ReadonlyArray<AdminDashboardStatusCar
     Object.freeze({
       title: "İçerik yönetimi",
       description:
-        "İçerik backend'i Payload tarafında kalır; blog ve danışman içeriği için CMS arayüzünü kullan.",
+        "İçerik backend'i Payload tarafında kalır; blog ve danışman içeriği için admin arayüzünü kullan.",
       cta: Object.freeze({
-        label: "CMS'e git",
-        href: "/cms",
+        label: "İçeriğe git",
+        href: "/admin/content/posts",
       }),
     }),
   ]);

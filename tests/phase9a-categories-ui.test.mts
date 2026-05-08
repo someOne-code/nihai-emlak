@@ -4,6 +4,8 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 // ── Empty state copy ──────────────────────────────────────────────────────────
 
@@ -194,4 +196,15 @@ test("buildCategoryUpdatePayload with slug round-trips through category update p
     assert.equal(parsed.value.slug, "guncel-slug");
     assert.equal(parsed.value.isActive, false);
   }
+});
+
+test("category edit panel shows linked blog posts for the selected category", () => {
+  const source = readFileSync(
+    resolve(import.meta.dirname, "..", "components", "admin-categories", "AdminCategoriesView.tsx"),
+    "utf-8",
+  );
+
+  assert.match(source, /Bağlı blog yazıları/);
+  assert.match(source, /detail\.linkedPosts/);
+  assert.match(source, /Bu kategoriye bağlı yazı yok/);
 });

@@ -37,6 +37,21 @@ type SupabaseClient = {
     functionName:
       | "admin_cancel_reservation"
       | "admin_confirm_reservation"
+      | "admin_request_documents"
+      | "admin_mark_documents_waiting"
+      | "admin_mark_documents_completed"
+      | "admin_mark_documents_failed"
+      | "get_admin_reservation_documents"
+      | "admin_mark_refund_required"
+      | "admin_mark_refund_requested"
+      | "admin_mark_refund_completed"
+      | "admin_mark_deposit_forfeited"
+      | "admin_mark_manual_resolution_required"
+      | "admin_mark_conflict_payment"
+      | "admin_mark_payment_issue_resolved"
+      | "admin_mark_payment_not_received"
+      | "get_admin_reservation_finance_ops"
+      | "list_admin_reservation_event_history"
       | "admin_reopen_listing"
       | "log_admin_workflow_invariant_rejection",
     args: Record<string, unknown>,
@@ -74,14 +89,14 @@ export async function handleAdminCancelReservationPost(
 
   const rpcResult = await guard.supabase.rpc("admin_cancel_reservation", {
     p_reservation_id: reservationId,
-    p_cancel_reason: bodyResult.body.reason,
+    p_refund_decision: bodyResult.body.refundDecision,
     p_note: bodyResult.body.note,
   });
   const invariantAuditFailure = await auditAdminWorkflowInvariantRejection(guard.supabase, rpcResult.error, {
     workflowName: "admin_cancel_reservation_rejected",
     reservationId,
     listingId: null,
-    reason: bodyResult.body.reason,
+    reason: bodyResult.body.refundDecision,
     note: bodyResult.body.note,
   });
   if (invariantAuditFailure) {
@@ -180,6 +195,167 @@ export async function handleAdminReopenListingPost(
   );
 }
 
+export async function handleAdminReservationDocumentsGet(
+  _request: Request,
+  dependencies: AdminWorkflowRouteDependencies,
+  params: { reservationId: string },
+): Promise<Response> {
+  const guard = await guardAdminWorkflowReadRequest(dependencies);
+  if (!guard.ok) {
+    return guard.response;
+  }
+
+  const reservationId = asUuid(params.reservationId);
+  if (!reservationId) {
+    return jsonError("Invalid reservation id", 400);
+  }
+
+  const rpcResult = await guard.supabase.rpc("get_admin_reservation_documents", {
+    p_reservation_id: reservationId,
+  });
+  if (rpcResult.error) {
+    return jsonError(...mapAdminWorkflowRpcError(rpcResult.error, "Reservation not found"));
+  }
+
+  if (!isRecord(rpcResult.data)) {
+    return jsonError("Invalid admin document tracking RPC response", 500);
+  }
+
+  return jsonResponse({ success: true, data: rpcResult.data }, 200);
+}
+
+export async function handleAdminReservationDocumentsPost(
+  request: Request,
+  dependencies: AdminWorkflowRouteDependencies,
+  params: { reservationId: string },
+): Promise<Response> {
+  const guard = await guardAdminWorkflowRequest(request, dependencies);
+  if (!guard.ok) {
+    return guard.response;
+  }
+
+  const reservationId = asUuid(params.reservationId);
+  if (!reservationId) {
+    return jsonError("Invalid reservation id", 400);
+  }
+
+  const bodyResult = await parseAdminDocumentBody(request);
+  if (!bodyResult.ok) {
+    return jsonError(bodyResult.error, bodyResult.status);
+  }
+
+  const rpcResult = await guard.supabase.rpc(DOCUMENT_STATUS_RPC_MAP[bodyResult.body.status], {
+    p_reservation_id: reservationId,
+    p_note: bodyResult.body.note,
+  });
+
+  return buildWorkflowResponse(
+    rpcResult,
+    "Reservation not found",
+    parseReservationDocumentWorkflowSuccess,
+  );
+}
+
+export async function handleAdminReservationFinanceOpsGet(
+  _request: Request,
+  dependencies: AdminWorkflowRouteDependencies,
+  params: { reservationId: string },
+): Promise<Response> {
+  const guard = await guardAdminWorkflowReadRequest(dependencies);
+  if (!guard.ok) {
+    return guard.response;
+  }
+
+  const reservationId = asUuid(params.reservationId);
+  if (!reservationId) {
+    return jsonError("Invalid reservation id", 400);
+  }
+
+  const rpcResult = await guard.supabase.rpc("get_admin_reservation_finance_ops", {
+    p_reservation_id: reservationId,
+  });
+  if (rpcResult.error) {
+    return jsonError(...mapAdminWorkflowRpcError(rpcResult.error, "Reservation not found"));
+  }
+
+  if (!isRecord(rpcResult.data)) {
+    return jsonError("Invalid admin finance ops RPC response", 500);
+  }
+
+  return jsonResponse({ success: true, data: rpcResult.data }, 200);
+}
+
+export async function handleAdminReservationEventHistoryGet(
+  _request: Request,
+  dependencies: AdminWorkflowRouteDependencies,
+  params: { reservationId: string },
+): Promise<Response> {
+  const guard = await guardAdminWorkflowReadRequest(dependencies);
+  if (!guard.ok) {
+    return guard.response;
+  }
+
+  const reservationId = asUuid(params.reservationId);
+  if (!reservationId) {
+    return jsonError("Invalid reservation id", 400);
+  }
+
+  const rpcResult = await guard.supabase.rpc("list_admin_reservation_event_history", {
+    p_reservation_id: reservationId,
+  });
+  if (rpcResult.error) {
+    return jsonError(...mapAdminWorkflowRpcError(rpcResult.error, "Reservation not found"));
+  }
+
+  if (!isRecord(rpcResult.data)) {
+    return jsonError("Invalid admin event history RPC response", 500);
+  }
+
+  return jsonResponse({ success: true, data: rpcResult.data }, 200);
+}
+
+export async function handleAdminReservationFinanceOpsPost(
+  request: Request,
+  dependencies: AdminWorkflowRouteDependencies,
+  params: { reservationId: string },
+): Promise<Response> {
+  const guard = await guardAdminWorkflowRequest(request, dependencies);
+  if (!guard.ok) {
+    return guard.response;
+  }
+
+  const reservationId = asUuid(params.reservationId);
+  if (!reservationId) {
+    return jsonError("Invalid reservation id", 400);
+  }
+
+  const bodyResult = await parseAdminFinanceOpsBody(request);
+  if (!bodyResult.ok) {
+    return jsonError(bodyResult.error, bodyResult.status);
+  }
+
+  const rpcResult = await guard.supabase.rpc(FINANCE_STATUS_RPC_MAP[bodyResult.body.status], {
+    p_reservation_id: reservationId,
+    p_note: bodyResult.body.note,
+  });
+  const invariantAuditFailure = await auditAdminWorkflowInvariantRejection(guard.supabase, rpcResult.error, {
+    workflowName: `${FINANCE_STATUS_RPC_MAP[bodyResult.body.status]}_rejected`,
+    reservationId,
+    listingId: null,
+    reason: bodyResult.body.status,
+    note: bodyResult.body.note,
+  });
+  if (invariantAuditFailure) {
+    return invariantAuditFailure;
+  }
+
+  return buildWorkflowResponse(
+    rpcResult,
+    "Reservation not found",
+    parseReservationFinanceOpsSuccess,
+  );
+}
+
 async function guardAdminWorkflowRequest(
   request: Request,
   dependencies: AdminWorkflowRouteDependencies,
@@ -234,6 +410,48 @@ async function guardAdminWorkflowRequest(
   };
 }
 
+async function guardAdminWorkflowReadRequest(
+  dependencies: AdminWorkflowRouteDependencies,
+): Promise<
+  | { ok: true; supabase: SupabaseClient }
+  | { ok: false; response: Response }
+> {
+  const supabase = (await dependencies.createServerSupabaseClient()) as SupabaseClient;
+  const userResult = await supabase.auth.getUser();
+  if (userResult.error || !userResult.data.user) {
+    return {
+      ok: false,
+      response: jsonError("Authentication required", 401),
+    };
+  }
+
+  const profileResult = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", userResult.data.user.id)
+    .maybeSingle();
+
+  if (profileResult.error) {
+    return {
+      ok: false,
+      response: jsonError("Admin profile lookup failed", 500),
+    };
+  }
+
+  const role = asNonEmptyString((profileResult.data as Record<string, unknown> | null)?.role ?? null);
+  if (role !== "admin") {
+    return {
+      ok: false,
+      response: jsonError("Admin role required", 403),
+    };
+  }
+
+  return {
+    ok: true,
+    supabase,
+  };
+}
+
 function validateAdminWorkflowRequestEnvelope(
   request: Request,
   config: StateChangingJsonRouteConfig,
@@ -248,10 +466,59 @@ function validateAdminWorkflowRequestEnvelope(
 async function parseAdminCancelBody(
   request: Request,
 ): Promise<
-  | { ok: true; body: { reason: string; note: string | null } }
+  | { ok: true; body: { refundDecision: "manual_refund" | "no_refund"; note: string } }
   | { ok: false; status: number; error: string }
 > {
-  return parseAdminReasonBody(request, "Admin cancel reason is required");
+  const payloadResult = await readStateChangingJsonRequestPayload(
+    request,
+    ADMIN_WORKFLOW_JSON_ROUTE_CONFIG,
+  );
+  if (!payloadResult.ok) {
+    return payloadResult;
+  }
+
+  if (!payloadResult.value || typeof payloadResult.value !== "object" || Array.isArray(payloadResult.value)) {
+    return {
+      ok: false,
+      status: 400,
+      error: "Invalid admin workflow request body",
+    };
+  }
+
+  const value = payloadResult.value as Record<string, unknown>;
+  const refundDecision = asNonEmptyString(value.refundDecision);
+  if (refundDecision !== "manual_refund" && refundDecision !== "no_refund") {
+    return {
+      ok: false,
+      status: 400,
+      error: "İade durumu seçilmelidir",
+    };
+  }
+
+  if (value.note !== undefined && typeof value.note !== "string") {
+    return {
+      ok: false,
+      status: 400,
+      error: "Admin workflow note must be a string",
+    };
+  }
+
+  const note = asNonEmptyString(value.note);
+  if (!note) {
+    return {
+      ok: false,
+      status: 400,
+      error: "İptal notu zorunludur",
+    };
+  }
+
+  return {
+    ok: true,
+    body: {
+      refundDecision,
+      note,
+    },
+  };
 }
 
 async function parseAdminReasonBody(
@@ -350,6 +617,124 @@ async function parseAdminNoteOnlyBody(
   return {
     ok: true,
     body: { note: noteResult.value },
+  };
+}
+
+const DOCUMENT_STATUS_RPC_MAP = {
+  requested: "admin_request_documents",
+  waiting: "admin_mark_documents_waiting",
+  completed: "admin_mark_documents_completed",
+  failed: "admin_mark_documents_failed",
+} as const;
+
+const FINANCE_STATUS_RPC_MAP = {
+  refund_required: "admin_mark_refund_required",
+  refund_requested: "admin_mark_refund_requested",
+  refund_completed: "admin_mark_refund_completed",
+  deposit_forfeited: "admin_mark_deposit_forfeited",
+  manual_resolution_required: "admin_mark_manual_resolution_required",
+  conflict_payment: "admin_mark_conflict_payment",
+  issue_resolved: "admin_mark_payment_issue_resolved",
+  payment_not_received: "admin_mark_payment_not_received",
+} as const;
+
+async function parseAdminDocumentBody(
+  request: Request,
+): Promise<
+  | { ok: true; body: { status: keyof typeof DOCUMENT_STATUS_RPC_MAP; note: string | null } }
+  | { ok: false; status: number; error: string }
+> {
+  const payloadResult = await readStateChangingJsonRequestPayload(
+    request,
+    ADMIN_WORKFLOW_JSON_ROUTE_CONFIG,
+  );
+  if (!payloadResult.ok) {
+    return payloadResult;
+  }
+
+  if (!payloadResult.value || typeof payloadResult.value !== "object" || Array.isArray(payloadResult.value)) {
+    return {
+      ok: false,
+      status: 400,
+      error: "Invalid JSON request body",
+    };
+  }
+
+  const body = payloadResult.value as Record<string, unknown>;
+  const status = asNonEmptyString(body.status);
+  if (!status || !(status in DOCUMENT_STATUS_RPC_MAP)) {
+    return {
+      ok: false,
+      status: 400,
+      error: "Invalid document workflow status",
+    };
+  }
+
+  const noteResult = parseOptionalAdminWorkflowNote(body.note);
+  if (!noteResult.ok) {
+    return {
+      ok: false,
+      status: 400,
+      error: noteResult.error,
+    };
+  }
+
+  return {
+    ok: true,
+    body: {
+      status: status as keyof typeof DOCUMENT_STATUS_RPC_MAP,
+      note: noteResult.value,
+    },
+  };
+}
+
+async function parseAdminFinanceOpsBody(
+  request: Request,
+): Promise<
+  | { ok: true; body: { status: keyof typeof FINANCE_STATUS_RPC_MAP; note: string | null } }
+  | { ok: false; status: number; error: string }
+> {
+  const payloadResult = await readStateChangingJsonRequestPayload(
+    request,
+    ADMIN_WORKFLOW_JSON_ROUTE_CONFIG,
+  );
+  if (!payloadResult.ok) {
+    return payloadResult;
+  }
+
+  if (!payloadResult.value || typeof payloadResult.value !== "object" || Array.isArray(payloadResult.value)) {
+    return {
+      ok: false,
+      status: 400,
+      error: "Invalid JSON request body",
+    };
+  }
+
+  const body = payloadResult.value as Record<string, unknown>;
+  const status = asNonEmptyString(body.status);
+  if (!status || !(status in FINANCE_STATUS_RPC_MAP)) {
+    return {
+      ok: false,
+      status: 400,
+      error: "Invalid finance workflow status",
+    };
+  }
+
+  const noteResult = parseOptionalAdminWorkflowNote(body.note);
+  if (!noteResult.ok) {
+    return {
+      ok: false,
+      status: 400,
+      error: noteResult.error,
+    };
+  }
+
+  return {
+    ok: true,
+    body: {
+      status: status as keyof typeof FINANCE_STATUS_RPC_MAP,
+      note: noteResult.value,
+    },
   };
 }
 
@@ -533,6 +918,96 @@ function parseListingWorkflowSuccess(value: unknown): {
   };
 }
 
+function parseReservationDocumentWorkflowSuccess(value: unknown): {
+  result: string;
+  eventId: string;
+  reservationId: string;
+  orderId: string;
+  paymentId: string | null;
+  listingId: string;
+  documentStatus: string;
+  adminNote: string | null;
+  updatedAt: string | null;
+} | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const result = asNonEmptyString(value.result);
+  const eventId = asUuid(value.event_id);
+  const reservationId = asUuid(value.reservation_id);
+  const orderId = asUuid(value.order_id);
+  const paymentIdRaw = value.payment_id;
+  const paymentId = paymentIdRaw === null ? null : asUuid(paymentIdRaw);
+  const listingId = asUuid(value.listing_id);
+  const documentStatus = asNonEmptyString(value.document_status);
+
+  if (!result || !eventId || !reservationId || !orderId || !paymentId || !listingId || !documentStatus) {
+    return null;
+  }
+
+  return {
+    result,
+    eventId,
+    reservationId,
+    orderId,
+    paymentId,
+    listingId,
+    documentStatus,
+    adminNote: asNonEmptyString(value.admin_note),
+    updatedAt: asNonEmptyString(value.updated_at),
+  };
+}
+
+function parseReservationFinanceOpsSuccess(value: unknown): {
+  result: string;
+  eventId: string;
+  reservationId: string;
+  orderId: string;
+  paymentId: string | null;
+  listingId: string;
+  financeStatus: string;
+  adminNote: string | null;
+  updatedAt: string | null;
+} | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const result = asNonEmptyString(value.result);
+  const eventId = asUuid(value.event_id);
+  const reservationId = asUuid(value.reservation_id);
+  const orderId = asUuid(value.order_id);
+  const paymentIdRaw = value.payment_id;
+  const paymentId = paymentIdRaw === null ? null : asUuid(paymentIdRaw);
+  const listingId = asUuid(value.listing_id);
+  const financeStatus = asNonEmptyString(value.finance_status);
+
+  if (
+    !result
+    || !eventId
+    || !reservationId
+    || !orderId
+    || (paymentIdRaw !== null && !paymentId)
+    || !listingId
+    || !financeStatus
+  ) {
+    return null;
+  }
+
+  return {
+    result,
+    eventId,
+    reservationId,
+    orderId,
+    paymentId,
+    listingId,
+    financeStatus,
+    adminNote: asNonEmptyString(value.admin_note),
+    updatedAt: asNonEmptyString(value.updated_at),
+  };
+}
+
 function jsonError(error: string, status: number): Response {
   return jsonResponse(
     {
@@ -590,6 +1065,10 @@ function parseOptionalAdminWorkflowNote(
     ok: true,
     value: normalized,
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function asUuid(value: unknown): string | null {

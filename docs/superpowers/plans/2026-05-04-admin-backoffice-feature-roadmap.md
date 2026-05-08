@@ -48,13 +48,13 @@ Next.js route/controller sadece auth, validation, origin/body guard ve dış sis
 
 | Öncelik | Modül | Neden |
 | --- | --- | --- |
-| P0 | Admin Dashboard Metrics | Admin panel açılınca neye bakılacağı görünmeli |
-| P0 | Listings Image Upload UX | Emlak operasyonunda görsel yönetimi temel ihtiyaç |
-| P0 | Operations UI Standardization | Kritik ödeme/rezervasyon ekranı eski CSS ve zayıf queue UX ile kalmış |
-| P1 | Communication Admin | Chatwoot backend var, admin görünürlüğü eksik |
-| P1 | Sale Leads Admin | Satılık ilanlarda checkout yok; lead/başvuru operasyonu gerekli |
-| P1 | Document Tracking | Ödeme sonrası backoffice takibi için durum yönetimi gerekli |
-| P2 | Finance Ops | Refund/kapora/conflict kararları launch öncesi görünür olmalı |
+| P0 | Admin Dashboard Metrics | ✅ Tamamlandı (2026-05-04) |
+| P0 | Listings Image Upload UX | ✅ Tamamlandı (2026-05-02) |
+| P0 | Operations UI Standardization | ✅ Tamamlandı (2026-05-04) |
+| P1 | Communication Admin | ✅ Tamamlandı (2026-05-05) |
+| P1 | Sale Leads Admin | ✅ Tamamlandı (2026-05-05) |
+| P1 | Document Tracking | ✅ Tamamlandı (2026-05-05) |
+| P2 | Finance Ops | ✅ Tamamlandı (2026-05-05) |
 | P2 | Audit Log Viewer | Kim ne yaptı sorusuna cevap |
 | P2 | Content Polish | Blog/danışman modüllerini ürün kalitesine çekmek |
 | P3 | System Health | Config/env/storage/payment/chatwoot readiness görünürlüğü |
@@ -233,6 +233,17 @@ Aksiyonlar:
 
 ## Faz E: Sale Leads Admin
 
+Durum: Tamamlandi (2026-05-05).
+
+Kapanis ozeti:
+
+- `/admin/sale-leads` ekrani eklendi.
+- `sale_leads` + `sale_lead_events` Supabase modeli eklendi.
+- Public create route sadece satilik ilanlar icin lead olusturuyor.
+- Admin status transition RPC audit/event yaziyor.
+- Danisman atamasi eklenmedi; roadmap siniri korundu.
+- Satilik checkout reddi regresyonu korunuyor.
+
 ### Amaç
 
 Satılık ilanlar için checkout yerine lead/başvuru operasyon akışı oluşturulsun.
@@ -247,7 +258,7 @@ Lead alanları:
 - Kullanıcı/contact bilgisi
 - Mesaj/not
 - Lead status
-- Danışman ataması, eğer consultant-listing ilişkisi eklenecekse
+danısmanlar sıtede vıtrın olarak duracak atama yok
 - Son güncelleme
 
 Status önerileri:
@@ -279,6 +290,8 @@ Status önerileri:
 - Admin dışı kullanıcı başka kullanıcının lead kaydını okuyamaz.
 
 ## Faz F: Document Tracking
+
+Durum: ✅ Tamamlandı (2026-05-05). Supabase `reservation_document_tracking` tablosu, explicit admin workflow RPC'leri, audit event yazımı, thin Next route ve `/admin/operations` içinde `Belge Takibi` kartı eklendi. Hassas belge upload bu faza alınmadı.
 
 ### Amaç
 
@@ -320,6 +333,8 @@ Operations içinde sekme veya ayrı ekran:
 - Her state change kim/neden/zaman bilgisiyle izlenir.
 
 ## Faz G: Finance Ops: Refund, Deposit, Conflict
+
+Durum: ✅ Tamamlandı (2026-05-05). Supabase `payment_finance_ops` karar tablosu, explicit admin finance workflow RPC'leri, `admin_workflow_events` + `payment_events` audit yazımı, thin Next route ve `/admin/operations` içinde `Finans Operasyon` kartı eklendi. Otomatik provider refund/para hareketi bu faza alınmadı.
 
 ### Amaç
 
@@ -457,6 +472,15 @@ Production readiness için admin/devops seviyesinde sade sistem sağlık ekranı
 
 Yeni ekran: `/admin/system`
 
+Local readiness notes:
+
+- Chatwoot smoke command: `npm run test:chatwoot-live`
+- Required smoke env: `CHATWOOT_BASE_URL`, `CHATWOOT_INBOX_IDENTIFIER`,
+  `CHATWOOT_HMAC_TOKEN`
+- Admin Chatwoot open-link env: `CHATWOOT_ACCOUNT_ID`
+- Chatwoot webhook sync remains out of scope until a signed webhook
+  ingestion contract is planned.
+
 Kontroller:
 
 - Supabase bağlantısı
@@ -487,26 +511,24 @@ Kontroller:
 
 ## Önerilen Uygulama Sırası
 
-1. Faz A: Admin Dashboard Metrics
-2. Faz B: Listings Image Upload UX
-3. Faz C: Operations UI Standardization
-4. Faz D: Communication Admin
-5. Faz E: Sale Leads Admin
-6. Faz F: Document Tracking
-7. Faz G: Finance Ops
-8. Faz H: Audit Log Viewer
-9. Faz I: Content Polish
-10. Faz J: System Health
+1. ✅ Faz A: Admin Dashboard Metrics
+2. ✅ Faz B: Listings Image Upload UX
+3. ✅ Faz C: Operations UI Standardization
+4. ✅ Faz D: Communication Admin
+5. ✅ Faz E: Sale Leads Admin
+6. ✅ Faz F: Document Tracking
+7. ✅ Faz G: Finance Ops
+8. ⬜ Faz H: Audit Log Viewer ← **sıradaki**
+9. ⬜ Faz I: Content Polish
+10. ⬜ Faz J: System Health
 
-## İlk Sprint Önerisi
+## İlk Sprint Önerisi (tamamlandı)
 
-İlk kodlama sprint’i için önerilen kapsam:
+✅ Dashboard Metrics read model + `/admin` UI kartları
+✅ Listings Image Upload UX
+✅ Operations UI Standardization
 
-1. Dashboard Metrics read model + `/admin` UI kartları
-2. Listings Image Upload UX
-3. Operations UI Standardization için sadece görsel refactor ve filtre iskeleti
-
-Bu üçü en hızlı operasyonel değer üretir ve mevcut backend kontratlarına en yakın işlerdir.
+İkinci sprint: Communication Admin + Sale Leads Admin.
 
 ## Validation Stratejisi
 

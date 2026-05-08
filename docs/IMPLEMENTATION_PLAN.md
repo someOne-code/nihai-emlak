@@ -427,11 +427,32 @@ Tamamlanan alt fazlar:
   - HMAC token frontend’de üretilmez
   - token sunucu tarafında, gizli anahtarla üretilip istemciye verilir
 
+### Faz 7.6: Admin Communication UI + Retry + Inngest Worker
+
+Durum: tamamlandi (2026-05-05). Admin backoffice roadmap Faz D kapsaminda.
+
+Kapanis ozeti:
+- `/admin/communications` ekrani: Chatwoot conversation mapping listesi,
+  status badge (Hazır/Oluşturuluyor/Başarısız), filtreleme, arama.
+- `POST /api/admin/communications` retry route'u: failed mapping'i
+  provisioning'e çevirir, Inngest'e `chatwoot/conversation.retry_requested`
+  event'i gönderir.
+- `public.admin_retry_chatwoot_conversation(uuid)` RPC: SECURITY DEFINER
+  wrapper → `internal` schema'da admin guard + audit log.
+- Inngest `chatwoot-provision` worker: event'i tüketir, Chatwoot
+  contact/conversation oluşturur, mapping'i `ready` yapar.
+- `_39_system_chatwoot_provisioning` migration: service-role-only DB
+  completion/failure RPC'leri.
+
+Kapanis dogrulamasi:
+- `npm run test:admin-communications` (27 test, fail 0)
+- Playwright E2E: failed → retry → provisioning → ready zinciri
+- `npm test` (full baseline)
+
 ### Faz 8: Admin listing ve fiyat konfigurasyon yonetimi
 
-Durum: planlandi. Bu faz, admin panelin sadece operasyon dashboard'u
-olmaktan cikip ilani ve checkout konfigurasyonunu yonetebilir hale gelmesini
-saglar.
+Durum: tamamlandi (2026-05-01). Faz 8.5 functional UI ve Faz 8.6 product
+UX upgrade gecildi. Admin backoffice roadmap Faz A, B kapsaminda.
 
 Amaç:
 - Admin kullanicilar listing, listing image, main item ve service option
@@ -547,7 +568,7 @@ Plan:
 
 #### Faz 8.7: Phase 8 hardening, docs and closure
 
-Durum: planlandi. Faz 8.5 ve Faz 8.6 gecmeden Phase 8 kapanmis sayilmaz.
+Durum: tamamlandi (2026-05-01). Faz 8.5 ve Faz 8.6 gecildi.
 
 Kapsam:
 - `docs/ADMIN_LISTING_CONFIG_CONTRACT.md` son haline getirilir.
@@ -561,8 +582,9 @@ Kapanis kapisi:
 
 ### Faz 9A: Custom Content Admin
 
-Durum: uygulanmakta. Bu faz, Payload CMS icerik motoru olarak kalirken icerik
-yonetimi yuzunu custom `/admin` shell icine tasir. Ilk teslimat `Posts`,
+Durum: tamamlandi (2026-05-02). Posts, Categories, Consultants modulleri
+custom admin shell'de. Admin backoffice roadmap Faz I kapsaminda polish
+kaldi. Ilk teslimat `Posts`,
 `Categories` ve `Consultants` modullerini birlikte kapsar.
 
 Amac:
@@ -612,9 +634,8 @@ Ayrintili uygulama plani:
 
 ### Faz 9B: Listing Catalog & Per-Listing Pricing Admin
 
-Durum: planlandi. Bu faz, `/admin/listings` icindeki ana odeme kalemi ve
-ek hizmet fiyatlandirma yuzeyini admin-dostu hale getirir ve global katalog
-yonetimini custom admin shell icine tasir.
+Durum: tamamlandi (2026-05-03). `/admin/listing-catalog` global katalog
+yonetimi ve ilan bazli fiyatlandirma admin shell'de.
 
 Amac:
 - Admin global ana odeme kalemlerini ve ek hizmetleri olusturup yonetebilir.
@@ -716,7 +737,18 @@ TDD kapisi:
 
 ### Faz 11: Satilik ilan lead/basvuru akisi
 
-Durum: planlandi. Proje sadece kiralik degildir; satilik ilanlarda odeme ve
+Durum: tamamlandi (2026-05-05). Admin backoffice roadmap Faz E kapsaminda.
+
+Kapanis ozeti:
+- `/api/sale-leads` public create boundary eklendi; auth, origin/body
+  validation ve `create_sale_lead` RPC cagrisi yapiyor.
+- `sale_leads` ve `sale_lead_events` Supabase modeli RLS ile eklendi.
+- `/api/admin/sale-leads` ve `/admin/sale-leads` admin yuzeyi eklendi.
+- Admin status transition RPC audit/event kaydi birakiyor.
+- Satilik checkout reddi regresyonu `tests/checkout-create-route.test.mts`
+  icinde korunuyor.
+
+Onceki hedef: Proje sadece kiralik degildir; satilik ilanlarda odeme ve
 ek hizmet yoktur, temel akis iletisim/basvuru odaklidir.
 
 Amaç:

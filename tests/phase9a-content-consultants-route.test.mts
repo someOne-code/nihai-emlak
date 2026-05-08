@@ -177,3 +177,27 @@ test("parseConsultantUpdateBody trims whitespace from non-empty string fields", 
   assert.equal(result.ok, true);
   if (result.ok) assert.equal(result.value.fullName, "Trimmed");
 });
+
+test("consultant DTO exposes preview link and related contact counts", async () => {
+  const { toConsultantDTOForTest } = await import("../lib/admin/content-consultants-dto.ts");
+
+  const dto = toConsultantDTOForTest({
+    id: 7,
+    fullName: "Ali Veli",
+    slug: "ali-veli",
+    title: "Consultant",
+    phone: "+90555",
+    email: "ali@example.com",
+    whatsappUrl: "https://wa.me/90555",
+    linkedinUrl: "https://linkedin.com/in/ali",
+    isPublished: true,
+    createdAt: "2024-01-01",
+    updatedAt: "2024-01-02",
+  });
+
+  assert.equal(dto.previewLink, "/consultants/ali-veli");
+  assert.deepEqual(dto.relatedCounts, {
+    contactChannels: 3,
+    externalLinks: 1,
+  });
+});

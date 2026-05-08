@@ -23,6 +23,10 @@ import {
   type PostCreateInput,
   type PostUpdateInput,
 } from "./content-posts-parsers";
+import {
+  buildPayloadPostCreateData,
+  buildPayloadPostUpdateData,
+} from "./content-posts-payload";
 
 // ── DTO types ──────────────────────────────────────────────────────────────
 
@@ -207,18 +211,7 @@ export async function handlePostsCreatePost(
   try {
     const doc = await payload.create({
       collection: "blog_posts",
-      data: {
-        title: parsed.value.title,
-        slug: parsed.value.slug,
-        excerpt: parsed.value.excerpt,
-        content: parsed.value.content,
-        category: parsed.value.category,
-        status: parsed.value.status ?? "draft",
-        publishedAt: parsed.value.publishedAt,
-        coverImageUrl: parsed.value.coverImageUrl,
-        seoTitle: parsed.value.seoTitle,
-        seoDescription: parsed.value.seoDescription,
-      },
+      data: buildPayloadPostCreateData(parsed.value),
     });
 
     return jsonResponse(
@@ -290,7 +283,7 @@ export async function handlePostUpdate(
     const doc = await payload.update({
       collection: "blog_posts",
       id,
-      data: parsed.value,
+      data: buildPayloadPostUpdateData(parsed.value),
     });
 
     return jsonResponse(

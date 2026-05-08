@@ -157,6 +157,15 @@ Read the calling user's ready mapping for a listing.
 
 List messages for a conversation owned by the caller.
 
+**Query parameters**
+
+- `limit`: optional integer, `1..100`, default `20`
+- `offset`: optional integer, `>= 0`, default `0`
+
+Invalid pagination values return `400` before any DB or provider call.
+Validated pagination is forwarded to the Chatwoot client as provider query
+parameters and echoed in the success payload.
+
 **Ownership check**
 
 - `chatwoot_conversations` is read with the user-context client and an
@@ -183,7 +192,7 @@ List messages for a conversation owned by the caller.
 | Status | Meaning                                                |
 |--------|--------------------------------------------------------|
 | 200    | Sanitized message list returned.                       |
-| 400    | Invalid conversation id.                               |
+| 400    | Invalid conversation id or pagination query.           |
 | 401    | Authentication required.                               |
 | 404    | Mapping not owned by caller or not ready.              |
 | 500    | Mapping lookup failed.                                 |
@@ -194,6 +203,10 @@ List messages for a conversation owned by the caller.
 ```json
 {
   "conversation_id": "<uuid>",
+  "pagination": {
+    "limit": 20,
+    "offset": 0
+  },
   "messages": [
     {
       "id": "101",
@@ -291,15 +304,45 @@ Send an incoming message from the calling user into their conversation.
 - The route layer does not use `service_role`; only the user-context
   Supabase client.
 
+## Local Chatwoot Smoke
+
+Run the opt-in live smoke with:
+
+```bash
+npm run test:chatwoot-live
+```
+
+The smoke is intentionally excluded from `npm test`. It reads only these
+environment keys:
+
+- `CHATWOOT_BASE_URL`
+- `CHATWOOT_INBOX_IDENTIFIER`
+- `CHATWOOT_HMAC_TOKEN`
+
+If any required key is missing, the test exits successfully with a TAP
+skip diagnostic. When all required keys are present, it creates a
+deterministic `user:live-smoke-*` contact identifier, creates a
+conversation, sends one incoming message, and lists messages through the
+existing `lib/communications/chatwoot.ts` client.
+
+The same smoke also runs a route-level messaging simulation: it creates a
+real Chatwoot contact/conversation, sends an incoming message through the
+backend message POST handler, then reads it through the backend message
+GET handler to verify the customer-facing sanitized response shape.
+
+`CHATWOOT_ACCOUNT_ID` is documented in `.env.example` for admin open-link
+URLs that need to deep-link from backoffice rows into the Chatwoot
+account. It is not required by the public Client API smoke test.
+
 ## Known Limitations
 
-- The messages GET endpoint does not yet expose pagination or cursor
-  parameters. A follow-up phase will add a documented pagination
-  contract; until then, the response reflects the provider default
-  page.
 - Streaming/realtime delivery is out of scope for Phase 7. Clients
   must poll the messages endpoint or rely on Chatwoot-side widgets
   outside this API surface.
+- Chatwoot webhook sync is out of scope for this contract and the local
+  live smoke; webhook payload ingestion will need its own signature
+  verification, idempotency, and event contract before it becomes a
+  product backend source.
 - Activity, template, and private Chatwoot messages are intentionally
   hidden from the customer-facing API surface and are not retrievable
   via this contract.

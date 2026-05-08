@@ -22,6 +22,15 @@ import {
   loadContentDetailModel,
 } from "@/lib/admin-ui/content-controller";
 import {
+  createContentLoadGuard,
+  shouldStartContentLoad,
+} from "@/lib/admin-ui/content-load-guard";
+import {
+  createContentRefreshGate,
+  refreshContentViews,
+  shouldRefreshContentOnResume,
+} from "@/lib/admin-ui/content-refresh";
+import {
   type PostsListViewModel,
   type PostRow as PostRowType,
   type PostDetail,
@@ -66,7 +75,6 @@ import {
   AdminFormSection,
   adminLayout,
   safeErrorMessage,
-  readIdFromMutation,
 } from "@/components/admin-content-shared";
 
 import PostsPageHeader from "./PostsPageHeader";
@@ -110,6 +118,9 @@ export default function AdminPostsView() {
   const [showCreate, setShowCreate] = useState(false);
 
   const mountedRef = useRef(true);
+  const initialListLoadGuardRef = useRef(createContentLoadGuard());
+  const categoryLoadGuardRef = useRef(createContentLoadGuard());
+  const resumeRefreshGateRef = useRef(createContentRefreshGate());
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -117,28 +128,35 @@ export default function AdminPostsView() {
     };
   }, []);
 
-  // Load category options once for form selects.
-  useEffect(() => {
-    fetchAdminCategoryOptions()
-      .then((raw) => {
-        if (!mountedRef.current) return;
-        if (Array.isArray(raw)) {
-          const opts: CategoryOption[] = (raw as unknown[])
-            .filter(
-              (item): item is Record<string, unknown> =>
-                typeof item === "object" && item !== null,
-            )
-            .map((item) => ({
-              id: String(item.id ?? ""),
-              title: String(item.title ?? ""),
-            }));
-          setCategories(opts);
-        }
-      })
-      .catch(() => {
-        // Non-fatal: category select will remain empty
-      });
+  const refreshCategoryOptions = useCallback(async () => {
+    try {
+      const raw = await fetchAdminCategoryOptions();
+      if (!mountedRef.current) return;
+      if (Array.isArray(raw)) {
+        const opts: CategoryOption[] = (raw as unknown[])
+          .filter(
+            (item): item is Record<string, unknown> =>
+              typeof item === "object" && item !== null,
+          )
+          .map((item) => ({
+            id: String(item.id ?? ""),
+            title: String(item.title ?? ""),
+          }));
+        setCategories(opts);
+      }
+    } catch {
+      // Non-fatal: category select will keep the last loaded options.
+    }
   }, []);
+
+  // Load category options once for filters, then refresh again when create opens.
+  useEffect(() => {
+    if (!shouldStartContentLoad(categoryLoadGuardRef.current)) {
+      return;
+    }
+
+    void refreshCategoryOptions();
+  }, [refreshCategoryOptions]);
 
   const loadList = useCallback(async (nextFilters: FilterState) => {
     setLoading(true);
@@ -160,8 +178,41 @@ export default function AdminPostsView() {
   }, []);
 
   useEffect(() => {
+    if (!shouldStartContentLoad(initialListLoadGuardRef.current)) {
+      return;
+    }
+
     loadList(INITIAL_FILTERS);
   }, [loadList]);
+
+  useEffect(() => {
+    const refreshOnResume = () => {
+      if (document.visibilityState === "hidden") {
+        return;
+      }
+      if (!shouldRefreshContentOnResume(resumeRefreshGateRef.current)) {
+        return;
+      }
+
+      void refreshContentViews([
+        () => loadList(filters),
+        () => refreshCategoryOptions(),
+      ]);
+    };
+
+    window.addEventListener("focus", refreshOnResume);
+    document.addEventListener("visibilitychange", refreshOnResume);
+    return () => {
+      window.removeEventListener("focus", refreshOnResume);
+      document.removeEventListener("visibilitychange", refreshOnResume);
+    };
+  }, [filters, loadList, refreshCategoryOptions]);
+
+  const loadPostDetail = useCallback(async (postId: string) => {
+    const result = await loadContentDetailModel("posts", postId);
+    if (!mountedRef.current) return;
+    setDetail(result?.type === "post" ? result.detail : null);
+  }, []);
 
   const handleSelectPost = useCallback(async (postId: string) => {
     setActionError(null);
@@ -170,16 +221,14 @@ export default function AdminPostsView() {
     setShowCreate(false);
     setDetailLoading(true);
     try {
-      const result = await loadContentDetailModel("posts", postId);
-      if (!mountedRef.current) return;
-      setDetail(result?.type === "post" ? result.detail : null);
+      await loadPostDetail(postId);
     } catch (err) {
       if (!mountedRef.current) return;
       setActionError(safeErrorMessage(err));
     } finally {
       if (mountedRef.current) setDetailLoading(false);
     }
-  }, []);
+  }, [loadPostDetail]);
 
   const handleApplyFilters = useCallback(
     (nextFilters: FilterState) => {
@@ -189,14 +238,32 @@ export default function AdminPostsView() {
     [loadList],
   );
 
+  const openCreatePostPanel = useCallback(() => {
+    setShowCreate(true);
+    setSelectedId(null);
+    setDetail(null);
+    void refreshCategoryOptions();
+  }, [refreshCategoryOptions]);
+
   const refreshAfterMutation = useCallback(
     async (postId: string | null, message: string) => {
       setActionSuccess(message);
       setActionError(null);
-      await loadList(filters);
-      if (postId && mountedRef.current) await handleSelectPost(postId);
+      if (postId) {
+        setSelectedId(postId);
+        setDetailLoading(true);
+      }
+
+      try {
+        await refreshContentViews([
+          () => loadList(filters),
+          ...(postId ? [() => loadPostDetail(postId)] : []),
+        ]);
+      } finally {
+        if (postId && mountedRef.current) setDetailLoading(false);
+      }
     },
-    [filters, loadList, handleSelectPost],
+    [filters, loadList, loadPostDetail],
   );
 
   const runAction = useCallback(
@@ -245,16 +312,14 @@ export default function AdminPostsView() {
 
   const hasActiveFilter =
     !!filters.search || !!filters.status || !!filters.category;
+  const shouldRenderDetailPanel =
+    showCreate || detail || detailLoading || viewModel.rows.length > 0;
 
   return (
     <div className={adminLayout.container}>
       <PostsPageHeader
         disabled={busy || loading}
-        onCreateClick={() => {
-          setShowCreate(true);
-          setSelectedId(null);
-          setDetail(null);
-        }}
+        onCreateClick={openCreatePostPanel}
       />
 
       {(error || actionError) && (
@@ -271,15 +336,6 @@ export default function AdminPostsView() {
           emptyTitle={hasActiveFilter ? "Sonuç yok" : "Henüz yazı yok"}
           emptyText={
             hasActiveFilter ? POSTS_FILTERED_EMPTY_TEXT : POSTS_EMPTY_TEXT
-          }
-          onCreateClick={
-            hasActiveFilter
-              ? undefined
-              : () => {
-                  setShowCreate(true);
-                  setSelectedId(null);
-                  setDetail(null);
-                }
           }
           toolbar={
             <FilterControls
@@ -300,67 +356,69 @@ export default function AdminPostsView() {
           ))}
         </PostsList>
 
-        <section className={adminLayout.detailPanel}>
-          {showCreate && (
-            <CreatePostPanel
-              busy={busy}
-              categories={categories}
-              onCancel={() => setShowCreate(false)}
-              onCreate={(payload) =>
-                runAction("Yazı oluşturuldu.", async () => {
-                  const created = await createAdminPost(payload);
-                  setShowCreate(false);
-                  return readIdFromMutation(created);
-                })
-              }
-            />
-          )}
+        {shouldRenderDetailPanel && (
+          <section className={adminLayout.detailPanel}>
+            {showCreate && (
+              <CreatePostPanel
+                busy={busy}
+                categories={categories}
+                onCancel={() => setShowCreate(false)}
+                onCreate={(payload) =>
+                  runAction("Yazı oluşturuldu.", async () => {
+                    await createAdminPost(payload);
+                    setShowCreate(false);
+                    return null;
+                  })
+                }
+              />
+            )}
 
-          {!showCreate && detail && (
-            <EditPostPanel
-              key={`edit-${detail.id}`}
-              detail={detail}
-              busy={busy || detailLoading}
-              categories={categories}
-              onSave={(payload) =>
-                runAction("Yazı güncellendi.", async () => {
-                  await updateAdminPost(detail.id, payload);
-                  return detail.id;
-                })
-              }
-              onDelete={() =>
-                runAction("Yazı silindi.", async () => {
-                  await deleteAdminPost(detail.id);
-                  setDetail(null);
-                  setSelectedId(null);
-                  return null;
-                })
-              }
-            />
-          )}
+            {!showCreate && detail && (
+              <EditPostPanel
+                key={`edit-${detail.id}`}
+                detail={detail}
+                busy={busy || detailLoading}
+                categories={categories}
+                onSave={(payload) =>
+                  runAction("Yazı güncellendi.", async () => {
+                    await updateAdminPost(detail.id, payload);
+                    return detail.id;
+                  })
+                }
+                onDelete={() =>
+                  runAction("Yazı silindi.", async () => {
+                    await deleteAdminPost(detail.id);
+                    setDetail(null);
+                    setSelectedId(null);
+                    return null;
+                  })
+                }
+              />
+            )}
 
-          {!showCreate && !detail && !detailLoading && (
-            <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed p-10 text-center">
-              <div
-                className="flex size-12 items-center justify-center rounded-xl border bg-muted text-2xl"
-                aria-hidden="true"
-              >
-                ✎
+            {!showCreate && !detail && !detailLoading && (
+              <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed p-10 text-center">
+                <div
+                  className="flex size-12 items-center justify-center rounded-xl border bg-muted text-2xl"
+                  aria-hidden="true"
+                >
+                  ✎
+                </div>
+                <h3 className="text-sm font-semibold">Yazı seçilmedi</h3>
+                <p className="max-w-xs text-xs text-muted-foreground">
+                  Detayı görüntülemek için soldan bir yazı seçin veya yeni bir
+                  yazı oluşturun.
+                </p>
               </div>
-              <h3 className="text-sm font-semibold">Yazı seçilmedi</h3>
-              <p className="max-w-xs text-xs text-muted-foreground">
-                Detayı görüntülemek için soldan bir yazı seçin veya yeni bir
-                yazı oluşturun.
-              </p>
-            </div>
-          )}
+            )}
 
-          {detailLoading && (
-            <div className="rounded-xl border bg-card p-5">
-              <p className={adminLayout.loadingText}>Yükleniyor...</p>
-            </div>
-          )}
-        </section>
+            {detailLoading && (
+              <div className="rounded-xl border bg-card p-5">
+                <p className={adminLayout.loadingText}>Yükleniyor...</p>
+              </div>
+            )}
+          </section>
+        )}
       </div>
     </div>
   );
@@ -552,6 +610,7 @@ function CreatePostPanel({
             onChange={(e) => setContent(e.target.value)}
             rows={8}
             placeholder="Yazı içeriği"
+            required
           />
         </AdminField>
         <AdminField label="Kategori">
@@ -738,6 +797,7 @@ function EditPostPanel({
             value={content}
             onChange={(e) => setContent(e.target.value)}
             rows={10}
+            required
           />
         </AdminField>
         <AdminField label="Kategori">

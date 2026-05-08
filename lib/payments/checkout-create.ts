@@ -13,7 +13,7 @@ export type CheckoutCreateRequestBody = {
   listingId: string;
   mainItems: string[];
   moveInDate: string;
-  note: string | null;
+  note: string;
   serviceItems: string[];
   stayMonths: number;
 };
@@ -99,6 +99,9 @@ export function parseCheckoutCreateRequestBody(payload: unknown): CheckoutCreate
   const note = normalizeNote(row.note);
   if (!note.ok) {
     return validationError(note.error);
+  }
+  if (note.value === null) {
+    return validationError("note is required");
   }
 
   const contact = normalizeContact(row.contact);

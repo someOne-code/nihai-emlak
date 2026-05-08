@@ -3,10 +3,11 @@
 import { useState, type ReactNode } from "react";
 
 import {
-  ADMIN_LISTING_DETAIL_TABS,
   DEFAULT_ADMIN_LISTING_DETAIL_TAB,
+  getAdminListingDetailTabsForType,
   type AdminListingDetailTabId,
 } from "@/lib/admin-ui/listings-product-layout";
+import type { AdminListingType } from "@/lib/admin-ui/listings-view-model";
 
 // Phase 8.6 Task 4: tab shell for the listing detail panels.
 //
@@ -22,6 +23,7 @@ type ListingDetailTabsProps = {
   services: ReactNode;
   checkout: ReactNode;
   initialTab?: AdminListingDetailTabId;
+  listingType?: AdminListingType;
 };
 
 export default function ListingDetailTabs({
@@ -31,8 +33,13 @@ export default function ListingDetailTabs({
   services,
   checkout,
   initialTab = DEFAULT_ADMIN_LISTING_DETAIL_TAB,
+  listingType = "unknown",
 }: ListingDetailTabsProps) {
-  const [activeTab, setActiveTab] = useState<AdminListingDetailTabId>(initialTab);
+  const tabs = getAdminListingDetailTabsForType(listingType);
+  const initialVisibleTab = tabs.some((tab) => tab.id === initialTab)
+    ? initialTab
+    : DEFAULT_ADMIN_LISTING_DETAIL_TAB;
+  const [activeTab, setActiveTab] = useState<AdminListingDetailTabId>(initialVisibleTab);
 
   const panels: Record<AdminListingDetailTabId, ReactNode> = {
     general,
@@ -49,7 +56,7 @@ export default function ListingDetailTabs({
         aria-label="İlan detay sekmeleri"
         className="flex flex-wrap gap-1 border-b border-border pb-1"
       >
-        {ADMIN_LISTING_DETAIL_TABS.map((tab) => {
+        {tabs.map((tab) => {
           const isActive = tab.id === activeTab;
           return (
             <button
@@ -73,7 +80,7 @@ export default function ListingDetailTabs({
         })}
       </div>
 
-      {ADMIN_LISTING_DETAIL_TABS.map((tab) => {
+      {tabs.map((tab) => {
         const isActive = tab.id === activeTab;
         return (
           <div

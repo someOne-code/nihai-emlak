@@ -21,9 +21,15 @@ import {
   parsePostUpdateBodyForTest,
 } from "../lib/admin/content-posts-parsers.ts";
 import {
+  buildPayloadPostCreateDataForTest,
+  buildPayloadPostUpdateDataForTest,
+} from "../lib/admin/content-posts-payload.ts";
+import {
   parseCategoryCreateBodyForTest,
   parseCategoryUpdateBodyForTest,
 } from "../lib/admin/content-categories-parsers.ts";
+import { buildCategoryOptionsFindArgsForTest } from "../lib/admin/content-categories-options.ts";
+import { buildCategoryLinkedPostsFindArgsForTest } from "../lib/admin/content-category-linked-posts.ts";
 
 // ── Env setup (mirrors phase8-admin-listings-route.test.mts) ────────────────
 
@@ -359,6 +365,31 @@ test("parsePostUpdateBody trims whitespace from non-empty string fields", () => 
 
 // ── Create ────────────────────────────────────────────────────────────────
 
+test("post create payload converts numeric category id strings for Payload relationship validation", () => {
+  const data = buildPayloadPostCreateDataForTest({
+    title: "Post",
+    slug: "post",
+    content: "Body",
+    category: "42",
+    status: "published",
+    publishedAt: null,
+    excerpt: null,
+    coverImageUrl: null,
+    seoTitle: null,
+    seoDescription: null,
+  });
+
+  assert.equal(data.category, 42);
+});
+
+test("post update payload converts numeric category id strings and preserves null clears", () => {
+  const withCategory = buildPayloadPostUpdateDataForTest({ category: "7" });
+  assert.equal(withCategory.category, 7);
+
+  const cleared = buildPayloadPostUpdateDataForTest({ category: null });
+  assert.equal(cleared.category, null);
+});
+
 test("parseCategoryCreateBody returns 400 for non-object body", () => {
   const result = parseCategoryCreateBodyForTest("string");
   assert.equal(result.ok, false);
@@ -498,4 +529,46 @@ test("parseCategoryUpdateBody trims whitespace from non-empty string fields", ()
   const result = parseCategoryUpdateBodyForTest({ title: "  Trimmed  " });
   assert.equal(result.ok, true);
   if (result.ok) assert.equal(result.value.title, "Trimmed");
+});
+
+test("category options query includes inactive categories for admin post forms", () => {
+  const args = buildCategoryOptionsFindArgsForTest();
+
+  assert.equal(args.collection, "blog_categories");
+  assert.equal(args.limit, 500);
+  assert.equal(args.sort, "sortOrder");
+  assert.equal("where" in args, false);
+});
+
+test("category detail linked posts query uses relationship id and lightweight result bounds", () => {
+  const args = buildCategoryLinkedPostsFindArgsForTest("42");
+
+  assert.equal(args.collection, "blog_posts");
+  assert.deepEqual(args.where, { category: { equals: 42 } });
+  assert.equal(args.limit, 50);
+  assert.equal(args.sort, "-updatedAt");
+  assert.equal(args.depth, 0);
+});
+
+test("category detail DTO exposes total linked post count and delete warning", async () => {
+  const { toCategoryDetailDTOForTest } = await import("../lib/admin/content-categories-dto.ts");
+
+  const dto = toCategoryDetailDTOForTest(
+    {
+      id: 42,
+      title: "Investment",
+      slug: "investment",
+      createdAt: "2024-01-01",
+      updatedAt: "2024-01-02",
+    },
+    [
+      { id: 1, title: "First", status: "published", updatedAt: "2024-02-01" },
+    ],
+    12,
+  );
+
+  assert.equal(dto.linkedPostCount, 12);
+  assert.equal(dto.deleteWarning.hasLinkedPosts, true);
+  assert.equal(dto.deleteWarning.linkedPostCount, 12);
+  assert.ok(dto.deleteWarning.message?.includes("12"));
 });

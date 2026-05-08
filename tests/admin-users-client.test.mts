@@ -10,6 +10,7 @@ import {
   buildAdminUsersViewModel,
   type AdminUsersDto,
 } from "../lib/admin-ui/users-view-model.ts";
+import { ADMIN_USERS_COPY } from "../lib/admin-ui/users-copy.ts";
 
 test("admin users client fetches list endpoint with no-store credentials", async () => {
   const calls: Array<{
@@ -114,6 +115,28 @@ test("admin users view-model renders empty and populated states", () => {
       createdAtLabel: "2026-05-01",
     },
   ]);
+});
+
+test("admin users copy uses Turkish spelling and requested created date label", () => {
+  assert.equal(
+    ADMIN_USERS_COPY.intro,
+    "Operasyon paneline erişecek admin kullanıcıları buradan davet edilir.",
+  );
+  assert.equal(
+    ADMIN_USERS_COPY.inviteDescription,
+    "Davet edilen kişi e-postadaki bağlantıdan şifresini belirler.",
+  );
+  assert.equal(ADMIN_USERS_COPY.invitePending, "Gönderiliyor...");
+  assert.equal(ADMIN_USERS_COPY.inviteSubmit, "Davet gönder");
+  assert.equal(
+    ADMIN_USERS_COPY.inviteSuccessSuffix,
+    "için admin daveti gönderildi.",
+  );
+  assert.equal(ADMIN_USERS_COPY.loadError, "Admin listesi alınamadı.");
+  assert.equal(ADMIN_USERS_COPY.inviteError, "Admin daveti gönderilemedi.");
+  assert.equal(ADMIN_USERS_COPY.loading, "Yükleniyor...");
+  assert.equal(ADMIN_USERS_COPY.empty, "Henüz admin kullanıcı bulunmuyor.");
+  assert.equal(ADMIN_USERS_COPY.createdAtHeader, "Oluşturulma Tarihi");
 });
 
 function jsonResponse(payload: unknown, status = 200): Response {

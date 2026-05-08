@@ -7,6 +7,8 @@
 // tests/phase9a-content-view-model.test.mts patterns exactly.
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import test from "node:test";
 
 import {
@@ -237,6 +239,28 @@ test("CreatePostPanel must not use `categoryId` alias (regression: P1 bug)", () 
       "parser must drop unknown alias `categoryId` — UI must use `category`",
     );
   }
+});
+
+test("post content textareas are marked required in the admin UI", () => {
+  const source = readFileSync(
+    resolve(import.meta.dirname, "..", "components", "admin-posts", "AdminPostsView.tsx"),
+    "utf-8",
+  );
+
+  assert.match(source, /placeholder="Yazı içeriği"[\s\S]*?required/);
+  assert.match(source, /rows=\{10\}\s*required/);
+});
+
+test("opening the post create panel refreshes category options", () => {
+  const source = readFileSync(
+    resolve(import.meta.dirname, "..", "components", "admin-posts", "AdminPostsView.tsx"),
+    "utf-8",
+  );
+
+  assert.match(source, /const refreshCategoryOptions = useCallback/);
+  assert.match(source, /const openCreatePostPanel = useCallback/);
+  assert.match(source, /void refreshCategoryOptions\(\);/);
+  assert.match(source, /onCreateClick=\{openCreatePostPanel\}/);
 });
 
 test("EditPostPanel payload round-trips through parsePostUpdateBodyForTest with all form fields", () => {

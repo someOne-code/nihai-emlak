@@ -1,4 +1,4 @@
-/* /admin/listings layout — only the three-column product shell grid
+/* /admin/listings layout - only the two-surface product shell grid
    is kept. All component-level styling has migrated to Tailwind CSS
    and shadcn/ui. */
 
@@ -6,23 +6,25 @@
   display: grid;
   gap: 1.25rem;
   grid-template-columns:
-    minmax(260px, 320px)
-    minmax(0, 1fr)
-    minmax(260px, 320px);
+    minmax(240px, 320px)
+    minmax(0, 1fr);
   align-items: start;
+}
+
+.lstProductShell > * {
+  min-width: 0;
+}
+
+.lstProductShell > aside {
+  align-self: start;
 }
 
 @media (max-width: 1180px) {
   .lstProductShell {
-    grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
-  }
-  .lstProductShell > aside:last-child {
-    grid-column: 1 / -1;
-  }
-}
-
-@media (max-width: 960px) {
-  .lstProductShell {
     grid-template-columns: 1fr;
+  }
+
+  .lstProductShell > aside {
+    position: static;
   }
 }

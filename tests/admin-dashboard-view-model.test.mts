@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { ADMIN_SIDEBAR_LINKS } from "../components/admin-shell/admin-shell-nav.ts";
+import {
+  ADMIN_SIDEBAR_ITEMS,
+  ADMIN_SIDEBAR_LINKS,
+} from "../components/admin-shell/admin-shell-nav.ts";
 import {
   ADMIN_DASHBOARD_ACTION_CARDS,
   buildAdminDashboardMetricCards,
@@ -11,7 +14,7 @@ test("admin dashboard exposes exactly three primary action cards", () => {
   assert.equal(ADMIN_DASHBOARD_ACTION_CARDS.length, 3);
 });
 
-test("admin dashboard action cards target the listings, operations, and CMS sections", () => {
+test("admin dashboard action cards target the listings, operations, and content sections", () => {
   assert.deepEqual(
     ADMIN_DASHBOARD_ACTION_CARDS.map((card) => ({
       title: card.title,
@@ -20,7 +23,7 @@ test("admin dashboard action cards target the listings, operations, and CMS sect
     [
       { title: "İlan Yönetimi", href: "/admin/listings" },
       { title: "Operasyonlar", href: "/admin/operations" },
-      { title: "CMS İçerik Yönetimi", href: "/cms" },
+      { title: "İçerik Yönetimi", href: "/admin/content/posts" },
     ],
   );
 });
@@ -39,7 +42,13 @@ test("admin dashboard action cards always carry a non-empty description and CTA 
 });
 
 test("admin dashboard action card hrefs stay aligned with the shared sidebar nav contract", () => {
-  const sidebarHrefs = new Set(ADMIN_SIDEBAR_LINKS.map((link) => link.href));
+  const structuredHrefs = ADMIN_SIDEBAR_ITEMS.flatMap((item) =>
+    item.kind === "link" ? [item.href] : item.children.map((child) => child.href),
+  );
+  const sidebarHrefs = new Set([
+    ...ADMIN_SIDEBAR_LINKS.map((link) => link.href),
+    ...structuredHrefs,
+  ]);
   for (const card of ADMIN_DASHBOARD_ACTION_CARDS) {
     assert.ok(
       sidebarHrefs.has(card.href),

@@ -215,6 +215,10 @@ begin
 
   v_note := nullif(btrim(coalesce(p_note, '')), '');
 
+  if v_note is null then
+    raise exception 'p_note is required' using errcode = '22023';
+  end if;
+
   if v_note is not null and char_length(v_note) > 1000 then
     raise exception 'p_note is too long' using errcode = '22023';
   end if;
@@ -449,8 +453,26 @@ security invoker
 set search_path = ''
 stable
 as $$
+begin
+  return public.list_admin_reservations(p_status, 'all'::text, p_limit, p_offset);
+end;
+$$;
+
+create or replace function public.list_admin_reservations(
+  p_status public.reservation_status,
+  p_queue text,
+  p_limit integer,
+  p_offset integer
+)
+returns jsonb
+language plpgsql
+security invoker
+set search_path = ''
+stable
+as $$
 declare
   v_items jsonb;
+  v_queue text;
 begin
   if auth.uid() is null then
     raise exception 'authenticated admin is required'
@@ -464,6 +486,12 @@ begin
 
   if p_limit is null or p_offset is null or p_limit < 1 or p_limit > 100 or p_offset < 0 then
     raise exception 'invalid pagination'
+      using errcode = '22023';
+  end if;
+
+  v_queue := coalesce(nullif(btrim(p_queue), ''), 'all');
+  if v_queue not in ('all', 'document_waiting', 'refund_requests', 'manual_refunds', 'payment_issues', 'completed') then
+    raise exception 'invalid reservation queue'
       using errcode = '22023';
   end if;
 
@@ -495,6 +523,20 @@ begin
           'documentReadiness', i.document_readiness,
           'note', i.note
         ),
+        'document_tracking', case
+          when dt.reservation_id is null then null
+          else jsonb_build_object(
+            'status', dt.status,
+            'updated_at', dt.updated_at
+          )
+        end,
+        'finance_ops', case
+          when fo.id is null then null
+          else jsonb_build_object(
+            'status', fo.status,
+            'updated_at', fo.updated_at
+          )
+        end,
         'created_at', r.created_at,
         'updated_at', r.updated_at
       )
@@ -504,15 +546,39 @@ begin
   )
   into v_items
   from (
-    select *
-    from public.reservations
-    where p_status is null or status = p_status
-    order by created_at desc, id
+    select r.*, dt.status as document_status, fo.status as finance_status
+    from public.reservations as r
+    left join public.reservation_document_tracking as dt on dt.reservation_id = r.id
+    left join lateral (
+      select *
+      from public.payment_finance_ops candidate
+      where candidate.reservation_id = r.id
+      order by candidate.updated_at desc, candidate.created_at desc
+      limit 1
+    ) as fo on true
+    where (p_status is null or r.status = p_status)
+      and (
+        v_queue = 'all'
+        or (v_queue = 'document_waiting' and dt.status in ('requested'::public.document_tracking_status, 'waiting'::public.document_tracking_status))
+        or (v_queue = 'refund_requests' and fo.status = 'refund_required'::public.finance_ops_status)
+        or (v_queue = 'manual_refunds' and fo.status = 'refund_requested'::public.finance_ops_status)
+        or (v_queue = 'payment_issues' and fo.status in ('manual_resolution_required'::public.finance_ops_status, 'conflict_payment'::public.finance_ops_status))
+        or (v_queue = 'completed' and (dt.status = 'completed'::public.document_tracking_status or r.status = 'confirmed'::public.reservation_status))
+      )
+    order by r.created_at desc, r.id
     limit p_limit
     offset p_offset
   ) as r
   join public.listings as l on l.id = r.listing_id
-  left join public.reservation_intake as i on i.reservation_id = r.id;
+  left join public.reservation_intake as i on i.reservation_id = r.id
+  left join public.reservation_document_tracking as dt on dt.reservation_id = r.id
+  left join lateral (
+    select *
+    from public.payment_finance_ops candidate
+    where candidate.reservation_id = r.id
+    order by candidate.updated_at desc, candidate.created_at desc
+    limit 1
+  ) as fo on true;
 
   return jsonb_build_object(
     'items', v_items,
@@ -521,6 +587,13 @@ begin
   );
 end;
 $$;
+
+revoke all on function public.list_admin_reservations(public.reservation_status, text, integer, integer)
+from public;
+revoke execute on function public.list_admin_reservations(public.reservation_status, text, integer, integer)
+from anon;
+grant execute on function public.list_admin_reservations(public.reservation_status, text, integer, integer)
+to authenticated;
 
 create or replace function public.get_admin_reservation_workflow_snapshot(
   p_reservation_id uuid

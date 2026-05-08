@@ -20,6 +20,15 @@ import {
   loadConsultantsModel,
   loadContentDetailModel,
 } from "@/lib/admin-ui/content-controller";
+import {
+  createContentLoadGuard,
+  shouldStartContentLoad,
+} from "@/lib/admin-ui/content-load-guard";
+import {
+  createContentRefreshGate,
+  refreshContentViews,
+  shouldRefreshContentOnResume,
+} from "@/lib/admin-ui/content-refresh";
 import type {
   ConsultantsListViewModel,
   ConsultantDetail,
@@ -59,7 +68,6 @@ import {
   AdminFormSection,
   adminLayout,
   safeErrorMessage,
-  readIdFromMutation,
 } from "@/components/admin-content-shared";
 
 import ConsultantsPageHeader from "./ConsultantsPageHeader";
@@ -93,6 +101,8 @@ export default function AdminConsultantsView() {
   const [showCreate, setShowCreate] = useState(false);
 
   const mountedRef = useRef(true);
+  const initialListLoadGuardRef = useRef(createContentLoadGuard());
+  const resumeRefreshGateRef = useRef(createContentRefreshGate());
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -116,8 +126,38 @@ export default function AdminConsultantsView() {
   }, []);
 
   useEffect(() => {
+    if (!shouldStartContentLoad(initialListLoadGuardRef.current)) {
+      return;
+    }
+
     loadList();
   }, [loadList]);
+
+  useEffect(() => {
+    const refreshOnResume = () => {
+      if (document.visibilityState === "hidden") {
+        return;
+      }
+      if (!shouldRefreshContentOnResume(resumeRefreshGateRef.current)) {
+        return;
+      }
+
+      void refreshContentViews([() => loadList()]);
+    };
+
+    window.addEventListener("focus", refreshOnResume);
+    document.addEventListener("visibilitychange", refreshOnResume);
+    return () => {
+      window.removeEventListener("focus", refreshOnResume);
+      document.removeEventListener("visibilitychange", refreshOnResume);
+    };
+  }, [loadList]);
+
+  const loadConsultantDetail = useCallback(async (consultantId: string) => {
+    const result = await loadContentDetailModel("consultants", consultantId);
+    if (!mountedRef.current) return;
+    setDetail(result?.type === "consultant" ? result.detail : null);
+  }, []);
 
   const handleSelectConsultant = useCallback(async (consultantId: string) => {
     setActionError(null);
@@ -126,26 +166,34 @@ export default function AdminConsultantsView() {
     setShowCreate(false);
     setDetailLoading(true);
     try {
-      const result = await loadContentDetailModel("consultants", consultantId);
-      if (!mountedRef.current) return;
-      setDetail(result?.type === "consultant" ? result.detail : null);
+      await loadConsultantDetail(consultantId);
     } catch (err) {
       if (!mountedRef.current) return;
       setActionError(safeErrorMessage(err));
     } finally {
       if (mountedRef.current) setDetailLoading(false);
     }
-  }, []);
+  }, [loadConsultantDetail]);
 
   const refreshAfterMutation = useCallback(
     async (consultantId: string | null, message: string) => {
       setActionSuccess(message);
       setActionError(null);
-      await loadList();
-      if (consultantId && mountedRef.current)
-        await handleSelectConsultant(consultantId);
+      if (consultantId) {
+        setSelectedId(consultantId);
+        setDetailLoading(true);
+      }
+
+      try {
+        await refreshContentViews([
+          () => loadList(),
+          ...(consultantId ? [() => loadConsultantDetail(consultantId)] : []),
+        ]);
+      } finally {
+        if (consultantId && mountedRef.current) setDetailLoading(false);
+      }
     },
-    [loadList, handleSelectConsultant],
+    [loadList, loadConsultantDetail],
   );
 
   const runAction = useCallback(
@@ -173,6 +221,8 @@ export default function AdminConsultantsView() {
         row.fullName.toLowerCase().includes(search.trim().toLowerCase()),
       )
     : viewModel.rows;
+  const shouldRenderDetailPanel =
+    showCreate || detail || detailLoading || filteredRows.length > 0;
 
   // ── Loading / error screens ────────────────────────────────────────────────
 
@@ -233,15 +283,6 @@ export default function AdminConsultantsView() {
               ? CONSULTANTS_FILTERED_EMPTY_TEXT
               : CONSULTANTS_EMPTY_TEXT
           }
-          onCreateClick={
-            hasActiveFilter
-              ? undefined
-              : () => {
-                  setShowCreate(true);
-                  setSelectedId(null);
-                  setDetail(null);
-                }
-          }
           toolbar={
             <Input
               type="search"
@@ -263,6 +304,7 @@ export default function AdminConsultantsView() {
           ))}
         </ConsultantsList>
 
+        {shouldRenderDetailPanel && (
         <section className={adminLayout.detailPanel}>
           {showCreate && (
             <CreateConsultantPanel
@@ -270,9 +312,9 @@ export default function AdminConsultantsView() {
               onCancel={() => setShowCreate(false)}
               onCreate={(payload) =>
                 runAction("Danışman oluşturuldu.", async () => {
-                  const created = await createAdminConsultant(payload);
+                  await createAdminConsultant(payload);
                   setShowCreate(false);
-                  return readIdFromMutation(created);
+                  return null;
                 })
               }
             />
@@ -322,6 +364,7 @@ export default function AdminConsultantsView() {
             </div>
           )}
         </section>
+        )}
       </div>
     </div>
   );

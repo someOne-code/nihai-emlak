@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { Button } from "@/components/ui/button";
 import { adminLayout } from "@/components/admin-content-shared";
 
 type PostsListProps = {
@@ -9,7 +8,6 @@ type PostsListProps = {
   emptyText?: string;
   emptyTitle?: string;
   loadingText?: string;
-  onCreateClick?: () => void;
   children: ReactNode;
 };
 
@@ -20,7 +18,6 @@ export default function PostsList({
   emptyTitle = "Henüz yazı yok",
   emptyText = "Henüz blog yazısı yok.",
   loadingText = "Güncelleniyor...",
-  onCreateClick,
   children,
 }: PostsListProps) {
   return (
@@ -44,11 +41,6 @@ export default function PostsList({
           <p className="max-w-[260px] text-xs text-muted-foreground">
             {emptyText}
           </p>
-          {onCreateClick && (
-            <Button size="sm" onClick={onCreateClick}>
-              Yeni yazı
-            </Button>
-          )}
         </div>
       ) : (
         <div className="flex flex-col gap-1.5">{children}</div>

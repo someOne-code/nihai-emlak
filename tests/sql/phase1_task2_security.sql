@@ -89,7 +89,8 @@ update public.profiles
 set role = 'admin'
 where id = '11111111-1111-1111-1111-111111111111'::uuid;
 
--- admin should read all profiles
+-- admin should read all profiles seeded by this test
+-- (filtered by deterministic ids so coexisting seed/admin rows do not skew the count)
 set role authenticated;
 select set_config('request.jwt.claim.sub', '11111111-1111-1111-1111-111111111111', false);
 select set_config('request.jwt.claim.role', 'authenticated', false);
@@ -97,9 +98,14 @@ do $$
 declare
   v_visible integer;
 begin
-  select count(*) into v_visible from public.profiles;
+  select count(*) into v_visible
+  from public.profiles
+  where id in (
+    '11111111-1111-1111-1111-111111111111'::uuid,
+    '22222222-2222-2222-2222-222222222222'::uuid
+  );
   if v_visible <> 2 then
-    raise exception 'Admin should see 2 profiles, got %', v_visible;
+    raise exception 'Admin should see 2 seeded profiles, got %', v_visible;
   end if;
 end;
 $$;

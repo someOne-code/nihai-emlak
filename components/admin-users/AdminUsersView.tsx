@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { RefreshCw, Send } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,16 @@ import {
   buildAdminUsersViewModel,
   type AdminUsersDto,
 } from "@/lib/admin-ui/users-view-model";
+import { ADMIN_USERS_COPY } from "@/lib/admin-ui/users-copy";
+import {
+  createInitialLoadGuard,
+  shouldStartInitialLoad,
+} from "@/lib/admin-ui/initial-load-guard";
+import {
+  createContentRefreshGate,
+  refreshContentViews,
+  shouldRefreshContentOnResume,
+} from "@/lib/admin-ui/content-refresh";
 
 export default function AdminUsersView() {
   const [email, setEmail] = useState("");
@@ -30,6 +40,8 @@ export default function AdminUsersView() {
   const [isInviting, setIsInviting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const initialLoadGuardRef = useRef(createInitialLoadGuard());
+  const resumeRefreshGateRef = useRef(createContentRefreshGate());
 
   const loadUsers = useCallback(async () => {
     setIsLoading(true);
@@ -37,14 +49,38 @@ export default function AdminUsersView() {
     try {
       setUsers(await fetchAdminUsers());
     } catch (error: unknown) {
-      setErrorMessage(readClientError(error, "Admin listesi alinamadi."));
+      setErrorMessage(readClientError(error, ADMIN_USERS_COPY.loadError));
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    if (!shouldStartInitialLoad(initialLoadGuardRef.current)) {
+      return;
+    }
+
     void loadUsers();
+  }, [loadUsers]);
+
+  useEffect(() => {
+    const refreshOnResume = () => {
+      if (document.visibilityState === "hidden") {
+        return;
+      }
+      if (!shouldRefreshContentOnResume(resumeRefreshGateRef.current)) {
+        return;
+      }
+
+      void refreshContentViews([() => loadUsers()]);
+    };
+
+    window.addEventListener("focus", refreshOnResume);
+    document.addEventListener("visibilitychange", refreshOnResume);
+    return () => {
+      window.removeEventListener("focus", refreshOnResume);
+      document.removeEventListener("visibilitychange", refreshOnResume);
+    };
   }, [loadUsers]);
 
   const viewModel = buildAdminUsersViewModel(users);
@@ -58,10 +94,12 @@ export default function AdminUsersView() {
     try {
       const result = await inviteAdminUser(email);
       setEmail("");
-      setSuccessMessage(`${result.email} icin admin daveti gonderildi.`);
+      setSuccessMessage(
+        `${result.email} ${ADMIN_USERS_COPY.inviteSuccessSuffix}`,
+      );
       await loadUsers();
     } catch (error: unknown) {
-      setErrorMessage(readClientError(error, "Admin daveti gonderilemedi."));
+      setErrorMessage(readClientError(error, ADMIN_USERS_COPY.inviteError));
     } finally {
       setIsInviting(false);
     }
@@ -72,7 +110,7 @@ export default function AdminUsersView() {
       <header className="flex flex-col gap-2">
         <h2 className="text-2xl font-semibold tracking-tight">Adminler</h2>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Operasyon paneline erisecek admin kullanicilari buradan davet edilir.
+          {ADMIN_USERS_COPY.intro}
         </p>
       </header>
 
@@ -80,7 +118,7 @@ export default function AdminUsersView() {
         <CardHeader>
           <CardTitle className="text-base">Admin davet et</CardTitle>
           <CardDescription>
-            Davet edilen kisi e-postadaki baglantidan sifresini belirler.
+            {ADMIN_USERS_COPY.inviteDescription}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -98,7 +136,9 @@ export default function AdminUsersView() {
             </div>
             <Button type="submit" disabled={isInviting}>
               <Send className="h-4 w-4" aria-hidden="true" />
-              {isInviting ? "Gonderiliyor..." : "Davet gonder"}
+              {isInviting
+                ? ADMIN_USERS_COPY.invitePending
+                : ADMIN_USERS_COPY.inviteSubmit}
             </Button>
           </form>
           {successMessage ? (
@@ -132,10 +172,12 @@ export default function AdminUsersView() {
         <Card>
           <CardContent className="p-0">
             {isLoading ? (
-              <div className="p-6 text-sm text-muted-foreground">Yukleniyor...</div>
+              <div className="p-6 text-sm text-muted-foreground">
+                {ADMIN_USERS_COPY.loading}
+              </div>
             ) : viewModel.isEmpty ? (
               <div className="p-6 text-sm text-muted-foreground">
-                Henuz admin kullanici bulunmuyor.
+                {ADMIN_USERS_COPY.empty}
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -144,7 +186,9 @@ export default function AdminUsersView() {
                     <tr>
                       <th className="px-4 py-3 font-medium">E-posta</th>
                       <th className="px-4 py-3 font-medium">Rol</th>
-                      <th className="px-4 py-3 font-medium">Olusturulma</th>
+                      <th className="px-4 py-3 font-medium">
+                        {ADMIN_USERS_COPY.createdAtHeader}
+                      </th>
                     </tr>
                   </thead>
                   <tbody>

@@ -36,7 +36,7 @@ test("task 5 keeps package-level validation scripts available", () => {
 
   assert.equal(packageJson.scripts?.typecheck, "tsc --noEmit");
   assert.equal(packageJson.scripts?.lint, "eslint .");
-  assert.equal(packageJson.scripts?.test, "npm run test:payment-callback-security && npm run typecheck && npm run lint");
-  assert.equal(packageJson.scripts?.["test:db-security"], "bash .codex/scripts/test-db-security.sh");
+  assert.equal(packageJson.scripts?.test, "npm run test:payment-callback-security && npm run test:phase8-admin-listings && npm run test:admin-dashboard && npm run test:admin-users && npm run test:phase9a-content && npm run test:phase9b-catalog && npm run test:admin-operations && npm run typecheck && npm run lint");
+  assert.equal(packageJson.scripts?.["test:db-security"], "node .codex/scripts/test-db-security-runner.mjs");
   assert.equal(packageJson.scripts?.build, "next build");
 });

@@ -118,7 +118,21 @@ export type CategoryDetail = {
   description: string | null;
   isActive: boolean;
   sortOrder: number;
+  linkedPosts: CategoryLinkedPost[];
+  linkedPostCount: number;
+  deleteWarning: {
+    hasLinkedPosts: boolean;
+    linkedPostCount: number;
+    message: string | null;
+  };
   createdAt: string;
+  updatedAt: string;
+};
+
+export type CategoryLinkedPost = {
+  id: string;
+  title: string;
+  statusLabel: string;
   updatedAt: string;
 };
 
@@ -154,6 +168,15 @@ export function buildCategoriesListViewModel(data: unknown): CategoriesListViewM
 
 export function buildCategoryDetail(data: unknown): CategoryDetail | null {
   if (!isRecord(data)) return null;
+  const linkedPosts = Array.isArray(data.linkedPosts)
+    ? data.linkedPosts.filter(isRecord).map((post): CategoryLinkedPost => ({
+        id: asString(post.id) ?? "",
+        title: asString(post.title) ?? "Başlıksız",
+        statusLabel: POST_STATUS_LABELS[normalizePostStatus(post.status)],
+        updatedAt: asString(post.updatedAt) ?? "",
+      }))
+    : [];
+
   return {
     id: asString(data.id) ?? "",
     title: asString(data.title) ?? "",
@@ -161,8 +184,27 @@ export function buildCategoryDetail(data: unknown): CategoryDetail | null {
     description: asString(data.description),
     isActive: data.isActive === true,
     sortOrder: asNumber(data.sortOrder) ?? 0,
+    linkedPosts,
+    linkedPostCount: asNumber(data.linkedPostCount) ?? linkedPosts.length,
+    deleteWarning: buildCategoryDeleteWarning(data.deleteWarning, linkedPosts.length),
     createdAt: asString(data.createdAt) ?? "",
     updatedAt: asString(data.updatedAt) ?? "",
+  };
+}
+
+function buildCategoryDeleteWarning(value: unknown, fallbackLinkedPostCount: number): CategoryDetail["deleteWarning"] {
+  if (!isRecord(value)) {
+    return {
+      hasLinkedPosts: fallbackLinkedPostCount > 0,
+      linkedPostCount: fallbackLinkedPostCount,
+      message: fallbackLinkedPostCount > 0 ? `Bu kategoriye bağlı ${fallbackLinkedPostCount} blog yazısı var.` : null,
+    };
+  }
+  const linkedPostCount = asNumber(value.linkedPostCount) ?? fallbackLinkedPostCount;
+  return {
+    hasLinkedPosts: value.hasLinkedPosts === true,
+    linkedPostCount,
+    message: asString(value.message),
   };
 }
 
@@ -191,6 +233,11 @@ export type ConsultantDetail = {
   linkedinUrl: string | null;
   isPublished: boolean;
   sortOrder: number;
+  previewLink: string;
+  relatedCounts: {
+    contactChannels: number;
+    externalLinks: number;
+  };
   createdAt: string;
   updatedAt: string;
 };
@@ -241,8 +288,20 @@ export function buildConsultantDetail(data: unknown): ConsultantDetail | null {
     linkedinUrl: asString(data.linkedinUrl),
     isPublished: data.isPublished === true,
     sortOrder: asNumber(data.sortOrder) ?? 0,
+    previewLink: asString(data.previewLink) ?? "",
+    relatedCounts: buildConsultantRelatedCounts(data.relatedCounts),
     createdAt: asString(data.createdAt) ?? "",
     updatedAt: asString(data.updatedAt) ?? "",
+  };
+}
+
+function buildConsultantRelatedCounts(value: unknown): ConsultantDetail["relatedCounts"] {
+  if (!isRecord(value)) {
+    return { contactChannels: 0, externalLinks: 0 };
+  }
+  return {
+    contactChannels: asNumber(value.contactChannels) ?? 0,
+    externalLinks: asNumber(value.externalLinks) ?? 0,
   };
 }
 

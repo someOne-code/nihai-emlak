@@ -99,6 +99,61 @@ begin
 end;
 $$;
 
+create or replace function public.list_admin_reservation_event_history(
+  p_reservation_id uuid
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+stable
+as $$
+declare
+  v_items jsonb;
+begin
+  if auth.uid() is null then
+    raise exception 'authenticated admin is required' using errcode = '28000';
+  end if;
+
+  if not public.is_admin() then
+    raise exception 'admin role is required' using errcode = '42501';
+  end if;
+
+  if p_reservation_id is null then
+    raise exception 'p_reservation_id is required' using errcode = '22023';
+  end if;
+
+  if not exists (select 1 from public.reservations where id = p_reservation_id) then
+    raise exception 'reservation not found: %', p_reservation_id using errcode = 'P0002';
+  end if;
+
+  select coalesce(
+    jsonb_agg(
+      jsonb_build_object(
+        'id', e.id,
+        'created_at', e.created_at,
+        'actor_type', 'admin',
+        'admin_user_id', e.admin_user_id,
+        'workflow_name', e.workflow_name,
+        'reason', e.reason,
+        'note', e.note,
+        'reservation_id', e.reservation_id,
+        'order_id', e.order_id,
+        'payment_id', e.payment_id,
+        'listing_id', e.listing_id
+      )
+      order by e.created_at asc, e.id
+    ),
+    '[]'::jsonb
+  )
+  into v_items
+  from public.admin_workflow_events e
+  where e.reservation_id = p_reservation_id;
+
+  return jsonb_build_object('items', v_items);
+end;
+$$;
+
 create or replace function internal.log_admin_workflow_invariant_rejection(
   p_workflow_name text,
   p_reservation_id uuid default null,
@@ -1174,6 +1229,13 @@ from public;
 revoke execute on function public.get_admin_reservation_workflow_snapshot(uuid)
 from anon;
 grant execute on function public.get_admin_reservation_workflow_snapshot(uuid)
+to authenticated;
+
+revoke all on function public.list_admin_reservation_event_history(uuid)
+from public;
+revoke execute on function public.list_admin_reservation_event_history(uuid)
+from anon;
+grant execute on function public.list_admin_reservation_event_history(uuid)
 to authenticated;
 
 revoke all on function public.get_admin_listing_workflow_snapshot(uuid)

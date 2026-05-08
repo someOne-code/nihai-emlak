@@ -46,11 +46,15 @@ function commandName(command) {
 }
 
 function run(command, args, options = {}) {
-  const result = spawnSync(commandName(command), args, {
+  const resolved = commandName(command);
+  // Windows requires shell:true to spawn .cmd/.bat wrappers (e.g. npx.cmd).
+  // Plain executables (docker.exe, node.exe) work fine without a shell.
+  const needsShell = process.platform === "win32" && resolved.endsWith(".cmd");
+  const result = spawnSync(resolved, args, {
     cwd: options.cwd,
     encoding: options.input ? undefined : "utf8",
     input: options.input,
-    shell: false,
+    shell: needsShell,
     windowsHide: true,
   });
 

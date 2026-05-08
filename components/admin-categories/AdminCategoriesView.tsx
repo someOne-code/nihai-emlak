@@ -17,6 +17,15 @@ import {
   loadCategoriesModel,
   loadContentDetailModel,
 } from "@/lib/admin-ui/content-controller";
+import {
+  createContentLoadGuard,
+  shouldStartContentLoad,
+} from "@/lib/admin-ui/content-load-guard";
+import {
+  createContentRefreshGate,
+  refreshContentViews,
+  shouldRefreshContentOnResume,
+} from "@/lib/admin-ui/content-refresh";
 import type {
   CategoriesListViewModel,
   CategoryDetail,
@@ -50,7 +59,6 @@ import {
   AdminField,
   adminLayout,
   safeErrorMessage,
-  readIdFromMutation,
 } from "@/components/admin-content-shared";
 
 import CategoriesPageHeader from "./CategoriesPageHeader";
@@ -84,6 +92,8 @@ export default function AdminCategoriesView() {
   const [showCreate, setShowCreate] = useState(false);
 
   const mountedRef = useRef(true);
+  const initialListLoadGuardRef = useRef(createContentLoadGuard());
+  const resumeRefreshGateRef = useRef(createContentRefreshGate());
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -107,8 +117,38 @@ export default function AdminCategoriesView() {
   }, []);
 
   useEffect(() => {
+    if (!shouldStartContentLoad(initialListLoadGuardRef.current)) {
+      return;
+    }
+
     loadList();
   }, [loadList]);
+
+  useEffect(() => {
+    const refreshOnResume = () => {
+      if (document.visibilityState === "hidden") {
+        return;
+      }
+      if (!shouldRefreshContentOnResume(resumeRefreshGateRef.current)) {
+        return;
+      }
+
+      void refreshContentViews([() => loadList()]);
+    };
+
+    window.addEventListener("focus", refreshOnResume);
+    document.addEventListener("visibilitychange", refreshOnResume);
+    return () => {
+      window.removeEventListener("focus", refreshOnResume);
+      document.removeEventListener("visibilitychange", refreshOnResume);
+    };
+  }, [loadList]);
+
+  const loadCategoryDetail = useCallback(async (categoryId: string) => {
+    const result = await loadContentDetailModel("categories", categoryId);
+    if (!mountedRef.current) return;
+    setDetail(result?.type === "category" ? result.detail : null);
+  }, []);
 
   const handleSelectCategory = useCallback(async (categoryId: string) => {
     setActionError(null);
@@ -117,26 +157,34 @@ export default function AdminCategoriesView() {
     setShowCreate(false);
     setDetailLoading(true);
     try {
-      const result = await loadContentDetailModel("categories", categoryId);
-      if (!mountedRef.current) return;
-      setDetail(result?.type === "category" ? result.detail : null);
+      await loadCategoryDetail(categoryId);
     } catch (err) {
       if (!mountedRef.current) return;
       setActionError(safeErrorMessage(err));
     } finally {
       if (mountedRef.current) setDetailLoading(false);
     }
-  }, []);
+  }, [loadCategoryDetail]);
 
   const refreshAfterMutation = useCallback(
     async (categoryId: string | null, message: string) => {
       setActionSuccess(message);
       setActionError(null);
-      await loadList();
-      if (categoryId && mountedRef.current)
-        await handleSelectCategory(categoryId);
+      if (categoryId) {
+        setSelectedId(categoryId);
+        setDetailLoading(true);
+      }
+
+      try {
+        await refreshContentViews([
+          () => loadList(),
+          ...(categoryId ? [() => loadCategoryDetail(categoryId)] : []),
+        ]);
+      } finally {
+        if (categoryId && mountedRef.current) setDetailLoading(false);
+      }
     },
-    [loadList, handleSelectCategory],
+    [loadList, loadCategoryDetail],
   );
 
   const runAction = useCallback(
@@ -164,6 +212,8 @@ export default function AdminCategoriesView() {
         row.title.toLowerCase().includes(search.trim().toLowerCase()),
       )
     : viewModel.rows;
+  const shouldRenderDetailPanel =
+    showCreate || detail || detailLoading || filteredRows.length > 0;
 
   // ── Loading / error screens ────────────────────────────────────────────────
 
@@ -224,15 +274,6 @@ export default function AdminCategoriesView() {
               ? CATEGORIES_FILTERED_EMPTY_TEXT
               : CATEGORIES_EMPTY_TEXT
           }
-          onCreateClick={
-            hasActiveFilter
-              ? undefined
-              : () => {
-                  setShowCreate(true);
-                  setSelectedId(null);
-                  setDetail(null);
-                }
-          }
           toolbar={
             <Input
               type="search"
@@ -254,6 +295,7 @@ export default function AdminCategoriesView() {
           ))}
         </CategoriesList>
 
+        {shouldRenderDetailPanel && (
         <section className={adminLayout.detailPanel}>
           {showCreate && (
             <CreateCategoryPanel
@@ -261,9 +303,9 @@ export default function AdminCategoriesView() {
               onCancel={() => setShowCreate(false)}
               onCreate={(payload) =>
                 runAction("Kategori oluşturuldu.", async () => {
-                  const created = await createAdminCategory(payload);
+                  await createAdminCategory(payload);
                   setShowCreate(false);
-                  return readIdFromMutation(created);
+                  return null;
                 })
               }
             />
@@ -313,6 +355,7 @@ export default function AdminCategoriesView() {
             </div>
           )}
         </section>
+        )}
       </div>
     </div>
   );
@@ -564,6 +607,39 @@ function EditCategoryPanel({
             {IS_ACTIVE_LABELS.active} (liste ve frontend&apos;de görünür)
           </label>
         </AdminField>
+        <section className="space-y-3 rounded-md border bg-muted/20 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold">Bağlı blog yazıları</h3>
+            <span className="text-xs text-muted-foreground">
+              {detail.linkedPosts.length} yazı
+            </span>
+          </div>
+          {detail.linkedPosts.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Bu kategoriye bağlı yazı yok.
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {detail.linkedPosts.map((post) => (
+                <li
+                  key={post.id}
+                  className="flex items-center justify-between gap-3 rounded-md border bg-background px-3 py-2"
+                >
+                  <span className="min-w-0 truncate text-sm font-medium">
+                    {post.title}
+                  </span>
+                  <Badge
+                    variant={
+                      post.statusLabel === "Yayında" ? "success" : "secondary"
+                    }
+                  >
+                    {post.statusLabel}
+                  </Badge>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
         <div className={adminLayout.buttonRow}>
           <Button type="submit" disabled={busy}>
             Kaydet

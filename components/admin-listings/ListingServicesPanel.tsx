@@ -12,6 +12,7 @@ import { Select } from "@/components/ui/select";
 import {
   buildAdminListingServiceDisplay,
   getAvailableServiceAddCandidates,
+  isAdminListingCheckoutConfigurable,
   type AdminListingAvailableService,
   type AdminListingDetail,
   type AdminListingService,
@@ -44,6 +45,19 @@ export default function ListingServicesPanel({
   busy,
   onConfigure,
 }: ListingServicesPanelProps) {
+  if (!isAdminListingCheckoutConfigurable(detail)) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Ek Hizmetler</CardTitle>
+          <CardDescription>
+            Satilik ilanlarda checkout ek hizmet yapilandirmasi beklenmez.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
+
   const candidates = getAvailableServiceAddCandidates(detail);
 
   return (

@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { Button } from "@/components/ui/button";
 import { adminLayout } from "@/components/admin-content-shared";
 
 type ConsultantsListProps = {
@@ -9,7 +8,6 @@ type ConsultantsListProps = {
   emptyText?: string;
   emptyTitle?: string;
   loadingText?: string;
-  onCreateClick?: () => void;
   children: ReactNode;
 };
 
@@ -20,7 +18,6 @@ export default function ConsultantsList({
   emptyTitle = "Henüz danışman yok",
   emptyText = "Henüz danışman yok.",
   loadingText = "Güncelleniyor...",
-  onCreateClick,
   children,
 }: ConsultantsListProps) {
   return (
@@ -41,11 +38,6 @@ export default function ConsultantsList({
           <p className="max-w-[260px] text-xs text-muted-foreground">
             {emptyText}
           </p>
-          {onCreateClick && (
-            <Button size="sm" onClick={onCreateClick}>
-              Yeni danışman
-            </Button>
-          )}
         </div>
       ) : (
         <div className="flex flex-col gap-1.5">{children}</div>

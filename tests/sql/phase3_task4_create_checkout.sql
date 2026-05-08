@@ -433,6 +433,33 @@ begin
   begin
     perform public.create_checkout(
       '77777777-7777-4777-8777-777777777762'::uuid,
+      current_date + 34,
+      6,
+      1,
+      array['dup_one_t4'],
+      array[]::text[],
+      '   ',
+      'Phase3 Contact User',
+      '+905551112233',
+      null,
+      'phone',
+      null,
+      null,
+      'ready',
+      null
+    );
+
+    raise exception 'TEST 1A FAILED: missing payment note should have been rejected';
+  exception
+    when invalid_parameter_value then
+      if position('p_note is required' in SQLERRM) = 0 then
+        raise;
+      end if;
+  end;
+
+  begin
+    perform public.create_checkout(
+      '77777777-7777-4777-8777-777777777762'::uuid,
       current_date + 32,
       6,
       1,
@@ -488,10 +515,13 @@ begin
   into v_reservation_count
   from public.reservations
   where listing_id = '77777777-7777-4777-8777-777777777762'::uuid
-    and note in ('Eksik contact kontrolu', 'Gecersiz contact enum kontrolu');
+    and (
+      note in ('Eksik contact kontrolu', 'Gecersiz contact enum kontrolu')
+      or move_in_date = current_date + 34
+    );
 
   if v_reservation_count <> 0 then
-    raise exception 'TEST 1A FAILED: invalid contact attempts must not create reservations, got %',
+    raise exception 'TEST 1A FAILED: invalid checkout attempts must not create reservations, got %',
       v_reservation_count;
   end if;
 end;

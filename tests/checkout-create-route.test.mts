@@ -138,6 +138,51 @@ test("checkout create rejects invalid request bodies", async (t) => {
   assert.equal(payload.error, "Client-supplied totals are not accepted");
 });
 
+test("checkout create requires a payment explanation note", async (t) => {
+  setupCheckoutCreateEnv(t);
+
+  const response = await handleCheckoutCreatePost(
+    createJsonRequest({
+      ...validCheckoutCreatePayload,
+      note: "   ",
+    }),
+    createDependencies({
+      rpc: () => {
+        throw new Error("rpc should not be called without a payment note");
+      },
+    }),
+  );
+
+  assert.equal(response.status, 400);
+
+  const payload = await response.json();
+  assert.equal(payload.success, false);
+  assert.equal(payload.error, "note is required");
+});
+
+test("checkout create rejects service-only payment selections", async (t) => {
+  setupCheckoutCreateEnv(t);
+
+  const response = await handleCheckoutCreatePost(
+    createJsonRequest({
+      ...validCheckoutCreatePayload,
+      main_items: [],
+      service_items: ["Cleaning"],
+    }),
+    createDependencies({
+      rpc: () => {
+        throw new Error("rpc should not be called without a main payment item");
+      },
+    }),
+  );
+
+  assert.equal(response.status, 400);
+
+  const payload = await response.json();
+  assert.equal(payload.success, false);
+  assert.equal(payload.error, "main_items must include at least one item");
+});
+
 test("checkout create sends normalized checkout intent to create_checkout RPC", async (t) => {
   setupCheckoutCreateEnv(t);
 

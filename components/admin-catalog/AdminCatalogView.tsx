@@ -26,6 +26,15 @@ import {
   type AdminCatalogMainItemRow,
   type AdminCatalogServiceRow,
 } from "@/lib/admin-ui/catalog-view-model";
+import {
+  createInitialLoadGuard,
+  shouldStartInitialLoad,
+} from "@/lib/admin-ui/initial-load-guard";
+import {
+  createContentRefreshGate,
+  refreshContentViews,
+  shouldRefreshContentOnResume,
+} from "@/lib/admin-ui/content-refresh";
 
 type Tab = "main-items" | "services";
 
@@ -73,6 +82,8 @@ export default function AdminCatalogView() {
   const [serviceDialog, setServiceDialog] = useState<ServiceDialogState>(null);
 
   const alertRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initialLoadGuardRef = useRef(createInitialLoadGuard());
+  const resumeRefreshGateRef = useRef(createContentRefreshGate());
 
   const showAlert = useCallback((kind: "success" | "error", message: string) => {
     setAlert({ kind, message });
@@ -105,7 +116,31 @@ export default function AdminCatalogView() {
   }, [showAlert]);
 
   useEffect(() => {
+    if (!shouldStartInitialLoad(initialLoadGuardRef.current)) {
+      return;
+    }
+
     void reload();
+  }, [reload]);
+
+  useEffect(() => {
+    const refreshOnResume = () => {
+      if (document.visibilityState === "hidden") {
+        return;
+      }
+      if (!shouldRefreshContentOnResume(resumeRefreshGateRef.current)) {
+        return;
+      }
+
+      void refreshContentViews([() => reload()]);
+    };
+
+    window.addEventListener("focus", refreshOnResume);
+    document.addEventListener("visibilitychange", refreshOnResume);
+    return () => {
+      window.removeEventListener("focus", refreshOnResume);
+      document.removeEventListener("visibilitychange", refreshOnResume);
+    };
   }, [reload]);
 
   const handleToggleMainItem = useCallback(

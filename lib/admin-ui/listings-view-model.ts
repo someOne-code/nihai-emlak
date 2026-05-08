@@ -18,6 +18,7 @@ export type AdminListingsViewModelInput = {
   list: AdminListingsListInput;
   selectedListingId: string | null;
   snapshot: unknown;
+  selectFirstWhenMissing?: boolean;
 };
 
 export type AdminListingRow = {
@@ -147,7 +148,11 @@ export function buildAdminListingsViewModel(
   const matchedRequested = requested
     ? rows.find((row) => row.listingId === requested)
     : null;
-  const selectedListingId = matchedRequested?.listingId ?? rows[0]?.listingId ?? null;
+  const shouldSelectFirst = input.selectFirstWhenMissing ?? true;
+  const selectedListingId =
+    matchedRequested?.listingId ??
+    (shouldSelectFirst ? rows[0]?.listingId : null) ??
+    null;
   const detail = buildDetail(input.snapshot, selectedListingId);
 
   return {
@@ -209,10 +214,33 @@ function buildDetail(
 export function getAvailableMainItemAddCandidates(
   detail: AdminListingDetail,
 ): AdminListingAvailableMainItem[] {
+  if (!isAdminListingCheckoutConfigurable(detail)) {
+    return [];
+  }
+
   const enabledCodes = new Set(
     detail.mainItems.filter((item) => item.isEnabled).map((item) => item.code),
   );
-  return detail.availableMainItems.filter((item) => !enabledCodes.has(item.code));
+  const enabledLabelKeys = new Set(
+    detail.mainItems
+      .filter((item) => item.isEnabled)
+      .map((item) => mainItemCandidateKey(item.label, item.code)),
+  );
+  const seenLabelKeys = new Set<string>();
+
+  return detail.availableMainItems.filter((item) => {
+    if (enabledCodes.has(item.code)) {
+      return false;
+    }
+
+    const key = mainItemCandidateKey(item.label, item.code);
+    if (enabledLabelKeys.has(key) || seenLabelKeys.has(key)) {
+      return false;
+    }
+
+    seenLabelKeys.add(key);
+    return true;
+  });
 }
 
 export type AdminListingMainItemDisplay = {
@@ -268,6 +296,19 @@ function trimOrNull(value: string | null | undefined): string | null {
   return trimmed.length === 0 ? null : trimmed;
 }
 
+function mainItemCandidateKey(label: string, code: string): string {
+  const normalizedLabel = normalizeVisibleLabel(label);
+  if (normalizedLabel) {
+    return `label:${normalizedLabel}`;
+  }
+  return `code:${normalizeVisibleLabel(code) ?? code}`;
+}
+
+function normalizeVisibleLabel(value: string): string | null {
+  const normalized = value.trim().replace(/\s+/g, " ").toLowerCase();
+  return normalized.length === 0 ? null : normalized;
+}
+
 function formatRawNumberLabel(prefix: string, value: number | null): string {
   if (value === null || !Number.isFinite(value)) {
     return `${prefix}: Belirtilmedi`;
@@ -286,10 +327,20 @@ function formatCustomNumberLabel(prefix: string, value: number | null): string {
 export function getAvailableServiceAddCandidates(
   detail: AdminListingDetail,
 ): AdminListingAvailableService[] {
+  if (!isAdminListingCheckoutConfigurable(detail)) {
+    return [];
+  }
+
   const enabledCodes = new Set(
     detail.services.filter((service) => service.isEnabled).map((service) => service.code),
   );
   return detail.availableServices.filter((service) => !enabledCodes.has(service.code));
+}
+
+export function isAdminListingCheckoutConfigurable(
+  detail: AdminListingDetail | null,
+): boolean {
+  return detail?.listing.type === "rent";
 }
 
 export type AdminListingServiceDisplay = {

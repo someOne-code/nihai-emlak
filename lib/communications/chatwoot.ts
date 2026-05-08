@@ -36,6 +36,15 @@ export type ChatwootConversationReference = {
   sourceId: string;
 };
 
+export type ChatwootMessagePagination = {
+  limit: number;
+  offset: number;
+};
+
+export type ListChatwootMessagesInput = ChatwootConversationReference & {
+  pagination?: ChatwootMessagePagination;
+};
+
 export type CreateChatwootMessageInput = ChatwootConversationReference & {
   content: string;
 };
@@ -193,9 +202,9 @@ export function createChatwootClient(
       );
     },
 
-    listMessages(input: ChatwootConversationReference): Promise<ChatwootClientResult<unknown[]>> {
+    listMessages(input: ListChatwootMessagesInput): Promise<ChatwootClientResult<unknown[]>> {
       return requestJson(
-        buildConversationMessagesPath(config.inboxIdentifier, input),
+        buildConversationMessagesPath(config.inboxIdentifier, input, input.pagination),
         {
           method: "GET",
         },
@@ -232,13 +241,24 @@ export function createChatwootClient(
 function buildConversationMessagesPath(
   inboxIdentifier: string,
   input: ChatwootConversationReference,
+  pagination?: ChatwootMessagePagination,
 ): string {
-  return [
+  const path = [
     `/public/api/v1/inboxes/${encodePathSegment(inboxIdentifier)}`,
     `/contacts/${encodePathSegment(input.sourceId)}`,
     `/conversations/${encodePathSegment(input.conversationId)}`,
     "/messages",
   ].join("");
+
+  if (!pagination) {
+    return path;
+  }
+
+  const params = new URLSearchParams({
+    limit: String(pagination.limit),
+    offset: String(pagination.offset),
+  });
+  return `${path}?${params.toString()}`;
 }
 
 function buildJsonHeaders(input: HeadersInit | undefined): Headers {

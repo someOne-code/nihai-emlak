@@ -3,8 +3,9 @@ import {
   resolveChatwootConfigFromEnv,
   type ChatwootClientResult,
   type ChatwootConfig,
-  type ChatwootConversationReference,
+  type ChatwootMessagePagination,
   type CreateChatwootMessageInput,
+  type ListChatwootMessagesInput,
   type ResolveChatwootConfigResult,
 } from "./chatwoot.ts";
 import {
@@ -48,7 +49,7 @@ type SupabaseClient = {
 
 export type ConversationMessagesClient = {
   listMessages: (
-    input: ChatwootConversationReference,
+    input: ListChatwootMessagesInput,
   ) => Promise<ChatwootClientResult<unknown[]>>;
   createIncomingMessage: (
     input: CreateChatwootMessageInput,
@@ -81,6 +82,8 @@ const MESSAGES_ROUTE_CONFIG: StateChangingJsonRouteConfig = {
   routeLabel: "Communication message",
 };
 
+const DEFAULT_MESSAGES_LIMIT = 20;
+const MAX_MESSAGES_LIMIT = 100;
 const PROVIDER_FAILURE_MESSAGE = "Communication provider request failed";
 const CONVERSATION_NOT_FOUND_MESSAGE = "Conversation not found";
 
@@ -139,6 +142,11 @@ export async function handleConversationMessagesGet(
     return jsonError("Invalid conversation id", 400);
   }
 
+  const paginationResult = parseMessagesPagination(_request);
+  if (!paginationResult.ok) {
+    return jsonError(paginationResult.error, 400);
+  }
+
   const supabase = (await dependencies.createServerSupabaseClient()) as SupabaseClient;
   const userResult = await supabase.auth.getUser();
   if (userResult.error || !userResult.data.user) {
@@ -161,6 +169,7 @@ export async function handleConversationMessagesGet(
   const listResult = await chatwootResult.client.listMessages({
     sourceId: mappingResult.mapping.chatwootSourceId,
     conversationId: mappingResult.mapping.chatwootConversationId,
+    pagination: paginationResult.value,
   });
   if (!listResult.ok) {
     return jsonError(PROVIDER_FAILURE_MESSAGE, 502);
@@ -173,6 +182,7 @@ export async function handleConversationMessagesGet(
       success: true,
       data: {
         conversation_id: mappingResult.mapping.conversationId,
+        pagination: paginationResult.value,
         messages,
       },
     },
@@ -377,6 +387,62 @@ function parseReadyMappingRow(value: unknown): MappingRow | null {
     chatwootConversationId,
     chatwootSourceId,
   };
+}
+
+function parseMessagesPagination(
+  request: Request,
+): { ok: true; value: ChatwootMessagePagination } | { ok: false; error: string } {
+  const url = new URL(request.url);
+
+  const limitResult = parsePaginationParam(url.searchParams.get("limit"), "limit");
+  if (!limitResult.ok) {
+    return limitResult;
+  }
+
+  const offsetResult = parsePaginationParam(url.searchParams.get("offset"), "offset");
+  if (!offsetResult.ok) {
+    return offsetResult;
+  }
+
+  const limit = limitResult.value ?? DEFAULT_MESSAGES_LIMIT;
+  const offset = offsetResult.value ?? 0;
+
+  if (limit < 1 || limit > MAX_MESSAGES_LIMIT) {
+    return { ok: false, error: "Invalid query parameter: limit" };
+  }
+
+  if (offset < 0) {
+    return { ok: false, error: "Invalid query parameter: offset" };
+  }
+
+  return {
+    ok: true,
+    value: {
+      limit,
+      offset,
+    },
+  };
+}
+
+function parsePaginationParam(
+  rawValue: string | null,
+  key: "limit" | "offset",
+): { ok: true; value: number | null } | { ok: false; error: string } {
+  const normalized = asNonEmptyString(rawValue);
+  if (!normalized) {
+    return { ok: true, value: null };
+  }
+
+  if (!/^-?\d+$/.test(normalized)) {
+    return { ok: false, error: `Invalid query parameter: ${key}` };
+  }
+
+  const parsed = Number.parseInt(normalized, 10);
+  if (!Number.isSafeInteger(parsed)) {
+    return { ok: false, error: `Invalid query parameter: ${key}` };
+  }
+
+  return { ok: true, value: parsed };
 }
 
 function sanitizeChatwootMessageList(value: unknown[]): SanitizedMessage[] {

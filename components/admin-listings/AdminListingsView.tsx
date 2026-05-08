@@ -37,6 +37,15 @@ import {
   type AdminListingsListResponse,
 } from "@/lib/admin-ui/listings-client.ts";
 import {
+  createInitialLoadGuard,
+  shouldStartInitialLoad,
+} from "@/lib/admin-ui/initial-load-guard.ts";
+import {
+  createContentRefreshGate,
+  refreshContentViews,
+  shouldRefreshContentOnResume,
+} from "@/lib/admin-ui/content-refresh.ts";
+import {
   AdminListingRow,
   AdminListingsViewModel,
   buildAdminListingsViewModel,
@@ -67,6 +76,10 @@ type FilterState = {
 
 const INITIAL_FILTERS: FilterState = { status: "", type: "" };
 
+type ListingLoadOptions = {
+  selectFirstWhenMissing?: boolean;
+};
+
 export default function AdminListingsView() {
   const [viewModel, setViewModel] = useState<AdminListingsViewModel>(INITIAL_VIEW_MODEL);
   const [list, setList] = useState<AdminListingsListResponse | null>(null);
@@ -80,6 +93,8 @@ export default function AdminListingsView() {
   const [initialDetailTab, setInitialDetailTab] = useState<AdminListingDetailTabId>("general");
 
   const mountedRef = useRef(true);
+  const initialLoadGuardRef = useRef(createInitialLoadGuard());
+  const resumeRefreshGateRef = useRef(createContentRefreshGate());
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -88,30 +103,28 @@ export default function AdminListingsView() {
   }, []);
 
   const loadAllAndCacheList = useCallback(
-    async (selectedListingId: string | null, nextFilters: FilterState) => {
+    async (
+      selectedListingId: string | null,
+      nextFilters: FilterState,
+      options: ListingLoadOptions = {},
+    ) => {
       setLoading(true);
       setError(null);
       try {
-        const cachedList = await fetchListFn(filterStateToQuery(nextFilters));
+        const [cachedList, snapshot] = await Promise.all([
+          fetchListFn(filterStateToQuery(nextFilters)),
+          selectedListingId ? fetchSnapshotFn(selectedListingId) : Promise.resolve(null),
+        ]);
         if (!mountedRef.current) return;
         setList(cachedList);
-        if (selectedListingId) {
-          const model = await selectAdminListing(
-            { fetchAdminListingSnapshot: fetchSnapshotFn },
-            {
-              list: cachedList,
-              listingId: selectedListingId,
-            },
-          );
-          if (!mountedRef.current) return;
-          setViewModel(model);
-        } else {
-          setViewModel(buildAdminListingsViewModel({
+        setViewModel(
+          buildAdminListingsViewModel({
             list: cachedList,
-            selectedListingId: null,
-            snapshot: null,
-          }));
-        }
+            selectedListingId,
+            snapshot,
+            selectFirstWhenMissing: options.selectFirstWhenMissing,
+          }),
+        );
       } catch (err) {
         if (!mountedRef.current) return;
         setError(safeErrorMessage(err));
@@ -125,8 +138,34 @@ export default function AdminListingsView() {
   );
 
   useEffect(() => {
+    if (!shouldStartInitialLoad(initialLoadGuardRef.current)) {
+      return;
+    }
+
     loadAllAndCacheList(null, INITIAL_FILTERS);
   }, [loadAllAndCacheList]);
+
+  useEffect(() => {
+    const refreshOnResume = () => {
+      if (document.visibilityState === "hidden") {
+        return;
+      }
+      if (!shouldRefreshContentOnResume(resumeRefreshGateRef.current)) {
+        return;
+      }
+
+      void refreshContentViews([
+        () => loadAllAndCacheList(viewModel.selectedListingId, filters),
+      ]);
+    };
+
+    window.addEventListener("focus", refreshOnResume);
+    document.addEventListener("visibilitychange", refreshOnResume);
+    return () => {
+      window.removeEventListener("focus", refreshOnResume);
+      document.removeEventListener("visibilitychange", refreshOnResume);
+    };
+  }, [filters, loadAllAndCacheList, viewModel.selectedListingId]);
 
   const handleSelectListing = useCallback(
     async (listingId: string) => {
@@ -165,7 +204,9 @@ export default function AdminListingsView() {
     async (listingId: string | null, message: string) => {
       setActionSuccess(message);
       setActionError(null);
-      await loadAllAndCacheList(listingId, filters);
+      await loadAllAndCacheList(listingId, filters, {
+        selectFirstWhenMissing: listingId !== null,
+      });
     },
     [filters, loadAllAndCacheList],
   );
@@ -286,10 +327,10 @@ export default function AdminListingsView() {
               onCancel={() => setShowCreate(false)}
               onCreate={(payload) =>
                 runAction("Yeni ilan oluşturuldu.", async () => {
-                  const created = await createAdminListing(payload);
+                  await createAdminListing(payload);
                   setShowCreate(false);
-                  setInitialDetailTab("images");
-                  return readListingIdFromMutation(created);
+                  setInitialDetailTab("general");
+                  return null;
                 })
               }
             />
@@ -299,6 +340,7 @@ export default function AdminListingsView() {
             <ListingDetailTabs
               key={`tabs-${detail.listing.id}`}
               initialTab={initialDetailTab}
+              listingType={detail.listing.type}
               general={
                 <ListingGeneralPanel
                   key={`detail-${detail.listing.id}`}
@@ -409,8 +451,6 @@ export default function AdminListingsView() {
             )
           )}
         </section>
-
-        {detail && <CheckoutReadinessPanel detail={detail} variant="side" />}
       </div>
     </div>
   );
@@ -800,18 +840,6 @@ function safeErrorMessage(err: unknown): string {
     return err.message;
   }
   return "Beklenmeyen bir hata olustu.";
-}
-
-function readListingIdFromMutation(value: unknown): string | null {
-  if (!value || typeof value !== "object") return null;
-  const record = value as Record<string, unknown>;
-  if (typeof record.id === "string") return record.id;
-  const listing = record.listing;
-  if (listing && typeof listing === "object") {
-    const id = (listing as Record<string, unknown>).id;
-    if (typeof id === "string") return id;
-  }
-  return null;
 }
 
 function filterStateToQuery(filters: FilterState): AdminListingsListFilters {

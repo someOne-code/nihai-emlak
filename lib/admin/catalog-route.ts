@@ -359,6 +359,10 @@ function mapAdminCatalogRpcError(error: {
   code?: string | null;
   message?: string | null;
 }): [string, number] {
+  if (error.code === "23505" && error.message?.includes("main item label")) {
+    return ["Ana ödeme kalemi etiketi zaten kullanılıyor", 409];
+  }
+
   return mapAdminListingRpcError(
     error,
     "Katalog kalemi bulunamadı",

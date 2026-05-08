@@ -10,6 +10,8 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 const POSTS = "../lib/admin-ui/content-posts-ui-helpers.ts";
 const CATEGORIES = "../lib/admin-ui/content-categories-ui-helpers.ts";
@@ -57,6 +59,65 @@ test("Each module exports a non-empty list empty-state and filtered-empty-state 
   assert.ok(categories.CATEGORIES_FILTERED_EMPTY_TEXT.length > 0);
   assert.ok(consultants.CONSULTANTS_EMPTY_TEXT.length > 0);
   assert.ok(consultants.CONSULTANTS_FILTERED_EMPTY_TEXT.length > 0);
+});
+
+test("Content list empty states do not render duplicate create buttons", () => {
+  const listFiles = [
+    "components/admin-posts/PostsList.tsx",
+    "components/admin-categories/CategoriesList.tsx",
+    "components/admin-consultants/ConsultantsList.tsx",
+  ];
+
+  for (const relativePath of listFiles) {
+    const source = readFileSync(resolve(import.meta.dirname, "..", relativePath), "utf-8");
+    assert.doesNotMatch(source, /onCreateClick/);
+    assert.doesNotMatch(source, /<Button[\s\S]*Yeni (yazı|kategori|danışman)/);
+  }
+});
+
+test("Content detail empty states are hidden when the list itself is empty", () => {
+  const viewFiles = [
+    "components/admin-posts/AdminPostsView.tsx",
+    "components/admin-categories/AdminCategoriesView.tsx",
+    "components/admin-consultants/AdminConsultantsView.tsx",
+  ];
+
+  for (const relativePath of viewFiles) {
+    const source = readFileSync(resolve(import.meta.dirname, "..", relativePath), "utf-8");
+    assert.match(source, /const shouldRenderDetailPanel =[\s\S]*?(viewModel\.rows|filteredRows)\.length > 0/);
+    assert.match(source, /\{shouldRenderDetailPanel && \(\s*<section className=\{adminLayout\.detailPanel\}>/);
+  }
+});
+
+test("Content admin views revalidate stale data when the browser tab resumes", () => {
+  const viewFiles = [
+    "components/admin-posts/AdminPostsView.tsx",
+    "components/admin-categories/AdminCategoriesView.tsx",
+    "components/admin-consultants/AdminConsultantsView.tsx",
+  ];
+
+  for (const relativePath of viewFiles) {
+    const source = readFileSync(resolve(import.meta.dirname, "..", relativePath), "utf-8");
+    assert.match(source, /createContentRefreshGate/);
+    assert.match(source, /shouldRefreshContentOnResume/);
+    assert.match(source, /addEventListener\("focus"/);
+    assert.match(source, /addEventListener\("visibilitychange"/);
+  }
+});
+
+test("Content mutation refreshes run independent list and detail reads in parallel", () => {
+  const viewFiles = [
+    "components/admin-posts/AdminPostsView.tsx",
+    "components/admin-categories/AdminCategoriesView.tsx",
+    "components/admin-consultants/AdminConsultantsView.tsx",
+  ];
+
+  for (const relativePath of viewFiles) {
+    const source = readFileSync(resolve(import.meta.dirname, "..", relativePath), "utf-8");
+    assert.match(source, /refreshContentViews/);
+    assert.match(source, /refreshAfterMutation[\s\S]*refreshContentViews\(/);
+    assert.doesNotMatch(source, /await loadList\([^)]*\);\s*if \([^)]* && mountedRef\.current\)\s*await handleSelect/);
+  }
 });
 
 // ── computeSlug* helpers must freeze on manual edit (parametric over modules) ─
@@ -160,4 +221,18 @@ test("Posts COVER_IMAGE_RATIO_HINT signals 16:9 ratio convention", async () => {
     hint.includes("yatay"),
     `Cover image hint must mention ratio expectation: got "${posts.COVER_IMAGE_RATIO_HINT}"`,
   );
+});
+
+test("Content create actions clear selection instead of opening the new item editor", () => {
+  const viewFiles = [
+    "components/admin-posts/AdminPostsView.tsx",
+    "components/admin-categories/AdminCategoriesView.tsx",
+    "components/admin-consultants/AdminConsultantsView.tsx",
+  ];
+
+  for (const relativePath of viewFiles) {
+    const source = readFileSync(resolve(import.meta.dirname, "..", relativePath), "utf-8");
+    assert.doesNotMatch(source, /createAdmin(?:Post|Category|Consultant)[\s\S]*return readIdFromMutation\(created\)/);
+    assert.match(source, /createAdmin(?:Post|Category|Consultant)[\s\S]*setShowCreate\(false\);[\s\S]*return null;/);
+  }
 });

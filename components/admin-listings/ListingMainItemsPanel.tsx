@@ -12,6 +12,7 @@ import { Select } from "@/components/ui/select";
 import {
   buildAdminListingMainItemDisplay,
   getAvailableMainItemAddCandidates,
+  isAdminListingCheckoutConfigurable,
   type AdminListingAvailableMainItem,
   type AdminListingDetail,
   type AdminListingMainItem,
@@ -46,6 +47,19 @@ export default function ListingMainItemsPanel({
   busy,
   onConfigure,
 }: ListingMainItemsPanelProps) {
+  if (!isAdminListingCheckoutConfigurable(detail)) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Ana Odeme Kalemleri</CardTitle>
+          <CardDescription>
+            Satilik ilanlarda checkout odeme kalemi yapilandirmasi beklenmez.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
+
   const candidates = getAvailableMainItemAddCandidates(detail);
 
   return (

@@ -57,14 +57,16 @@ test("chatwoot config rejects invalid base url and normalizes valid origin", () 
 test("chatwoot client builds contact, conversation, and message requests", async () => {
   const calls: Array<{ url: string; init: RequestInit }> = [];
   const fetchImpl = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
-    calls.push({ url: String(input), init: init ?? {} });
-    if (String(input).endsWith("/contacts")) {
+    const url = String(input);
+    const pathname = new URL(url).pathname;
+    calls.push({ url, init: init ?? {} });
+    if (pathname.endsWith("/contacts")) {
       return Response.json({ source_id: "contact-source-123" });
     }
-    if (String(input).endsWith("/conversations")) {
+    if (pathname.endsWith("/conversations")) {
       return Response.json({ id: 9876 });
     }
-    if (String(input).endsWith("/messages") && init?.method === "GET") {
+    if (pathname.endsWith("/messages") && init?.method === "GET") {
       return Response.json([{ id: 1, content: "Merhaba" }]);
     }
     return Response.json({ id: 2, content: "Selam" });
@@ -98,6 +100,10 @@ test("chatwoot client builds contact, conversation, and message requests", async
   const messagesResult = await client.listMessages({
     sourceId: "contact-source-123",
     conversationId: "9876",
+    pagination: {
+      limit: 10,
+      offset: 20,
+    },
   });
   const messageResult = await client.createIncomingMessage({
     sourceId: "contact-source-123",
@@ -141,7 +147,7 @@ test("chatwoot client builds contact, conversation, and message requests", async
 
   assert.equal(
     calls[2]?.url,
-    "https://chat.example.com/public/api/v1/inboxes/inbox_123/contacts/contact-source-123/conversations/9876/messages",
+    "https://chat.example.com/public/api/v1/inboxes/inbox_123/contacts/contact-source-123/conversations/9876/messages?limit=10&offset=20",
   );
   assert.equal(calls[2]?.init.method, "GET");
 

@@ -20,7 +20,8 @@ type ReadModelRpcName =
   | "list_admin_reservations"
   | "list_admin_orders"
   | "list_admin_payments"
-  | "list_admin_payment_events";
+  | "list_admin_payment_events"
+  | "list_admin_audit_events";
 
 type SupabaseClient = {
   auth: {
@@ -126,6 +127,8 @@ export async function handleAdminReservationsGet(
   const query = parseAdminListQuery(request, {
     statusParam: "status",
     allowedStatuses: ["pending", "confirmed", "cancelled", "expired"],
+    queueParam: "queue",
+    allowedQueues: ["all", "document_waiting", "refund_requests", "manual_refunds", "payment_issues", "completed"],
   });
   if (!query.ok) {
     return jsonError(query.error, 400);
@@ -133,6 +136,7 @@ export async function handleAdminReservationsGet(
 
   const rpcResult = await guard.supabase.rpc("list_admin_reservations", {
     p_status: query.value.status,
+    p_queue: query.value.queue,
     p_limit: query.value.limit,
     p_offset: query.value.offset,
   });
@@ -217,6 +221,37 @@ export async function handleAdminPaymentEventsGet(
 
   const rpcResult = await guard.supabase.rpc("list_admin_payment_events", {
     p_payment_id: query.value.paymentId,
+    p_limit: query.value.limit,
+    p_offset: query.value.offset,
+  });
+  if (rpcResult.error) {
+    return jsonError(...mapAdminReadRpcError(rpcResult.error));
+  }
+
+  return jsonSuccess(rpcResult.data);
+}
+
+export async function handleAdminAuditEventsGet(
+  request: Request,
+  dependencies: ReadModelRouteDependencies,
+): Promise<Response> {
+  const guard = await guardAdminReadRequest(dependencies);
+  if (!guard.ok) {
+    return guard.response;
+  }
+
+  const query = parseAdminAuditEventsQuery(request);
+  if (!query.ok) {
+    return jsonError(query.error, 400);
+  }
+
+  const rpcResult = await guard.supabase.rpc("list_admin_audit_events", {
+    p_entity_type: query.value.entityType,
+    p_entity_id: query.value.entityId,
+    p_actor_id: query.value.actorId,
+    p_action: query.value.action,
+    p_from: query.value.from,
+    p_to: query.value.to,
     p_limit: query.value.limit,
     p_offset: query.value.offset,
   });
@@ -322,10 +357,11 @@ function parsePublicListingsQuery(
 
 function parseAdminListQuery(
   request: Request,
-  config: { statusParam: string; allowedStatuses: string[] },
-): { ok: true; value: { status: string | null; limit: number; offset: number } } | { ok: false; error: string } {
+  config: { statusParam: string; allowedStatuses: string[]; queueParam?: string; allowedQueues?: string[] },
+): { ok: true; value: { status: string | null; queue: string | null; limit: number; offset: number } } | { ok: false; error: string } {
   const url = new URL(request.url);
   const statusRaw = asNonEmptyString(url.searchParams.get(config.statusParam));
+  const queueRaw = config.queueParam ? asNonEmptyString(url.searchParams.get(config.queueParam)) : null;
 
   let status: string | null = null;
   if (statusRaw) {
@@ -334,6 +370,15 @@ function parseAdminListQuery(
       return { ok: false, error: `Invalid query parameter: ${config.statusParam}` };
     }
     status = normalized;
+  }
+
+  let queue: string | null = null;
+  if (queueRaw && config.queueParam && config.allowedQueues) {
+    const normalized = queueRaw.toLowerCase();
+    if (!config.allowedQueues.includes(normalized)) {
+      return { ok: false, error: `Invalid query parameter: ${config.queueParam}` };
+    }
+    queue = normalized;
   }
 
   const limitResult = parsePaginationParam(url.searchParams.get("limit"), "limit");
@@ -361,6 +406,7 @@ function parseAdminListQuery(
     ok: true,
     value: {
       status,
+      queue,
       limit,
       offset,
     },
@@ -406,6 +452,99 @@ function parseAdminPaymentEventsQuery(
     ok: true,
     value: {
       paymentId,
+      limit,
+      offset,
+    },
+  };
+}
+
+function parseAdminAuditEventsQuery(
+  request: Request,
+): {
+  ok: true;
+  value: {
+    entityType: string | null;
+    entityId: string | null;
+    actorId: string | null;
+    action: string | null;
+    from: string | null;
+    to: string | null;
+    limit: number;
+    offset: number;
+  };
+} | { ok: false; error: string } {
+  const url = new URL(request.url);
+  const entityTypeRaw = asNonEmptyString(url.searchParams.get("entityType"));
+  const entityIdRaw = asNonEmptyString(url.searchParams.get("entityId"));
+  const actorIdRaw = asNonEmptyString(url.searchParams.get("actorId"));
+  const action = asNonEmptyString(url.searchParams.get("action"));
+  const fromRaw = url.searchParams.get("from");
+  const toRaw = url.searchParams.get("to");
+  const from = asIsoDateTime(fromRaw);
+  const to = asIsoDateTime(toRaw);
+
+  let entityType: string | null = null;
+  if (entityTypeRaw) {
+    const normalized = entityTypeRaw.toLowerCase();
+    if (!["reservation", "order", "payment", "listing", "sale_lead"].includes(normalized)) {
+      return { ok: false, error: "Invalid query parameter: entityType" };
+    }
+    entityType = normalized;
+  }
+
+  let entityId: string | null = null;
+  if (entityIdRaw) {
+    entityId = asUuid(entityIdRaw);
+    if (!entityId) {
+      return { ok: false, error: "Invalid query parameter: entityId" };
+    }
+  }
+
+  let actorId: string | null = null;
+  if (actorIdRaw) {
+    actorId = asUuid(actorIdRaw);
+    if (!actorId) {
+      return { ok: false, error: "Invalid query parameter: actorId" };
+    }
+  }
+
+  if (fromRaw && !from) {
+    return { ok: false, error: "Invalid query parameter: from" };
+  }
+  if (toRaw && !to) {
+    return { ok: false, error: "Invalid query parameter: to" };
+  }
+
+  const limitResult = parsePaginationParam(url.searchParams.get("limit"), "limit");
+  if (!limitResult.ok) {
+    return limitResult;
+  }
+
+  const offsetResult = parsePaginationParam(url.searchParams.get("offset"), "offset");
+  if (!offsetResult.ok) {
+    return offsetResult;
+  }
+
+  const limit = limitResult.value ?? DEFAULT_LIMIT;
+  const offset = offsetResult.value ?? 0;
+
+  if (limit < 1 || limit > MAX_LIMIT) {
+    return { ok: false, error: "Invalid query parameter: limit" };
+  }
+
+  if (offset < 0) {
+    return { ok: false, error: "Invalid query parameter: offset" };
+  }
+
+  return {
+    ok: true,
+    value: {
+      entityType,
+      entityId,
+      actorId,
+      action,
+      from,
+      to,
       limit,
       offset,
     },
@@ -504,6 +643,20 @@ function asUuid(value: unknown): string | null {
   }
 
   return normalized.toLowerCase();
+}
+
+function asIsoDateTime(value: unknown): string | null {
+  const normalized = asNonEmptyString(value);
+  if (!normalized) {
+    return null;
+  }
+
+  const timestamp = Date.parse(normalized);
+  if (!Number.isFinite(timestamp)) {
+    return null;
+  }
+
+  return new Date(timestamp).toISOString();
 }
 
 function asNonEmptyString(value: unknown): string | null {

@@ -27,6 +27,17 @@ export const ADMIN_LISTING_DETAIL_TABS: ReadonlyArray<AdminListingDetailTab> =
 
 export const DEFAULT_ADMIN_LISTING_DETAIL_TAB: AdminListingDetailTabId = "general";
 
+export function getAdminListingDetailTabsForType(
+  listingType: "rent" | "sale" | "unknown" | string | null | undefined,
+): ReadonlyArray<AdminListingDetailTab> {
+  if (listingType === "sale") {
+    return ADMIN_LISTING_DETAIL_TABS.filter(
+      (tab) => tab.id !== "main-items" && tab.id !== "services",
+    );
+  }
+  return ADMIN_LISTING_DETAIL_TABS;
+}
+
 const KNOWN_TAB_IDS: ReadonlySet<AdminListingDetailTabId> = new Set(
   ADMIN_LISTING_DETAIL_TABS.map((tab) => tab.id),
 );

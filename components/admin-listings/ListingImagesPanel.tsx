@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { resolveAdminDisplayImageUrl } from "@/lib/admin-ui/admin-image-url";
 import { uploadListingImage } from "@/lib/admin-ui/listings-client";
 import type { AdminListingImage } from "@/lib/admin-ui/listings-view-model";
 
@@ -265,14 +266,25 @@ function ImageCard({
   onMove: (direction: -1 | 1) => void;
   onDelete: () => void;
 }) {
+  const displayImageUrl = resolveAdminDisplayImageUrl(image.imageUrl, {
+    currentOrigin: typeof window === "undefined" ? null : window.location.origin,
+    supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+  });
+
   return (
     <div className="rounded-lg border bg-card overflow-hidden">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={image.imageUrl}
-        alt={image.altText ?? ""}
-        className="w-full aspect-[4/3] object-cover bg-muted"
-      />
+      {displayImageUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={displayImageUrl}
+          alt={image.altText ?? ""}
+          className="w-full aspect-[4/3] object-cover bg-muted"
+        />
+      ) : (
+        <div className="flex aspect-[4/3] w-full items-center justify-center bg-muted text-xs text-muted-foreground">
+          Gorsel onizleme yok
+        </div>
+      )}
       <div className="p-3 space-y-2">
         <div className="flex flex-wrap gap-1">
           <Badge variant="outline" className="text-[10px] tabular-nums">Sıra #{image.sortOrder}</Badge>

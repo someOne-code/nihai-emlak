@@ -6,74 +6,116 @@
 // React into node:test. The shell itself must not perform auth;
 // page-level access guards remain authoritative.
 
+export type AdminSidebarIcon =
+  | "bar-chart"
+  | "building"
+  | "catalog"
+  | "dashboard"
+  | "inbox"
+  | "newspaper"
+  | "operations"
+  | "sale-leads"
+  | "section-content"
+  | "section-general"
+  | "section-management"
+  | "shield"
+  | "tags"
+  | "user";
+
 export type AdminSidebarLink = {
   readonly label: string;
   readonly href: string;
+  readonly icon?: AdminSidebarIcon;
 };
 
-export type AdminSidebarItem =
-  | { readonly kind: "link"; readonly label: string; readonly href: string }
-  | {
-      readonly kind: "section";
-      readonly label: string;
-      readonly children: ReadonlyArray<AdminSidebarLink>;
-    };
+export type AdminSidebarSectionLink = AdminSidebarLink & {
+  readonly icon: AdminSidebarIcon;
+};
+
+export type AdminSidebarItem = {
+  readonly kind: "section";
+  readonly label: string;
+  readonly icon: AdminSidebarIcon;
+  readonly children: ReadonlyArray<AdminSidebarSectionLink>;
+};
 
 // Flat link list kept for backward compatibility with existing consumers
 // that only need a simple link array.
 export const ADMIN_SIDEBAR_LINKS: ReadonlyArray<AdminSidebarLink> =
   Object.freeze([
-    Object.freeze({ label: "Dashboard", href: "/admin" }),
+    Object.freeze({ label: "Kontrol Paneli", href: "/admin" }),
     Object.freeze({ label: "İlanlar", href: "/admin/listings" }),
     Object.freeze({ label: "Operasyonlar", href: "/admin/operations" }),
     Object.freeze({ label: "Adminler", href: "/admin/users" }),
-    Object.freeze({ label: "CMS", href: "/cms" }),
   ]);
 
-// Phase 9A: structured sidebar items with Icerik section grouping.
+// Structured sidebar items with clear visual hierarchy.
 export const ADMIN_SIDEBAR_ITEMS: ReadonlyArray<AdminSidebarItem> =
   Object.freeze([
     Object.freeze({
-      kind: "link" as const,
-      label: "Dashboard",
-      href: "/admin",
-    }),
-    Object.freeze({
-      kind: "link" as const,
-      label: "İlanlar",
-      href: "/admin/listings",
-    }),
-    Object.freeze({
-      kind: "link" as const,
-      label: "Operasyonlar",
-      href: "/admin/operations",
-    }),
-    Object.freeze({
-      kind: "link" as const,
-      label: "Adminler",
-      href: "/admin/users",
-    }),
-    Object.freeze({
       kind: "section" as const,
-      label: "İçerik",
+      label: "Genel",
+      icon: "section-general",
       children: Object.freeze([
-        Object.freeze({ label: "Blog Yazıları", href: "/admin/content/posts" }),
+        Object.freeze({ label: "Kontrol Paneli", href: "/admin", icon: "dashboard" }),
+        Object.freeze({ label: "İlanlar", href: "/admin/listings", icon: "building" }),
         Object.freeze({
-          label: "Blog Kategorileri",
-          href: "/admin/content/categories",
-        }),
-        Object.freeze({
-          label: "Danışmanlar",
-          href: "/admin/content/consultants",
+          label: "Operasyonlar",
+          href: "/admin/operations",
+          icon: "operations",
         }),
       ]),
     }),
     Object.freeze({
-      kind: "link" as const,
-      label: "Fiyat Kataloğu",
-      href: "/admin/listing-catalog",
+      kind: "section" as const,
+      label: "İçerik",
+      icon: "section-content",
+      children: Object.freeze([
+        Object.freeze({
+          label: "Blog Yazıları",
+          href: "/admin/content/posts",
+          icon: "newspaper",
+        }),
+        Object.freeze({
+          label: "Blog Kategorileri",
+          href: "/admin/content/categories",
+          icon: "tags",
+        }),
+        Object.freeze({
+          label: "Danışmanlar",
+          href: "/admin/content/consultants",
+          icon: "user",
+        }),
+      ]),
     }),
-    Object.freeze({ kind: "link" as const, label: "CMS", href: "/cms" }),
+    Object.freeze({
+      kind: "section" as const,
+      label: "Yönetim",
+      icon: "section-management",
+      children: Object.freeze([
+        Object.freeze({ label: "Adminler", href: "/admin/users", icon: "shield" }),
+        Object.freeze({
+          label: "İletişim",
+          href: "/admin/communications",
+          icon: "inbox",
+        }),
+        Object.freeze({
+          label: "Satış Leadleri",
+          href: "/admin/sale-leads",
+          icon: "sale-leads",
+        }),
+        Object.freeze({
+          label: "Fiyat Kataloğu",
+          href: "/admin/listing-catalog",
+          icon: "catalog",
+        }),
+        Object.freeze({
+          label: "Sistem Sağlığı",
+          href: "/admin/system",
+          icon: "shield",
+        }),
+      ]),
+    }),
   ]);
 
 type AdminTitleRule = {
@@ -86,9 +128,12 @@ type AdminTitleRule = {
 // falling back to the "/admin" dashboard label.
 const ADMIN_TITLE_RULES: ReadonlyArray<AdminTitleRule> = Object.freeze([
   Object.freeze({ prefix: "/admin/users", title: "Adminler" }),
+  Object.freeze({ prefix: "/admin/system", title: "Sistem Sağlığı" }),
   Object.freeze({ prefix: "/admin/listing-catalog", title: "Fiyat Kataloğu" }),
+  Object.freeze({ prefix: "/admin/sale-leads", title: "Satış Leadleri" }),
   Object.freeze({ prefix: "/admin/listings", title: "İlanlar" }),
   Object.freeze({ prefix: "/admin/operations", title: "Operasyonlar" }),
+  Object.freeze({ prefix: "/admin/communications", title: "İletişim" }),
   Object.freeze({ prefix: "/admin/content/posts", title: "Blog Yazıları" }),
   Object.freeze({
     prefix: "/admin/content/categories",
@@ -96,15 +141,18 @@ const ADMIN_TITLE_RULES: ReadonlyArray<AdminTitleRule> = Object.freeze([
   }),
   Object.freeze({ prefix: "/admin/content/consultants", title: "Danışmanlar" }),
   Object.freeze({ prefix: "/admin/content", title: "İçerik" }),
-  Object.freeze({ prefix: "/admin", title: "Dashboard" }),
+  Object.freeze({ prefix: "/admin", title: "Kontrol Paneli" }),
 ]);
 
 const ADMIN_TITLE_EXACT: Readonly<Record<string, string>> = Object.freeze({
-  "/admin": "Dashboard",
+  "/admin": "Kontrol Paneli",
   "/admin/users": "Adminler",
+  "/admin/system": "Sistem Sağlığı",
   "/admin/listing-catalog": "Fiyat Kataloğu",
+  "/admin/sale-leads": "Satış Leadleri",
   "/admin/listings": "İlanlar",
   "/admin/operations": "Operasyonlar",
+  "/admin/communications": "İletişim",
   "/admin/content/posts": "Blog Yazıları",
   "/admin/content/categories": "Blog Kategorileri",
   "/admin/content/consultants": "Danışmanlar",

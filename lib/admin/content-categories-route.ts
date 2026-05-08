@@ -20,6 +20,8 @@ import {
   type CategoryCreateInput,
   type CategoryUpdateInput,
 } from "./content-categories-parsers";
+import { buildCategoryOptionsFindArgs } from "./content-categories-options";
+import { buildCategoryLinkedPostsFindArgs } from "./content-category-linked-posts";
 
 // ── DTO types ──────────────────────────────────────────────────────────────
 
@@ -32,6 +34,23 @@ export type CategoryDTO = {
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
+};
+
+export type CategoryLinkedPostDTO = {
+  id: string;
+  title: string;
+  status: string;
+  updatedAt: string;
+};
+
+export type CategoryDetailDTO = CategoryDTO & {
+  linkedPosts: CategoryLinkedPostDTO[];
+  linkedPostCount: number;
+  deleteWarning: {
+    hasLinkedPosts: boolean;
+    linkedPostCount: number;
+    message: string | null;
+  };
 };
 
 export type CategoryOptionDTO = {
@@ -63,6 +82,13 @@ type PayloadCategoryDoc = {
   updatedAt: string;
 };
 
+type PayloadCategoryLinkedPostDoc = {
+  id: number | string;
+  title?: string | null;
+  status?: string | null;
+  updatedAt?: string | null;
+};
+
 // ── DTO mappers ────────────────────────────────────────────────────────────
 
 function toCategoryDTO(doc: PayloadCategoryDoc): CategoryDTO {
@@ -75,6 +101,31 @@ function toCategoryDTO(doc: PayloadCategoryDoc): CategoryDTO {
     sortOrder: doc.sortOrder ?? 0,
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
+  };
+}
+
+function toCategoryDetailDTO(
+  doc: PayloadCategoryDoc,
+  linkedPosts: PayloadCategoryLinkedPostDoc[],
+  totalLinkedPostCount = linkedPosts.length,
+): CategoryDetailDTO {
+  const linkedPostCount = Math.max(0, totalLinkedPostCount);
+  return {
+    ...toCategoryDTO(doc),
+    linkedPosts: linkedPosts.map((post) => ({
+      id: String(post.id),
+      title: post.title ?? "Başlıksız",
+      status: post.status ?? "draft",
+      updatedAt: post.updatedAt ?? "",
+    })),
+    linkedPostCount,
+    deleteWarning: {
+      hasLinkedPosts: linkedPostCount > 0,
+      linkedPostCount,
+      message: linkedPostCount > 0
+        ? `Bu kategoriye bağlı ${linkedPostCount} blog yazısı var.`
+        : null,
+    },
   };
 }
 
@@ -130,12 +181,7 @@ export async function handleCategoriesOptionsGet(
 
   const payload = await getPayload({ config: configPromise });
 
-  const result = await payload.find({
-    collection: "blog_categories",
-    limit: 500,
-    sort: "sortOrder",
-    where: { isActive: { equals: true } },
-  });
+  const result = await payload.find(buildCategoryOptionsFindArgs());
 
   const options: CategoryOptionDTO[] = result.docs.map((doc) => ({
     id: String(doc.id),
@@ -195,8 +241,16 @@ export async function handleCategoryGet(
 
   try {
     const doc = await payload.findByID({ collection: "blog_categories", id });
+    const linkedPosts = await payload.find(buildCategoryLinkedPostsFindArgs(id));
     return jsonResponse(
-      { success: true, data: toCategoryDTO(doc as unknown as PayloadCategoryDoc) },
+      {
+        success: true,
+        data: toCategoryDetailDTO(
+          doc as unknown as PayloadCategoryDoc,
+          linkedPosts.docs as unknown as PayloadCategoryLinkedPostDoc[],
+          linkedPosts.totalDocs,
+        ),
+      },
       200,
     );
   } catch {

@@ -29,6 +29,16 @@
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
     --radius: 0.5rem;
+
+    /* Legacy admin shared tokens — consumed by posts.css & other admin CSS */
+    --ops-surface: #ffffff;
+    --ops-surface-muted: #f8fafc;
+    --ops-border: #d7e0ea;
+    --ops-border-strong: #c2d1e0;
+    --ops-text: #0f172a;
+    --ops-muted: #475569;
+    --ops-accent: #0f766e;
+    --ops-accent-soft: #ccfbf1;
   }
   .dark {
     --background: 0 0% 3.9%;
@@ -55,6 +65,16 @@
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
+
+    /* Legacy admin shared tokens — dark mode */
+    --ops-surface: #0b1220;
+    --ops-surface-muted: #111c2f;
+    --ops-border: #1e2a44;
+    --ops-border-strong: #2a3a5c;
+    --ops-text: #e2e8f0;
+    --ops-muted: #94a3b8;
+    --ops-accent: #2dd4bf;
+    --ops-accent-soft: #134e4a;
   }
 }
 

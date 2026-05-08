@@ -15,9 +15,7 @@ import {
 // admin-friendly Turkish copy derived from the DB/RPC snapshot via
 // `buildAdminListingCheckoutReadinessDisplay`. The view never invents
 // readiness decisions; status, badge label, summary, and missing list
-// items all come from the helper. The same component is reused by the
-// always-visible side aside and the "Checkout Hazırlığı" tab so the
-// two surfaces stay consistent by construction.
+// items all come from the helper.
 
 type CheckoutReadinessPanelProps = {
   detail: AdminListingDetail | null;

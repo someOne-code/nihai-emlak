@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   ADMIN_LISTING_DETAIL_TABS,
   DEFAULT_ADMIN_LISTING_DETAIL_TAB,
+  getAdminListingDetailTabsForType,
   resolveAdminListingDetailTab,
   type AdminListingDetailTabId,
 } from "../lib/admin-ui/listings-product-layout.ts";
@@ -18,6 +19,20 @@ test("admin listings detail tabs expose the product panel order", () => {
       { id: "services", label: "Ek Hizmetler" },
       { id: "checkout", label: "Checkout Hazırlığı" },
     ],
+  );
+});
+
+test("sale listing detail tabs hide checkout configuration surfaces", () => {
+  assert.deepEqual(
+    getAdminListingDetailTabsForType("sale").map((tab) => tab.id),
+    ["general", "images", "checkout"],
+  );
+});
+
+test("rent listing detail tabs keep checkout configuration surfaces", () => {
+  assert.deepEqual(
+    getAdminListingDetailTabsForType("rent").map((tab) => tab.id),
+    ADMIN_LISTING_DETAIL_TABS.map((tab) => tab.id),
   );
 });
 

@@ -19,6 +19,12 @@ export type AdminOperationsOverview = {
   payments: AdminOperationsListResult;
 };
 
+export type OperationsOverviewFilters = {
+  reservationStatus?: "all" | "pending" | "confirmed" | "cancelled" | "expired";
+  reservationQueue?: "all" | "document_waiting" | "refund_requests" | "manual_refunds" | "payment_issues" | "completed";
+  paymentStatus?: "all" | "pending" | "succeeded" | "failed" | "cancelled" | "refunded" | "conflict";
+};
+
 export class AdminOperationsClientError extends Error {
   readonly status: number;
 
@@ -31,10 +37,28 @@ export class AdminOperationsClientError extends Error {
 
 export async function loadAdminOperationsOverview(
   options: AdminOperationsClientOptions = {},
+  filters: OperationsOverviewFilters = {},
 ): Promise<AdminOperationsOverview> {
+  const reservationParams = new URLSearchParams();
+  if (filters.reservationStatus && filters.reservationStatus !== "all") {
+    reservationParams.set("status", filters.reservationStatus);
+  }
+  if (filters.reservationQueue && filters.reservationQueue !== "all") {
+    reservationParams.set("queue", filters.reservationQueue);
+  }
+  reservationParams.set("limit", "20");
+  reservationParams.set("offset", "0");
+
+  const paymentParams = new URLSearchParams();
+  if (filters.paymentStatus && filters.paymentStatus !== "all") {
+    paymentParams.set("status", filters.paymentStatus);
+  }
+  paymentParams.set("limit", "100");
+  paymentParams.set("offset", "0");
+
   const [reservations, orders, payments] = await Promise.all([
     requestAdminJson<AdminOperationsListResult>(
-      "/api/admin/read/reservations?status=pending&limit=20&offset=0",
+      `/api/admin/read/reservations?${reservationParams.toString()}`,
       { method: "GET" },
       options,
     ),
@@ -44,7 +68,7 @@ export async function loadAdminOperationsOverview(
       options,
     ),
     requestAdminJson<AdminOperationsListResult>(
-      "/api/admin/read/payments?limit=100&offset=0",
+      `/api/admin/read/payments?${paymentParams.toString()}`,
       { method: "GET" },
       options,
     ),
@@ -57,12 +81,60 @@ export async function loadAdminOperationsOverview(
   };
 }
 
+export async function loadAdminPaymentEvents(
+  paymentId: string,
+  options: AdminOperationsClientOptions = {},
+): Promise<unknown> {
+  const params = new URLSearchParams();
+  params.set("paymentId", paymentId);
+  params.set("limit", "20");
+  params.set("offset", "0");
+  return requestAdminJson(
+    `/api/admin/read/payment-events?${params.toString()}`,
+    { method: "GET" },
+    options,
+  );
+}
+
 export async function fetchReservationWorkflowSnapshot(
   reservationId: string,
   options: AdminOperationsClientOptions = {},
 ): Promise<unknown> {
   return requestAdminJson(
     `/api/admin/workflows/reservations/${encodeURIComponent(reservationId)}/snapshot`,
+    { method: "GET" },
+    options,
+  );
+}
+
+export async function fetchReservationDocumentTracking(
+  reservationId: string,
+  options: AdminOperationsClientOptions = {},
+): Promise<unknown> {
+  return requestAdminJson(
+    `/api/admin/workflows/reservations/${encodeURIComponent(reservationId)}/documents`,
+    { method: "GET" },
+    options,
+  );
+}
+
+export async function fetchReservationFinanceOps(
+  reservationId: string,
+  options: AdminOperationsClientOptions = {},
+): Promise<unknown> {
+  return requestAdminJson(
+    `/api/admin/workflows/reservations/${encodeURIComponent(reservationId)}/finance`,
+    { method: "GET" },
+    options,
+  );
+}
+
+export async function fetchReservationEventHistory(
+  reservationId: string,
+  options: AdminOperationsClientOptions = {},
+): Promise<unknown> {
+  return requestAdminJson(
+    `/api/admin/workflows/reservations/${encodeURIComponent(reservationId)}/events`,
     { method: "GET" },
     options,
   );
@@ -79,9 +151,44 @@ export async function fetchListingWorkflowSnapshot(
   );
 }
 
+export async function updateReservationDocumentTracking(
+  reservationId: string,
+  body: { status: "requested" | "waiting" | "completed" | "failed"; note?: string | null },
+  options: AdminOperationsClientOptions = {},
+): Promise<unknown> {
+  return postAdminJson(
+    `/api/admin/workflows/reservations/${encodeURIComponent(reservationId)}/documents`,
+    body,
+    options,
+  );
+}
+
+export async function updateReservationFinanceOps(
+  reservationId: string,
+  body: {
+    status:
+      | "refund_required"
+      | "refund_requested"
+      | "refund_completed"
+      | "deposit_forfeited"
+      | "manual_resolution_required"
+      | "conflict_payment"
+      | "issue_resolved"
+      | "payment_not_received";
+    note?: string | null;
+  },
+  options: AdminOperationsClientOptions = {},
+): Promise<unknown> {
+  return postAdminJson(
+    `/api/admin/workflows/reservations/${encodeURIComponent(reservationId)}/finance`,
+    body,
+    options,
+  );
+}
+
 export async function cancelReservationWorkflow(
   reservationId: string,
-  body: { reason: string; note?: string | null },
+  body: { refundDecision: "manual_refund" | "no_refund"; note: string },
   options: AdminOperationsClientOptions = {},
 ): Promise<unknown> {
   return postAdminJson(

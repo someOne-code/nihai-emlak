@@ -200,6 +200,20 @@ test("task 4 operations view renders disabled action reasons as visible helper t
   assert.match(cssSource, /\.opsActionReason\s*\{/);
 });
 
+test("task 4 operations view localizes workflow conflict errors for admins", async () => {
+  const source = await readFile(
+    new URL("../components/admin-operations/OperationsView.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(source, /Bu islem mevcut kayit durumunda yapilamaz/);
+  assert.doesNotMatch(
+    source,
+    /if \(err instanceof AdminOperationsClientError\) return err\.message;/,
+    "raw backend workflow errors should not be surfaced directly in the operations page",
+  );
+});
+
 test("task 4 loader fetches overview, selected reservation snapshot, and related listing snapshot", async () => {
   const calls: string[] = [];
   const model = await loadOperationsModel({
@@ -222,6 +236,7 @@ test("task 4 loader fetches overview, selected reservation snapshot, and related
       calls.push("overview");
       return createOverview();
     },
+    loadAdminPaymentEvents: async () => ({ items: [], limit: 20, offset: 0 }),
   });
 
   assert.deepEqual(calls, ["overview", "reservation:reservation-1", "listing:listing-1"]);

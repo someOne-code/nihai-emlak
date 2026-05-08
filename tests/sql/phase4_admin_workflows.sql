@@ -45,6 +45,14 @@ where payment_id in (
   '33333333-4444-4444-8444-444444444004'::uuid
 );
 
+delete from public.payment_finance_ops
+where payment_id in (
+  '33333333-4444-4444-8444-444444444001'::uuid,
+  '33333333-4444-4444-8444-444444444002'::uuid,
+  '33333333-4444-4444-8444-444444444003'::uuid,
+  '33333333-4444-4444-8444-444444444004'::uuid
+);
+
 delete from public.payments
 where id in (
   '33333333-4444-4444-8444-444444444001'::uuid,
@@ -350,8 +358,8 @@ begin
   begin
     perform public.admin_cancel_reservation(
       'eeeeeeee-ffff-4fff-8fff-fffffffff001'::uuid,
-      'user_cannot_cancel',
-      null
+      'no_refund',
+      'regular user should fail'
     );
     raise exception 'TEST 1 FAILED: non-admin should not cancel reservation';
   exception
@@ -364,7 +372,7 @@ $$;
 reset role;
 
 -- ============================================================
--- TEST 2: admin cancel pending reservation cancels payment/order/reservation
+-- TEST 2: admin cannot cancel while bank payment approval is pending
 -- ============================================================
 set role authenticated;
 select set_config('request.jwt.claim.sub', 'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb001', false);
@@ -372,21 +380,26 @@ select set_config('request.jwt.claim.role', 'authenticated', false);
 
 do $$
 declare
-  v_result jsonb;
   v_reservation_status text;
   v_order_status text;
   v_payment_status text;
   v_listing_status text;
   v_snapshot jsonb;
+  v_cancel_blocked boolean := false;
 begin
-  v_result := public.admin_cancel_reservation(
-    'eeeeeeee-ffff-4fff-8fff-fffffffff001'::uuid,
-    'customer_withdrew_before_payment',
-    'customer changed plans'
-  );
+  begin
+    perform public.admin_cancel_reservation(
+      'eeeeeeee-ffff-4fff-8fff-fffffffff001'::uuid,
+      'no_refund',
+      'customer changed plans'
+    );
+  exception
+    when sqlstate 'P0001' then
+      v_cancel_blocked := true;
+  end;
 
-  if v_result->>'result' <> 'cancelled' then
-    raise exception 'TEST 2 FAILED: expected cancelled result, got %', v_result;
+  if not v_cancel_blocked then
+    raise exception 'TEST 2 FAILED: pending bank approval should block admin cancel';
   end if;
 
   select status::text into v_reservation_status
@@ -405,9 +418,9 @@ begin
   from public.listings
   where id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd001'::uuid;
 
-  if v_reservation_status <> 'cancelled'
-     or v_order_status <> 'cancelled'
-     or v_payment_status <> 'cancelled'
+  if v_reservation_status <> 'pending'
+     or v_order_status <> 'pending'
+     or v_payment_status <> 'pending'
      or v_listing_status <> 'active' then
     raise exception
       'TEST 2 FAILED: unexpected statuses reservation=% order=% payment=% listing=%',
@@ -418,10 +431,9 @@ begin
     'eeeeeeee-ffff-4fff-8fff-fffffffff001'::uuid
   );
 
-  if coalesce(v_snapshot->'latest_event'->>'workflow_name', '') <> 'admin_cancel_reservation' then
-    raise exception
-      'TEST 2 FAILED: expected latest cancel workflow event, got %',
-      coalesce(v_snapshot->'latest_event', '{}'::jsonb);
+  if v_snapshot #>> '{eligibility,can_cancel}' <> 'false'
+     or v_snapshot #>> '{eligibility,can_cancel_reason}' <> 'Banka odeme onayi bekleniyor.' then
+    raise exception 'TEST 2 FAILED: expected pending bank approval cancel block, got %', v_snapshot;
   end if;
 end;
 $$;
@@ -442,10 +454,11 @@ declare
   v_order_status text;
   v_payment_status text;
   v_listing_status text;
+  v_finance_status text;
 begin
   v_result := public.admin_cancel_reservation(
     'eeeeeeee-ffff-4fff-8fff-fffffffff002'::uuid,
-    'manual_documents_failed',
+    'manual_refund',
     'documents failed after payment'
   );
 
@@ -469,13 +482,18 @@ begin
   from public.listings
   where id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd002'::uuid;
 
+  select status::text into v_finance_status
+  from public.payment_finance_ops
+  where payment_id = '33333333-4444-4444-8444-444444444002'::uuid;
+
   if v_reservation_status <> 'cancelled'
      or v_order_status <> 'cancelled'
      or v_payment_status <> 'succeeded'
-     or v_listing_status <> 'passive' then
+     or v_listing_status <> 'active'
+     or v_finance_status <> 'refund_requested' then
     raise exception
-      'TEST 3 FAILED: unexpected statuses reservation=% order=% payment=% listing=%',
-      v_reservation_status, v_order_status, v_payment_status, v_listing_status;
+      'TEST 3 FAILED: unexpected statuses reservation=% order=% payment=% listing=% finance=%',
+      v_reservation_status, v_order_status, v_payment_status, v_listing_status, v_finance_status;
   end if;
 end;
 $$;
@@ -483,7 +501,7 @@ $$;
 reset role;
 
 -- ============================================================
--- TEST 4: admin reopen listing after cancelled flow
+-- TEST 4: cancelled paid reservation reopens listing automatically
 -- ============================================================
 set role authenticated;
 select set_config('request.jwt.claim.sub', 'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb001', false);
@@ -491,20 +509,9 @@ select set_config('request.jwt.claim.role', 'authenticated', false);
 
 do $$
 declare
-  v_result jsonb;
   v_listing_status text;
   v_snapshot jsonb;
 begin
-  v_result := public.admin_reopen_listing(
-    'cccccccc-dddd-4ddd-8ddd-ddddddddd002'::uuid,
-    'manual_resolution_completed',
-    'paperwork and refund handled offline'
-  );
-
-  if v_result->>'result' <> 'reopened' then
-    raise exception 'TEST 4 FAILED: expected reopened result, got %', v_result;
-  end if;
-
   select status::text into v_listing_status
   from public.listings
   where id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd002'::uuid;
@@ -517,10 +524,14 @@ begin
     'cccccccc-dddd-4ddd-8ddd-ddddddddd002'::uuid
   );
 
-  if coalesce(v_snapshot->'latest_event'->>'workflow_name', '') <> 'admin_reopen_listing' then
+  if coalesce(v_snapshot->'latest_event'->>'workflow_name', '') <> 'admin_cancel_reservation' then
     raise exception
-      'TEST 4 FAILED: expected latest reopen workflow event, got %',
+      'TEST 4 FAILED: expected latest cancel workflow event, got %',
       coalesce(v_snapshot->'latest_event', '{}'::jsonb);
+  end if;
+
+  if v_snapshot #>> '{eligibility,can_reopen}' <> 'false' then
+    raise exception 'TEST 4 FAILED: active listing should not show reopen eligibility, got %', v_snapshot;
   end if;
 end;
 $$;
@@ -1043,8 +1054,8 @@ begin
   begin
     perform public.admin_cancel_reservation(
       'eeeeeeee-ffff-4fff-8fff-fffffffff006'::uuid,
-      'should_fail_ownership_drift',
-      null
+      'manual_refund',
+      'should fail ownership drift'
     );
     raise exception 'TEST 6C FAILED: admin cancel should reject ownership drift';
   exception
@@ -1169,8 +1180,8 @@ begin
   begin
     perform public.admin_cancel_reservation(
       'eeeeeeee-ffff-4fff-8fff-fffffffff007'::uuid,
-      'should_fail_partial_terminal_drift',
-      null
+      'manual_refund',
+      'should fail partial terminal drift'
     );
     raise exception 'TEST 6D FAILED: cancel should reject partial terminal drift';
   exception
@@ -1317,8 +1328,8 @@ begin
   begin
     perform public.admin_cancel_reservation(
       'eeeeeeee-ffff-4fff-8fff-fffffffff008'::uuid,
-      'should_fail_payment_amount_currency_drift',
-      null
+      'manual_refund',
+      'should fail payment amount currency drift'
     );
     raise exception 'TEST 6E FAILED: cancel should reject payment amount/currency drift';
   exception
@@ -1594,8 +1605,8 @@ begin
     'cccccccc-dddd-4ddd-8ddd-ddddddddd002'::uuid
   );
 
-  if v_listing_snapshot #>> '{latest_event,workflow_name}' <> 'admin_reopen_listing' then
-    raise exception 'TEST 8 FAILED: expected latest listing event to be reopen, got %', v_listing_snapshot;
+  if v_listing_snapshot #>> '{latest_event,workflow_name}' <> 'admin_cancel_reservation' then
+    raise exception 'TEST 8 FAILED: expected latest listing event to be cancel, got %', v_listing_snapshot;
   end if;
 
   if v_listing_snapshot #>> '{eligibility,can_reopen}' <> 'false' then
@@ -1626,6 +1637,14 @@ or listing_id in (
 );
 
 delete from public.payment_events
+where payment_id in (
+  '33333333-4444-4444-8444-444444444001'::uuid,
+  '33333333-4444-4444-8444-444444444002'::uuid,
+  '33333333-4444-4444-8444-444444444003'::uuid,
+  '33333333-4444-4444-8444-444444444004'::uuid
+);
+
+delete from public.payment_finance_ops
 where payment_id in (
   '33333333-4444-4444-8444-444444444001'::uuid,
   '33333333-4444-4444-8444-444444444002'::uuid,

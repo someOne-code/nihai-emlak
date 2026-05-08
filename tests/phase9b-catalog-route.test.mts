@@ -178,6 +178,30 @@ test("catalog main items POST calls admin_create_main_item_catalog and returns 2
   assert.deepEqual(payload.data, result);
 });
 
+test("catalog main items POST maps duplicate visible labels to 409", async (t) => {
+  setupCatalogEnv(t);
+
+  const response = await handleAdminCatalogMainItemPost(
+    createJsonRequest({
+      path: "/api/admin/catalog/main-items",
+      method: "POST",
+      body: validMainItemCreateBody(),
+    }),
+    createDependencies({
+      rpc: () => ({
+        data: null,
+        error: {
+          code: "23505",
+          message: "active main item label already exists",
+        },
+      }),
+    }),
+  );
+
+  assert.equal(response.status, 409);
+  assert.equal((await response.json()).error, "Ana ödeme kalemi etiketi zaten kullanılıyor");
+});
+
 // ---------------------------------------------------------------------------
 // PATCH /api/admin/catalog/main-items/:code
 // ---------------------------------------------------------------------------

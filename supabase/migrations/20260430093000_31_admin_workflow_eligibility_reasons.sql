@@ -139,6 +139,7 @@ begin
     and v_has_valid_listing_status
     and v_has_matching_payment_amount
     and v_has_matching_payment_currency
+    and v_payment.status <> 'pending'
     and v_reservation.status not in ('cancelled', 'expired')
     and v_order.status <> 'cancelled'
     and (not v_has_terminal_signal or v_has_success_terminal_tuple)
@@ -181,6 +182,8 @@ begin
       v_can_cancel_reason := 'Odeme tutari siparis toplamiyla eslesmiyor.';
     elsif not v_has_matching_payment_currency then
       v_can_cancel_reason := 'Odeme para birimi siparis para birimiyle eslesmiyor.';
+    elsif v_payment.status = 'pending' then
+      v_can_cancel_reason := 'Banka odeme onayi bekleniyor.';
     elsif v_reservation.status in ('cancelled', 'expired') then
       v_can_cancel_reason := 'Rezervasyon zaten iptal edilmis veya suresi dolmus.';
     elsif v_order.status = 'cancelled' then
@@ -237,7 +240,9 @@ begin
       'id', v_payment.id,
       'status', v_payment.status,
       'amount', v_payment.amount,
-      'currency', v_payment.currency
+      'currency', v_payment.currency,
+      'created_at', v_payment.created_at,
+      'updated_at', v_payment.updated_at
     ),
     'listing', jsonb_build_object(
       'id', v_listing.id,

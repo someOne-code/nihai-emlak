@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  handleAdminAuditEventsGet,
   handleAdminOrdersGet,
   handleAdminPaymentEventsGet,
   handleAdminPaymentsGet,
@@ -174,8 +175,54 @@ test("admin reservations route calls list_admin_reservations RPC", async () => {
       functionName: "list_admin_reservations",
       args: {
         p_status: "pending",
+        p_queue: null,
         p_limit: 5,
         p_offset: 1,
+      },
+    },
+  ]);
+});
+
+test("admin reservations route validates queue and passes it to list_admin_reservations RPC", async () => {
+  const invalidResponse = await handleAdminReservationsGet(
+    new Request("http://localhost:3000/api/admin/read/reservations?queue=nope"),
+    createDependencies({
+      rpc: () => {
+        throw new Error("rpc should not run for invalid queue");
+      },
+    }),
+  );
+
+  assert.equal(invalidResponse.status, 400);
+  assert.equal((await invalidResponse.json()).error, "Invalid query parameter: queue");
+
+  const calls: Array<{ functionName: string; args: Record<string, unknown> }> = [];
+  const response = await handleAdminReservationsGet(
+    new Request("http://localhost:3000/api/admin/read/reservations?queue=payment_issues&limit=10&offset=20"),
+    createDependencies({
+      rpc: (functionName, args) => {
+        calls.push({ functionName, args });
+        return {
+          data: {
+            items: [],
+            limit: 10,
+            offset: 20,
+          },
+          error: null,
+        };
+      },
+    }),
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(calls, [
+    {
+      functionName: "list_admin_reservations",
+      args: {
+        p_status: null,
+        p_queue: "payment_issues",
+        p_limit: 10,
+        p_offset: 20,
       },
     },
   ]);
@@ -287,6 +334,68 @@ test("admin payment events route validates payment id query and calls RPC", asyn
       },
     },
   ]);
+});
+
+test("admin audit route validates filters and calls list_admin_audit_events RPC", async () => {
+  const invalidResponse = await handleAdminAuditEventsGet(
+    new Request("http://localhost:3000/api/admin/audit?entityId=not-a-uuid"),
+    createDependencies({
+      rpc: () => {
+        throw new Error("rpc should not run for invalid audit filters");
+      },
+    }),
+  );
+
+  assert.equal(invalidResponse.status, 400);
+  assert.equal((await invalidResponse.json()).error, "Invalid query parameter: entityId");
+
+  const calls: Array<{ functionName: string; args: Record<string, unknown> }> = [];
+  const response = await handleAdminAuditEventsGet(
+    new Request("http://localhost:3000/api/admin/audit?entityType=reservation&entityId=eeeeeeee-ffff-4fff-8fff-fffffffff101&actorId=aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb101&action=admin_request_documents&from=2026-05-01T00:00:00.000Z&to=2026-05-08T00:00:00.000Z&limit=10&offset=5"),
+    createDependencies({
+      rpc: (functionName, args) => {
+        calls.push({ functionName, args });
+        return {
+          data: {
+            items: [
+              {
+                id: "66666666-7777-4777-8777-777777777101",
+                source: "admin_workflow",
+                action: "admin_request_documents",
+                entity_type: "reservation",
+                entity_id: "eeeeeeee-ffff-4fff-8fff-fffffffff101",
+                actor_type: "admin",
+                actor_id: "aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb101",
+                summary: "Belgeler istendi",
+                created_at: "2026-05-05T10:00:00.000Z",
+              },
+            ],
+            limit: 10,
+            offset: 5,
+          },
+          error: null,
+        };
+      },
+    }),
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(calls, [
+    {
+      functionName: "list_admin_audit_events",
+      args: {
+        p_entity_type: "reservation",
+        p_entity_id: "eeeeeeee-ffff-4fff-8fff-fffffffff101",
+        p_actor_id: "aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb101",
+        p_action: "admin_request_documents",
+        p_from: "2026-05-01T00:00:00.000Z",
+        p_to: "2026-05-08T00:00:00.000Z",
+        p_limit: 10,
+        p_offset: 5,
+      },
+    },
+  ]);
+  assert.doesNotMatch(JSON.stringify(await response.json()), /payload|token|SECRET|raw_callback_body/i);
 });
 
 function createDependencies(options: {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
@@ -21,6 +21,15 @@ import {
   AdminDashboardClientError,
   fetchAdminDashboardSummary,
 } from "@/lib/admin-ui/dashboard-client";
+import {
+  createInitialLoadGuard,
+  shouldStartInitialLoad,
+} from "@/lib/admin-ui/initial-load-guard";
+import {
+  createContentRefreshGate,
+  refreshContentViews,
+  shouldRefreshContentOnResume,
+} from "@/lib/admin-ui/content-refresh";
 import type { AdminDashboardSummaryDto } from "@/lib/admin-ui/dashboard-summary-view-model";
 
 // Phase 8.6 Task 3: /admin dashboard skeleton.
@@ -34,6 +43,8 @@ export default function AdminDashboardView() {
   const [summary, setSummary] = useState<AdminDashboardSummaryDto | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const initialLoadGuardRef = useRef(createInitialLoadGuard());
+  const resumeRefreshGateRef = useRef(createContentRefreshGate());
 
   const loadSummary = useCallback(async () => {
     setIsLoading(true);
@@ -54,7 +65,31 @@ export default function AdminDashboardView() {
   }, []);
 
   useEffect(() => {
+    if (!shouldStartInitialLoad(initialLoadGuardRef.current)) {
+      return;
+    }
+
     void loadSummary();
+  }, [loadSummary]);
+
+  useEffect(() => {
+    const refreshOnResume = () => {
+      if (document.visibilityState === "hidden") {
+        return;
+      }
+      if (!shouldRefreshContentOnResume(resumeRefreshGateRef.current)) {
+        return;
+      }
+
+      void refreshContentViews([() => loadSummary()]);
+    };
+
+    window.addEventListener("focus", refreshOnResume);
+    document.addEventListener("visibilitychange", refreshOnResume);
+    return () => {
+      window.removeEventListener("focus", refreshOnResume);
+      document.removeEventListener("visibilitychange", refreshOnResume);
+    };
   }, [loadSummary]);
 
   const metricCards = summary ? buildAdminDashboardMetricCards(summary) : [];

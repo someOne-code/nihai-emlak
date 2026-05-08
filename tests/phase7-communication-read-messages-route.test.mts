@@ -201,6 +201,29 @@ test("messages GET rejects invalid conversation ids", async (t) => {
   });
 });
 
+test("messages GET rejects invalid pagination query before auth", async (t) => {
+  setupCommunicationEnv(t);
+
+  const response = await handleConversationMessagesGet(
+    new Request(
+      `http://localhost:3000/api/communications/conversations/${MAPPING_ID}/messages?limit=20x`,
+    ),
+    createDependencies({
+      maybeSingle: () => {
+        throw new Error("supabase from() should not run for invalid pagination");
+      },
+      chatwootClient: createFailingChatwootClient(),
+    }),
+    { conversationId: MAPPING_ID },
+  );
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), {
+    success: false,
+    error: "Invalid query parameter: limit",
+  });
+});
+
 test("messages GET returns 404 when caller does not own the mapping", async (t) => {
   setupCommunicationEnv(t);
 
@@ -325,6 +348,10 @@ test("messages GET returns sanitized message summaries", async (t) => {
       input: {
         sourceId: CHATWOOT_SOURCE_ID,
         conversationId: CHATWOOT_CONVERSATION_ID,
+        pagination: {
+          limit: 20,
+          offset: 0,
+        },
       },
     },
   ]);
@@ -332,6 +359,10 @@ test("messages GET returns sanitized message summaries", async (t) => {
     success: true,
     data: {
       conversation_id: MAPPING_ID,
+      pagination: {
+        limit: 20,
+        offset: 0,
+      },
       messages: [
         {
           id: "101",
@@ -348,6 +379,62 @@ test("messages GET returns sanitized message summaries", async (t) => {
           private: false,
         },
       ],
+    },
+  });
+});
+
+test("messages GET forwards validated pagination to Chatwoot", async (t) => {
+  setupCommunicationEnv(t);
+  const chatwootCalls: ChatwootCall[] = [];
+
+  const response = await handleConversationMessagesGet(
+    new Request(
+      `http://localhost:3000/api/communications/conversations/${MAPPING_ID}/messages?limit=10&offset=20`,
+    ),
+    createDependencies({
+      maybeSingle: () => ({
+        data: readyMappingRow(),
+        error: null,
+      }),
+      chatwootClient: {
+        listMessages: async (input: Record<string, unknown>) => {
+          chatwootCalls.push({ method: "listMessages", input });
+          return {
+            ok: true,
+            value: [],
+          };
+        },
+        createIncomingMessage: async () => {
+          throw new Error("createIncomingMessage should not be called");
+        },
+      },
+    }),
+    { conversationId: MAPPING_ID },
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(chatwootCalls, [
+    {
+      method: "listMessages",
+      input: {
+        sourceId: CHATWOOT_SOURCE_ID,
+        conversationId: CHATWOOT_CONVERSATION_ID,
+        pagination: {
+          limit: 10,
+          offset: 20,
+        },
+      },
+    },
+  ]);
+  assert.deepEqual(await response.json(), {
+    success: true,
+    data: {
+      conversation_id: MAPPING_ID,
+      pagination: {
+        limit: 10,
+        offset: 20,
+      },
+      messages: [],
     },
   });
 });

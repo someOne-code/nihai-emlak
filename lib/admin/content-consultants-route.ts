@@ -43,6 +43,11 @@ export type ConsultantDTO = {
   linkedinUrl: string | null;
   isPublished: boolean;
   sortOrder: number;
+  previewLink: string;
+  relatedCounts: {
+    contactChannels: number;
+    externalLinks: number;
+  };
   createdAt: string;
   updatedAt: string;
 };
@@ -93,9 +98,18 @@ function toConsultantDTO(doc: PayloadConsultantDoc): ConsultantDTO {
     linkedinUrl: doc.linkedinUrl ?? null,
     isPublished: doc.isPublished ?? false,
     sortOrder: doc.sortOrder ?? 0,
+    previewLink: `/consultants/${doc.slug}`,
+    relatedCounts: {
+      contactChannels: countPresent([doc.phone, doc.email, doc.whatsappUrl]),
+      externalLinks: countPresent([doc.linkedinUrl]),
+    },
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
   };
+}
+
+function countPresent(values: unknown[]): number {
+  return values.filter((value) => typeof value === "string" && value.trim().length > 0).length;
 }
 
 // Body parsing is delegated to content-consultants-parsers.ts (imported above).

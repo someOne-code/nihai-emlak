@@ -29,6 +29,27 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+*.log
+
+# local tool output
+/.codex/logs/
+/.codex/tmp/
+/.playwright-cli/
+/.playwright-mcp/
+/output/
+/smoke-screenshots/
+/tmp/
+
+# local tool configs and generated scratch files
+/.antigravityignore
+/.mcp.json
+/.roomodes
+/.windsurf/
+/agent-manager-skill/
+/app/(payload)/cms/importMap.js
+/admin-login-404.png
+/cms-login.png
+/operations-admin-after-login.png
 
 # env files
 .env*

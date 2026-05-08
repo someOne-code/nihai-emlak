@@ -211,6 +211,18 @@ test("admin listings view-model selects the first row when selection is null", (
   assert.equal(model.selectedListingId, LISTING_ID);
 });
 
+test("admin listings view-model can preserve an intentionally empty selection", () => {
+  const model = buildAdminListingsViewModel({
+    list: createList(),
+    selectedListingId: null,
+    snapshot: null,
+    selectFirstWhenMissing: false,
+  });
+
+  assert.equal(model.selectedListingId, null);
+  assert.equal(model.detail, null);
+});
+
 test("admin listings view-model keeps existing selection if it is still in the list", () => {
   const model = buildAdminListingsViewModel({
     list: createList(),
@@ -273,6 +285,128 @@ test("admin listings view-model returns add candidates excluding already attache
   assert.deepEqual(
     getAvailableServiceAddCandidates(model.detail).map((service) => service.code),
     ["phase8_extra_service"],
+  );
+});
+
+test("admin listings view-model returns no checkout config add candidates for sale listings", () => {
+  const snapshot = createSnapshot();
+  snapshot.listing.id = SECOND_LISTING_ID;
+  snapshot.listing.type = "sale";
+  snapshot.main_item_options = [];
+  snapshot.service_options = [];
+
+  const model = buildAdminListingsViewModel({
+    list: createList(),
+    selectedListingId: SECOND_LISTING_ID,
+    snapshot,
+  });
+
+  assert.ok(model.detail);
+  assert.deepEqual(getAvailableMainItemAddCandidates(model.detail), []);
+  assert.deepEqual(getAvailableServiceAddCandidates(model.detail), []);
+});
+
+test("admin listings view-model collapses duplicate active main item labels in add candidates", () => {
+  const snapshot = createSnapshot();
+  snapshot.main_item_options = [];
+  snapshot.available_main_items = [
+    {
+      id: "mc-1",
+      code: "deposit_primary",
+      label: "Kapora",
+      pricing_strategy: "fixed",
+      default_amount: 1000,
+      default_multiplier: null,
+      is_active: true,
+      sort_order: 0,
+    },
+    {
+      id: "mc-2",
+      code: "deposit_duplicate",
+      label: "  kapora  ",
+      pricing_strategy: "fixed",
+      default_amount: 1000,
+      default_multiplier: null,
+      is_active: true,
+      sort_order: 1,
+    },
+    {
+      id: "mc-3",
+      code: "rent_primary",
+      label: "Bir Aylik Kira",
+      pricing_strategy: "multiplier",
+      default_amount: null,
+      default_multiplier: 1,
+      is_active: true,
+      sort_order: 2,
+    },
+  ];
+
+  const model = buildAdminListingsViewModel({
+    list: createList(),
+    selectedListingId: LISTING_ID,
+    snapshot,
+  });
+
+  assert.ok(model.detail);
+  assert.deepEqual(
+    getAvailableMainItemAddCandidates(model.detail).map((item) => item.code),
+    ["deposit_primary", "rent_primary"],
+  );
+});
+
+test("admin listings view-model hides duplicate-label main item candidates already enabled on the listing", () => {
+  const snapshot = createSnapshot();
+  snapshot.main_item_options = [
+    {
+      id: "mio-1",
+      main_item_id: "mc-1",
+      code: "deposit_primary",
+      label: "Kapora",
+      pricing_strategy: "fixed",
+      default_amount: 1000,
+      default_multiplier: null,
+      override_label: null,
+      override_amount: null,
+      override_multiplier: null,
+      is_enabled: true,
+      sort_order: 0,
+      catalog_is_active: true,
+    },
+  ];
+  snapshot.available_main_items = [
+    {
+      id: "mc-2",
+      code: "deposit_duplicate",
+      label: "kapora",
+      pricing_strategy: "fixed",
+      default_amount: 1000,
+      default_multiplier: null,
+      is_active: true,
+      sort_order: 1,
+    },
+    {
+      id: "mc-3",
+      code: "rent_primary",
+      label: "Bir Aylik Kira",
+      pricing_strategy: "multiplier",
+      default_amount: null,
+      default_multiplier: 1,
+      is_active: true,
+      sort_order: 2,
+    },
+  ];
+
+  const model = buildAdminListingsViewModel({
+    list: createList(),
+    selectedListingId: LISTING_ID,
+    snapshot,
+  });
+
+  assert.ok(model.detail);
+  assert.deepEqual(
+    getAvailableMainItemAddCandidates(model.detail).map((item) => item.code),
+    ["rent_primary"],
   );
 });
 

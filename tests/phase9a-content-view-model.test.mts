@@ -100,11 +100,40 @@ test("buildCategoryDetail returns null for invalid input", () => {
 });
 
 test("buildCategoryDetail maps a valid document", () => {
-  const doc = { id: "c1", title: "Tech", slug: "tech", description: "Desc", isActive: true, sortOrder: 0, createdAt: "2024-01-01", updatedAt: "2024-01-01" };
+  const doc = {
+    id: "c1",
+    title: "Tech",
+    slug: "tech",
+    description: "Desc",
+    isActive: true,
+    sortOrder: 0,
+    linkedPosts: [
+      { id: "p1", title: "First", status: "published", updatedAt: "2024-01-02" },
+      { id: "p2", title: "Second", status: "draft", updatedAt: "2024-01-03" },
+    ],
+    linkedPostCount: 12,
+    deleteWarning: {
+      hasLinkedPosts: true,
+      linkedPostCount: 12,
+      message: "Bu kategoriye bagli 12 blog yazisi var.",
+    },
+    createdAt: "2024-01-01",
+    updatedAt: "2024-01-01",
+  };
   const detail = buildCategoryDetail(doc);
   assert.ok(detail);
   assert.equal(detail.title, "Tech");
   assert.equal(detail.isActive, true);
+  assert.deepEqual(detail.linkedPosts, [
+    { id: "p1", title: "First", statusLabel: "Yayında", updatedAt: "2024-01-02" },
+    { id: "p2", title: "Second", statusLabel: "Taslak", updatedAt: "2024-01-03" },
+  ]);
+  assert.equal(detail.linkedPostCount, 12);
+  assert.deepEqual(detail.deleteWarning, {
+    hasLinkedPosts: true,
+    linkedPostCount: 12,
+    message: "Bu kategoriye bagli 12 blog yazisi var.",
+  });
 });
 
 // ── Consultants list view-model ────────────────────────────────────────────
@@ -143,6 +172,8 @@ test("buildConsultantDetail maps a valid document", () => {
     id: "co1", fullName: "Ali Veli", slug: "ali", title: "Danışman",
     photoUrl: null, shortBio: "Bio", phone: "+90555", email: "ali@x.com",
     whatsappUrl: null, linkedinUrl: null, isPublished: true, sortOrder: 1,
+    previewLink: "/consultants/ali",
+    relatedCounts: { contactChannels: 2, externalLinks: 0 },
     createdAt: "2024-01-01", updatedAt: "2024-01-01",
   };
   const detail = buildConsultantDetail(doc);
@@ -150,4 +181,6 @@ test("buildConsultantDetail maps a valid document", () => {
   assert.equal(detail.fullName, "Ali Veli");
   assert.equal(detail.isPublished, true);
   assert.equal(detail.phone, "+90555");
+  assert.equal(detail.previewLink, "/consultants/ali");
+  assert.deepEqual(detail.relatedCounts, { contactChannels: 2, externalLinks: 0 });
 });
