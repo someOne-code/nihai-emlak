@@ -102,3 +102,35 @@ end;
 $$;
 
 reset role;
+
+do $$
+declare
+  v_has_write_privilege boolean;
+  v_unique_index_count integer;
+begin
+  select count(*) into v_unique_index_count
+  from pg_indexes
+  where schemaname = 'public'
+    and tablename = 'main_item_catalog'
+    and indexname = 'main_item_catalog_active_label_unique'
+    and indexdef ilike '%unique%'
+    and indexdef ilike '%where (is_active = true)%';
+
+  if v_unique_index_count <> 1 then
+    raise exception 'main_item_catalog active label uniqueness must be enforced by a partial unique index';
+  end if;
+
+  select
+    has_table_privilege('authenticated', 'public.main_item_catalog', 'insert')
+    or has_table_privilege('authenticated', 'public.main_item_catalog', 'update')
+    or has_table_privilege('authenticated', 'public.main_item_catalog', 'delete')
+    or has_table_privilege('authenticated', 'public.service_catalog', 'insert')
+    or has_table_privilege('authenticated', 'public.service_catalog', 'update')
+    or has_table_privilege('authenticated', 'public.service_catalog', 'delete')
+  into v_has_write_privilege;
+
+  if v_has_write_privilege then
+    raise exception 'authenticated must not have direct catalog table write privileges';
+  end if;
+end;
+$$;

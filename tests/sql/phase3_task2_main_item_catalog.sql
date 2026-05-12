@@ -101,9 +101,7 @@ update public.profiles
 set role = 'admin'
 where id = '77777777-7777-7777-7777-777777777777'::uuid;
 
-set role authenticated;
-select set_config('request.jwt.claim.sub', '77777777-7777-7777-7777-777777777777', false);
-select set_config('request.jwt.claim.role', 'authenticated', false);
+reset role;
 
 insert into public.listings (
   id,
@@ -134,6 +132,8 @@ values
   38000
 );
 
+reset role;
+
 insert into public.main_item_catalog (
   id,
   code,
@@ -162,6 +162,10 @@ values
   false,
   2
 );
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', '77777777-7777-7777-7777-777777777777', false);
+select set_config('request.jwt.claim.role', 'authenticated', false);
 
 insert into public.listing_main_item_options (
   id,
@@ -280,6 +284,8 @@ begin
 end;
 $$;
 
+reset role;
+
 do $$
 begin
   begin
@@ -387,6 +393,10 @@ begin
   end;
 end;
 $$;
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', '77777777-7777-7777-7777-777777777777', false);
+select set_config('request.jwt.claim.role', 'authenticated', false);
 
 do $$
 begin

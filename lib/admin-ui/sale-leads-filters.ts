@@ -10,6 +10,10 @@ export type SaleLeadsFilterState = {
   status: SaleLeadStatusFilter;
 };
 
+export type SaleLeadsBackendFilters = {
+  status?: SaleLeadStatusFilter;
+};
+
 export const SALE_LEADS_INITIAL_FILTER_STATE: SaleLeadsFilterState = {
   search: "",
   status: "actionable",
@@ -35,6 +39,19 @@ export function applySaleLeadFilters(
   }
 
   return filtered;
+}
+
+export function buildSaleLeadsBackendFilters(
+  filters: SaleLeadsFilterState,
+): SaleLeadsBackendFilters {
+  return filters.status === "all" ? {} : { status: filters.status };
+}
+
+export function hasSaleLeadsBackendFilterChange(
+  previous: SaleLeadsFilterState,
+  next: SaleLeadsFilterState,
+): boolean {
+  return previous.status !== next.status;
 }
 
 function matchesSearch(row: SaleLeadsOverviewRow, query: string): boolean {

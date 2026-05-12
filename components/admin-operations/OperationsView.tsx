@@ -3,7 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Clock3 } from "lucide-react";
 
-import { AdminOperationsClientError } from "@/lib/admin-ui/operations-client.ts";
+import {
+  AdminOperationsClientError,
+  loadAdminOperationsOverview,
+  type AdminOperationsOverview,
+} from "@/lib/admin-ui/operations-client.ts";
 import {
   createInitialLoadGuard,
   shouldStartInitialLoad,
@@ -60,6 +64,7 @@ import {
   INITIAL_FILTER_STATE,
   type OperationsFilterState,
 } from "./OperationsFilters";
+import { createOperationsFilterRefreshController } from "@/lib/admin-ui/operations-filter-refresh.ts";
 import { OperationsTimeline } from "./OperationsTimeline";
 import { OperationsDocumentTrackingCard } from "./OperationsDocumentTrackingCard";
 import { OperationsFinanceOpsCard } from "./OperationsFinanceOpsCard";
@@ -100,11 +105,14 @@ export default function OperationsView() {
   const initialLoadGuardRef = useRef(createInitialLoadGuard());
   const resumeRefreshGateRef = useRef(createContentRefreshGate());
   const loadRequestSeqRef = useRef(0);
+  const overviewRef = useRef<AdminOperationsOverview | null>(null);
   const detailStartRef = useRef<HTMLDivElement | null>(null);
+  const filterRefreshControllerRef = useRef<ReturnType<typeof createOperationsFilterRefreshController> | null>(null);
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      filterRefreshControllerRef.current?.cancelPending();
     };
   }, []);
 
@@ -133,7 +141,7 @@ export default function OperationsView() {
     return true;
   }, []);
 
-  const loadData = useCallback(async (selectedReservationId?: string | null) => {
+  const loadData = useCallback(async (selectedReservationId?: string | null, useOverviewCache = false) => {
     const requestSeq = loadRequestSeqRef.current + 1;
     loadRequestSeqRef.current = requestSeq;
     setLoading(true);
@@ -141,7 +149,14 @@ export default function OperationsView() {
 
     try {
       const backendFilters = toBackendFilters(filtersRef.current);
-      const nextViewModel = await loadOperationsModel(undefined, selectedReservationId, backendFilters);
+      let overview: AdminOperationsOverview | undefined;
+      if (useOverviewCache && overviewRef.current) {
+        overview = overviewRef.current;
+      } else {
+        overview = await loadAdminOperationsOverview(undefined, backendFilters);
+        overviewRef.current = overview;
+      }
+      const nextViewModel = await loadOperationsModel(undefined, selectedReservationId, backendFilters, overview);
       if (loadRequestSeqRef.current !== requestSeq) return;
       if (!mountedRef.current) return;
       setViewModel(nextViewModel);
@@ -159,6 +174,15 @@ export default function OperationsView() {
       }
     }
   }, []);
+
+  if (!filterRefreshControllerRef.current) {
+    filterRefreshControllerRef.current = createOperationsFilterRefreshController({
+      delayMs: 250,
+      loadData: (selectedReservationId) => {
+        void loadData(selectedReservationId);
+      },
+    });
+  }
 
   useEffect(() => {
     if (!shouldStartInitialLoad(initialLoadGuardRef.current)) {
@@ -194,10 +218,11 @@ export default function OperationsView() {
     setActionError(null);
     clearFieldErrors();
     setActionSuccess(null);
+    const prev = filtersRef.current;
     setFilters(next);
     filtersRef.current = next;
-    loadData();
-  }, [clearFieldErrors, loadData]);
+    filterRefreshControllerRef.current?.applyFilterChange(next, prev);
+  }, [clearFieldErrors]);
 
   const handleClearFilters = useCallback(() => {
     setActionError(null);
@@ -209,7 +234,7 @@ export default function OperationsView() {
   }, [clearFieldErrors, loadData]);
 
   const handleShowPending = useCallback(() => {
-    const next: OperationsFilterState = { ...INITIAL_FILTER_STATE, reservationStatus: "pending" };
+    const next: OperationsFilterState = { ...INITIAL_FILTER_STATE, queue: "payment_waiting" };
     setActionError(null);
     clearFieldErrors();
     setActionSuccess(null);
@@ -239,7 +264,7 @@ export default function OperationsView() {
       filtersRef.current = nextFilters;
     }
     detailStartRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    loadData(row.reservationId);
+    loadData(row.reservationId, true);
   }, [clearFieldErrors, loadData]);
 
   const handleAction = useCallback(async (actionId: OperationsActionId) => {
@@ -717,7 +742,7 @@ function MobileOverviewCard({
 
       <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
         <MobileMetaItem label="Operasyon"><span className="sr-only">Operasyon</span><OperationsStatusBadge status={row.primaryStatus} /></MobileMetaItem>
-        <MobileMetaItem label="Sipariş kaydı"><span className="sr-only">Sipariş kaydı</span><OperationsStatusBadge status={row.orderStatus} /></MobileMetaItem>
+        <MobileMetaItem label={row.orderRecordLabel}><span className="sr-only">{row.orderRecordLabel}</span><OperationsStatusBadge status={row.orderStatus} /></MobileMetaItem>
         <MobileMetaItem label="Banka ödemesi"><span className="sr-only">Banka ödemesi</span><OperationsStatusBadge status={row.paymentStatus} /></MobileMetaItem>
         <MobileMetaItem label="Tutar"><strong>{row.amountLabel}</strong></MobileMetaItem>
         <MobileMetaItem label="Giriş"><strong>{row.moveInDate}</strong></MobileMetaItem>

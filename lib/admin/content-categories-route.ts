@@ -4,24 +4,26 @@
 // Includes an /options endpoint for posts form select dropdowns.
 
 import { getPayload } from "payload";
-import configPromise from "@payload-config";
+import configPromise from "../../payload.config.ts";
 
 import {
   guardContentAdminRequest,
   jsonError,
   jsonResponse,
+  readContentAdminJsonPayload,
   validateContentAdminJsonEnvelope,
   validateContentAdminOrigin,
-} from "./content-shared";
-import type { ContentAdminRouteDependencies } from "./content-shared";
+} from "./content-shared.ts";
+import type { ContentAdminRouteDependencies } from "./content-shared.ts";
 import {
   parseCategoryCreateBodyForTest as parseCategoryCreateBody,
   parseCategoryUpdateBodyForTest as parseCategoryUpdateBody,
   type CategoryCreateInput,
   type CategoryUpdateInput,
-} from "./content-categories-parsers";
-import { buildCategoryOptionsFindArgs } from "./content-categories-options";
-import { buildCategoryLinkedPostsFindArgs } from "./content-category-linked-posts";
+} from "./content-categories-parsers.ts";
+import { buildCategoriesListFindArgs } from "./content-categories-query.ts";
+import { buildCategoryOptionsFindArgs } from "./content-categories-options.ts";
+import { buildCategoryLinkedPostsFindArgs } from "./content-category-linked-posts.ts";
 
 // ── DTO types ──────────────────────────────────────────────────────────────
 
@@ -148,12 +150,7 @@ export async function handleCategoriesListGet(
 
   const payload = await getPayload({ config: configPromise });
 
-  const result = await payload.find({
-    collection: "blog_categories",
-    page,
-    limit,
-    sort: "sortOrder",
-  });
+  const result = await payload.find(buildCategoriesListFindArgs(page, limit));
 
   const items = result.docs.map((doc) => toCategoryDTO(doc as unknown as PayloadCategoryDoc));
 
@@ -198,15 +195,13 @@ export async function handleCategoriesCreatePost(
   const envelope = validateContentAdminJsonEnvelope(request);
   if (!envelope.ok) return jsonError(envelope.error, envelope.status);
 
+  const bodyResult = await readContentAdminJsonPayload(request);
+  if (!bodyResult.ok) return jsonError(bodyResult.error, bodyResult.status);
+
   const guard = await guardContentAdminRequest(deps);
   if (!guard.ok) return guard.response;
 
-  let body: unknown;
-  try { body = await request.json(); } catch {
-    return jsonError("Invalid JSON request body", 400);
-  }
-
-  const parsed = parseCategoryCreateBody(body);
+  const parsed = parseCategoryCreateBody(bodyResult.value);
   if (!parsed.ok) return jsonError(parsed.error, parsed.status);
 
   const payload = await getPayload({ config: configPromise });
@@ -266,15 +261,13 @@ export async function handleCategoryUpdate(
   const envelope = validateContentAdminJsonEnvelope(request);
   if (!envelope.ok) return jsonError(envelope.error, envelope.status);
 
+  const bodyResult = await readContentAdminJsonPayload(request);
+  if (!bodyResult.ok) return jsonError(bodyResult.error, bodyResult.status);
+
   const guard = await guardContentAdminRequest(deps);
   if (!guard.ok) return guard.response;
 
-  let body: unknown;
-  try { body = await request.json(); } catch {
-    return jsonError("Invalid JSON request body", 400);
-  }
-
-  const parsed = parseCategoryUpdateBody(body);
+  const parsed = parseCategoryUpdateBody(bodyResult.value);
   if (!parsed.ok) return jsonError(parsed.error, parsed.status);
 
   const payload = await getPayload({ config: configPromise });

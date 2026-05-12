@@ -8,6 +8,7 @@ import {
   type CreateChatwootConversationInput,
   type CreateChatwootMessageInput,
 } from "./chatwoot.ts";
+import { createAdminClient } from "../supabase/admin.ts";
 import {
   readStateChangingJsonRequestPayload,
   validateStateChangingJsonRequestEnvelope,
@@ -39,10 +40,16 @@ type SupabaseClient = {
     }>;
   };
   rpc: (
+    functionName: "claim_chatwoot_conversation",
+    args: Record<string, unknown>,
+  ) => Promise<SupabaseRpcResponse>;
+};
+
+type SystemSupabaseClient = {
+  rpc: (
     functionName:
-      | "claim_chatwoot_conversation"
-      | "complete_chatwoot_conversation_claim"
-      | "mark_chatwoot_conversation_claim_failed",
+      | "system_complete_chatwoot_conversation_claim"
+      | "system_mark_chatwoot_conversation_claim_failed",
     args: Record<string, unknown>,
   ) => Promise<SupabaseRpcResponse>;
 };
@@ -60,6 +67,7 @@ export type ChatwootConversationOpenClient = {
 };
 
 export type ConversationOpenRouteDependencies = {
+  createAdminSupabaseClient?: () => unknown | null;
   createChatwootClient?: (config: ChatwootConfig) => ChatwootConversationOpenClient;
   createServerSupabaseClient: () => Promise<unknown>;
   resolveChatwootConfig?: () =>
@@ -141,9 +149,18 @@ export async function handleListingConversationPost(
     return jsonError("Conversation provisioning is already in progress", 409);
   }
 
+  const systemClient = (
+    dependencies.createAdminSupabaseClient
+      ? dependencies.createAdminSupabaseClient()
+      : createAdminClient()
+  ) as SystemSupabaseClient | null;
+  if (!systemClient) {
+    return jsonError("Communication provisioning service is unavailable", 500);
+  }
+
   const configResult = (dependencies.resolveChatwootConfig ?? resolveChatwootConfigFromEnv)();
   if (!configResult.ok) {
-    await markClaimFailed(supabase, claim.conversationId);
+    await markClaimFailed(systemClient, claim.conversationId);
     return jsonError("Chatwoot configuration is incomplete", 500);
   }
 
@@ -157,7 +174,7 @@ export async function handleListingConversationPost(
     user: userResult.data.user,
   });
   if (!providerResult.ok) {
-    const markFailedResult = await markClaimFailed(supabase, claim.conversationId);
+    const markFailedResult = await markClaimFailed(systemClient, claim.conversationId);
     if (!markFailedResult.ok) {
       return jsonError(markFailedResult.error, markFailedResult.status);
     }
@@ -165,7 +182,7 @@ export async function handleListingConversationPost(
     return jsonError(PROVIDER_FAILURE_MESSAGE, 502);
   }
 
-  const completeResult = await supabase.rpc("complete_chatwoot_conversation_claim", {
+  const completeResult = await systemClient.rpc("system_complete_chatwoot_conversation_claim", {
     p_mapping_id: claim.conversationId,
     p_chatwoot_source_id: providerResult.sourceId,
     p_chatwoot_conversation_id: providerResult.conversationId,
@@ -367,10 +384,10 @@ function parseCompletedConversationRow(
 }
 
 async function markClaimFailed(
-  supabase: SupabaseClient,
+  supabase: SystemSupabaseClient,
   conversationId: string,
 ): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
-  const result = await supabase.rpc("mark_chatwoot_conversation_claim_failed", {
+  const result = await supabase.rpc("system_mark_chatwoot_conversation_claim_failed", {
     p_mapping_id: conversationId,
     p_failure_reason: PROVIDER_FAILURE_MESSAGE,
   });

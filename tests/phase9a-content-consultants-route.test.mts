@@ -201,3 +201,19 @@ test("consultant DTO exposes preview link and related contact counts", async () 
     externalLinks: 1,
   });
 });
+
+test("consultants list query selects only fields needed to open the edit form", async () => {
+  const { buildConsultantsListFindArgs } = await import(
+    "../lib/admin/content-consultants-query.ts"
+  );
+
+  const args = buildConsultantsListFindArgs(1, 20);
+
+  assert.equal(args.collection, "consultants");
+  assert.equal(args.depth, 0);
+  assert.equal(args.sort, "sortOrder");
+  assert.equal(args.select.fullName, true);
+  assert.equal(args.select.shortBio, true);
+  assert.equal(args.select.email, true);
+  assert.equal(args.select.updatedAt, true);
+});

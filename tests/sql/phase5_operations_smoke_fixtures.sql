@@ -111,8 +111,8 @@ insert into public.listings (
 values
   ('cccccccc-dddd-4ddd-8ddd-ddddddddd201'::uuid, 'rent', 'passive', 'Smoke Belge Bekleyen', 'smoke-belge-bekleyen', 'Smoke document waiting listing', 'Smoke document waiting listing', 'Istanbul', 'Kadikoy', 50000, 'TRY'),
   ('cccccccc-dddd-4ddd-8ddd-ddddddddd202'::uuid, 'rent', 'passive', 'Smoke Iptal Iade Talebi', 'smoke-iptal-iade-talebi', 'Smoke refund request listing', 'Smoke refund request listing', 'Istanbul', 'Besiktas', 52000, 'TRY'),
-  ('cccccccc-dddd-4ddd-8ddd-ddddddddd203'::uuid, 'rent', 'active', 'Smoke Manuel Iade Bekleyen', 'smoke-manuel-iade-bekleyen', 'Smoke manual refund listing', 'Smoke manual refund listing', 'Istanbul', 'Sisli', 48000, 'TRY'),
-  ('cccccccc-dddd-4ddd-8ddd-ddddddddd204'::uuid, 'rent', 'active', 'Smoke Odeme Sorunu', 'smoke-odeme-sorunu', 'Smoke payment issue listing', 'Smoke payment issue listing', 'Istanbul', 'Atasehir', 47000, 'TRY'),
+  ('cccccccc-dddd-4ddd-8ddd-ddddddddd203'::uuid, 'rent', 'passive', 'Smoke Manuel Iade Bekleyen', 'smoke-manuel-iade-bekleyen', 'Smoke manual refund listing', 'Smoke manual refund listing', 'Istanbul', 'Sisli', 48000, 'TRY'),
+  ('cccccccc-dddd-4ddd-8ddd-ddddddddd204'::uuid, 'rent', 'passive', 'Smoke Odeme Sorunu', 'smoke-odeme-sorunu', 'Smoke payment issue listing', 'Smoke payment issue listing', 'Istanbul', 'Atasehir', 47000, 'TRY'),
   ('cccccccc-dddd-4ddd-8ddd-ddddddddd205'::uuid, 'rent', 'passive', 'Smoke Tamamlanan', 'smoke-tamamlanan', 'Smoke completed listing', 'Smoke completed listing', 'Istanbul', 'Uskudar', 53000, 'TRY');
 
 insert into public.reservations (

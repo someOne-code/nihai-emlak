@@ -59,6 +59,7 @@ function makeSnapshot(id: string) {
     main_item_options: [],
     service_options: [],
     checkout_eligibility: { is_checkout_ready: false, missing: [] as string[] },
+    publish_readiness: { is_publish_ready: true, missing: [] as string[] },
   };
 }
 
@@ -178,6 +179,44 @@ test("selectAdminListing reuses the existing list and only refetches the snapsho
   assert.equal(model.selectedListingId, SECOND_LISTING_ID);
   assert.ok(model.detail);
   assert.equal(model.detail.listing.id, SECOND_LISTING_ID);
+});
+
+test("loadAdminListingsModel tolerates snapshot failure and returns model without detail", async () => {
+  const calls: string[] = [];
+  const model = await loadAdminListingsModel(
+    {
+      fetchAdminListingsList: async () => {
+        calls.push("list");
+        return makeList([{ id: LISTING_ID }]);
+      },
+      fetchAdminListingSnapshot: async () => {
+        calls.push("snapshot");
+        throw new Error("simulated snapshot 500");
+      },
+    },
+    { selectedListingId: LISTING_ID },
+  );
+
+  assert.deepEqual(calls, ["list", "snapshot"]);
+  assert.equal(model.selectedListingId, LISTING_ID);
+  assert.equal(model.detail, null, "detail must be null when snapshot fails, not crash the loader");
+  assert.ok(model.rows.length > 0, "list rows must still be available");
+});
+
+test("selectAdminListing tolerates snapshot failure and returns model without detail", async () => {
+  const list = makeList([{ id: LISTING_ID }, { id: SECOND_LISTING_ID }]);
+  const model = await selectAdminListing(
+    {
+      fetchAdminListingSnapshot: async () => {
+        throw new Error("simulated snapshot 500");
+      },
+    },
+    { list, listingId: SECOND_LISTING_ID },
+  );
+
+  assert.equal(model.selectedListingId, SECOND_LISTING_ID);
+  assert.equal(model.detail, null, "detail must be null when snapshot fails, not crash the selector");
+  assert.ok(model.rows.length > 0, "list rows must still be available");
 });
 
 test("selectAdminListing returns null detail when listing id is not in list", async () => {

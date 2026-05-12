@@ -472,6 +472,86 @@ end;
 $$;
 
 -- ----------------------------------------------------------------------------
+-- 14b) admin_configure_listing_service: rejects when no enabled main item (P0004)
+-- ----------------------------------------------------------------------------
+do $$
+begin
+  -- Temporarily remove the main item to verify the service guard.
+  delete from public.listing_service_options
+  where listing_id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid;
+  delete from public.listing_main_item_options
+  where listing_id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid;
+
+  begin
+    perform public.admin_configure_listing_service(
+      'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid,
+      'phase8_service',
+      jsonb_build_object('is_enabled', true)
+    );
+    raise exception 'Service config without main item unexpectedly succeeded';
+  exception
+    when sqlstate 'P0004' then
+      null; -- expected: WHEN OTHERS does not catch assert_failure (P0004)
+  end;
+
+  -- Restore the main item for subsequent tests.
+  perform public.admin_configure_listing_main_item(
+    'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid,
+    'phase8_main',
+    jsonb_build_object('is_enabled', true)
+  );
+end;
+$$;
+
+-- ----------------------------------------------------------------------------
+-- 14c) admin_listing_is_checkout_ready: true with main item only (no service needed)
+-- ----------------------------------------------------------------------------
+do $$
+declare
+  v_ready boolean;
+begin
+  -- Ensure main item exists but no service options.
+  delete from public.listing_service_options
+  where listing_id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid;
+
+  v_ready := public.admin_listing_is_checkout_ready(
+    'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid
+  );
+
+  if not v_ready then
+    raise exception 'Listing with main item but no services should be checkout-ready';
+  end if;
+end;
+$$;
+
+-- ----------------------------------------------------------------------------
+-- 14d) admin_listing_is_checkout_ready: false without main item
+-- ----------------------------------------------------------------------------
+do $$
+declare
+  v_ready boolean;
+begin
+  delete from public.listing_main_item_options
+  where listing_id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid;
+
+  v_ready := public.admin_listing_is_checkout_ready(
+    'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid
+  );
+
+  if v_ready then
+    raise exception 'Listing without main item should NOT be checkout-ready';
+  end if;
+
+  -- Restore the main item for subsequent tests.
+  perform public.admin_configure_listing_main_item(
+    'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid,
+    'phase8_main',
+    jsonb_build_object('is_enabled', true)
+  );
+end;
+$$;
+
+-- ----------------------------------------------------------------------------
 -- 15) regular user is rejected by admin_configure_listing_main_item (42501)
 -- ----------------------------------------------------------------------------
 reset role;

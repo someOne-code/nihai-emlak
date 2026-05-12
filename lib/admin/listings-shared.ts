@@ -111,16 +111,16 @@ export async function guardAdminListingsRequest(
 export function mapAdminListingRpcError(
   error: AdminListingsSupabaseError,
   notFoundError: string,
-  genericError: string = "Admin listing RPC failed",
+  genericError: string = "İlan işlemi başarısız oldu",
 ): [string, number] {
   const code = asNonEmptyString(error.code);
 
   if (code === "28000") {
-    return ["Authentication required", 401];
+    return ["Oturum açmanız gerekiyor", 401];
   }
 
   if (code === "42501") {
-    return ["Admin role required", 403];
+    return ["Yönetici yetkisi gerekli", 403];
   }
 
   if (code === "P0002") {
@@ -128,15 +128,15 @@ export function mapAdminListingRpcError(
   }
 
   if (code === "23505") {
-    return ["Listing slug is already used", 409];
+    return ["Bu URL adresi (slug) zaten kullanılıyor", 409];
   }
 
   if (code === "P0004") {
-    return ["Rent listing is not checkout-ready", 422];
+    return [translateP0004(asNonEmptyString(error.message)), 422];
   }
 
   if (code === "22023") {
-    return ["Invalid admin listing request", 400];
+    return ["Geçersiz ilan isteği", 400];
   }
 
   // 42883 = undefined_function: migration not applied to this database.
@@ -184,6 +184,30 @@ export function asNonEmptyString(value: unknown): string | null {
   }
 
   return value.trim();
+}
+
+const PUBLISH_MISSING_LABELS: Record<string, string> = {
+  description: "Açıklama",
+  district: "İlçe",
+  image: "Görsel",
+};
+
+function translateP0004(raw: string | null): string {
+  if (!raw) {
+    return "İlan yayına alınamıyor";
+  }
+
+  if (raw === "checkout-not-ready") {
+    return "Kiralık ilan için ana ödeme kalemi gerekli";
+  }
+
+  if (raw.startsWith("publish-guard:")) {
+    const keys = raw.replace("publish-guard:", "").trim().split(/,\s*/);
+    const labels = keys.map((k) => PUBLISH_MISSING_LABELS[k] ?? k);
+    return `Yayına alınamıyor: eksik alanlar — ${labels.join(", ")}`;
+  }
+
+  return raw;
 }
 
 function isUuid(value: string): boolean {

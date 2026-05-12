@@ -120,6 +120,10 @@ export type AdminListingDetail = {
     isCheckoutReady: boolean;
     missing: string[];
   };
+  publishReadiness: {
+    isPublishReady: boolean;
+    missing: string[];
+  };
 };
 
 export type AdminListingsViewModel = {
@@ -208,6 +212,7 @@ function buildDetail(
     availableMainItems: pickArray(snapshot.available_main_items).map(buildAvailableMainItem),
     availableServices: pickArray(snapshot.available_services).map(buildAvailableService),
     checkoutEligibility: buildEligibility(snapshot.checkout_eligibility),
+    publishReadiness: buildPublishReadiness(snapshot.publish_readiness),
   };
 }
 
@@ -570,6 +575,23 @@ function buildEligibility(value: unknown): AdminListingDetail["checkoutEligibili
 
   return {
     isCheckoutReady: asBoolean(value.is_checkout_ready),
+    missing,
+  };
+}
+
+function buildPublishReadiness(value: unknown): AdminListingDetail["publishReadiness"] {
+  if (!isRecord(value)) {
+    return { isPublishReady: false, missing: [] };
+  }
+
+  const missing = Array.isArray(value.missing)
+    ? value.missing
+        .map((entry) => asString(entry))
+        .filter((entry): entry is string => Boolean(entry))
+    : [];
+
+  return {
+    isPublishReady: asBoolean(value.is_publish_ready),
     missing,
   };
 }

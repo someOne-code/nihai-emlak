@@ -4,7 +4,7 @@
 -- Contract: docs/ADMIN_LISTING_CONFIG_CONTRACT.md
 
 -- deterministic ids
--- admin user:    aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb800
+-- admin user:    aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb820
 -- regular user:  aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb801
 -- main item:     bbbbbbbb-cccc-4ccc-8ccc-ccccccccc801
 -- service cat:   dddddddd-eeee-4eee-8eee-eeeeeeeee801
@@ -17,6 +17,14 @@
 -- ----------------------------------------------------------------------------
 -- cleanup (idempotent)
 -- ----------------------------------------------------------------------------
+delete from public.listing_images
+where listing_id in (
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid,
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd802'::uuid,
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd803'::uuid,
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd804'::uuid
+);
+
 delete from public.listing_service_options
 where listing_id in (
   'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid,
@@ -60,7 +68,7 @@ where id = 'bbbbbbbb-cccc-4ccc-8ccc-ccccccccc801'::uuid
 
 delete from auth.users
 where id in (
-  'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb800'::uuid,
+  'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb820'::uuid,
   'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb801'::uuid
 );
 
@@ -75,7 +83,7 @@ insert into auth.users (
 values
 (
   '00000000-0000-0000-0000-000000000000',
-  'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb800'::uuid,
+  'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb820'::uuid,
   'authenticated', 'authenticated',
   'phase8-admin@example.com',
   crypt('test-password', gen_salt('bf')),
@@ -98,7 +106,7 @@ values
 
 update public.profiles
 set role = 'admin'
-where id = 'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb800'::uuid;
+where id = 'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb820'::uuid;
 
 -- ----------------------------------------------------------------------------
 -- seed service catalog
@@ -131,33 +139,45 @@ values (
 );
 
 insert into public.listings (
-  id, type, status, title, slug, city, district, price, currency
+  id, type, status, title, slug, city, district, price, currency, description
 )
 values
 (
   'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid,
   'sale', 'passive',
   'Phase 8 Sale Passive', 'phase-8-sale-passive',
-  'Istanbul', 'Kadikoy', 4500000, 'TRY'
+  'Istanbul', 'Kadikoy', 4500000, 'TRY',
+  'Satilik daire aciklamasi'
 ),
 (
   'cccccccc-dddd-4ddd-8ddd-ddddddddd802'::uuid,
   'rent', 'passive',
   'Phase 8 Rent With Main', 'phase-8-rent-with-main',
-  'Istanbul', 'Sisli', 42000, 'TRY'
+  'Istanbul', 'Sisli', 42000, 'TRY',
+  'Kiralik daire aciklamasi'
 ),
 (
   'cccccccc-dddd-4ddd-8ddd-ddddddddd803'::uuid,
   'rent', 'passive',
   'Phase 8 Rent Without Main', 'phase-8-rent-without-main',
-  'Istanbul', 'Besiktas', 39000, 'TRY'
+  'Istanbul', 'Besiktas', 39000, 'TRY',
+  'Kiralik daire aciklamasi 2'
 ),
 (
   'cccccccc-dddd-4ddd-8ddd-ddddddddd804'::uuid,
   'rent', 'passive',
   'Phase 8 Rent Main No Service', 'phase-8-rent-main-no-service',
-  'Istanbul', 'Uskudar', 35000, 'TRY'
+  'Istanbul', 'Uskudar', 35000, 'TRY',
+  'Kiralik daire aciklamasi 3'
 );
+
+-- Seed images so publish guard is satisfied
+insert into public.listing_images (listing_id, image_url, sort_order)
+values
+  ('cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid, 'https://example.com/sale1.jpg', 0),
+  ('cccccccc-dddd-4ddd-8ddd-ddddddddd802'::uuid, 'https://example.com/rent1.jpg', 0),
+  ('cccccccc-dddd-4ddd-8ddd-ddddddddd803'::uuid, 'https://example.com/rent2.jpg', 0),
+  ('cccccccc-dddd-4ddd-8ddd-ddddddddd804'::uuid, 'https://example.com/rent3.jpg', 0);
 
 insert into public.listing_main_item_options (
   listing_id, main_item_id, is_enabled, sort_order
@@ -212,7 +232,7 @@ $$;
 -- ----------------------------------------------------------------------------
 reset role;
 set role authenticated;
-select set_config('request.jwt.claim.sub', 'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb800', false);
+select set_config('request.jwt.claim.sub', 'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb820', false);
 select set_config('request.jwt.claim.role', 'authenticated', false);
 
 -- 2) admin_list_listings returns the 4 seeded listings (and any pre-existing).
@@ -274,13 +294,11 @@ begin
     raise exception 'Missing list should include enabled_main_item';
   end if;
 
+  -- After fix_checkout_ready_service_not_required migration,
+  -- a listing with an enabled main item but no service IS checkout-ready.
   v_no_service := public.admin_get_listing('cccccccc-dddd-4ddd-8ddd-ddddddddd804'::uuid);
-  if (v_no_service #>> '{checkout_eligibility, is_checkout_ready}')::boolean is not false then
-    raise exception 'Listing with main item but no service should NOT be checkout-ready';
-  end if;
-
-  if not (v_no_service -> 'checkout_eligibility' -> 'missing') ? 'enabled_service_option' then
-    raise exception 'Missing list should include enabled_service_option';
+  if (v_no_service #>> '{checkout_eligibility, is_checkout_ready}')::boolean is not true then
+    raise exception 'Listing with main item (no service) should be checkout-ready after service-not-required fix';
   end if;
 end;
 $$;
@@ -485,19 +503,25 @@ begin
 end;
 $$;
 
--- 13b) admin_set_listing_status: rent with main item but no service -> P0004
+-- 13b) admin_set_listing_status: rent with main item but no service -> now succeeds
+-- (after fix_checkout_ready_service_not_required, services are optional)
 do $$
+declare
+  v_response jsonb;
 begin
-  begin
-    perform public.admin_set_listing_status(
-      'cccccccc-dddd-4ddd-8ddd-ddddddddd804'::uuid,
-      'active'::public.listing_status
-    );
-    raise exception 'Activate rent listing without service option unexpectedly succeeded';
-  exception
-    when sqlstate 'P0004' then
-      null;
-  end;
+  v_response := public.admin_set_listing_status(
+    'cccccccc-dddd-4ddd-8ddd-ddddddddd804'::uuid,
+    'active'::public.listing_status
+  );
+  if (v_response #>> '{listing, status}') <> 'active' then
+    raise exception 'Rent listing with main item (no service) should activate after service-not-required fix, got %', v_response #>> '{listing, status}';
+  end if;
+
+  -- Reset back to passive for other tests.
+  perform public.admin_set_listing_status(
+    'cccccccc-dddd-4ddd-8ddd-ddddddddd804'::uuid,
+    'passive'::public.listing_status
+  );
 end;
 $$;
 
@@ -612,7 +636,7 @@ on conflict (id) do nothing;
 -- Switch back to admin role for snapshot tests
 reset role;
 set role authenticated;
-select set_config('request.jwt.claim.sub', 'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb800', false);
+select set_config('request.jwt.claim.sub', 'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb820', false);
 select set_config('request.jwt.claim.role', 'authenticated', false);
 
 -- 16) admin_get_listing returns available_main_items with active catalog entries

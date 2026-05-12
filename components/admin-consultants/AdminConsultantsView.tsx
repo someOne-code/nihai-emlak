@@ -159,21 +159,14 @@ export default function AdminConsultantsView() {
     setDetail(result?.type === "consultant" ? result.detail : null);
   }, []);
 
-  const handleSelectConsultant = useCallback(async (consultantId: string) => {
+  const handleSelectConsultant = useCallback((row: ConsultantRowType) => {
     setActionError(null);
     setActionSuccess(null);
-    setSelectedId(consultantId);
+    setSelectedId(row.id);
     setShowCreate(false);
-    setDetailLoading(true);
-    try {
-      await loadConsultantDetail(consultantId);
-    } catch (err) {
-      if (!mountedRef.current) return;
-      setActionError(safeErrorMessage(err));
-    } finally {
-      if (mountedRef.current) setDetailLoading(false);
-    }
-  }, [loadConsultantDetail]);
+    setDetail(row.detail);
+    setDetailLoading(false);
+  }, []);
 
   const refreshAfterMutation = useCallback(
     async (consultantId: string | null, message: string) => {
@@ -379,7 +372,7 @@ function ConsultantRowItem({
 }: {
   row: ConsultantRowType;
   selected: boolean;
-  onSelect: (id: string) => void;
+  onSelect: (row: ConsultantRowType) => void;
 }) {
   const initials = row.fullName
     .split(" ")
@@ -391,7 +384,7 @@ function ConsultantRowItem({
   return (
     <button
       type="button"
-      onClick={() => onSelect(row.id)}
+      onClick={() => onSelect(row)}
       className={selected ? adminLayout.listItemSelected : adminLayout.listItem}
     >
       <div className={adminLayout.listItemHeader}>

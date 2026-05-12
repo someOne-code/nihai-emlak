@@ -13,7 +13,9 @@ import {
 // Re-export pure logic so the rest of the UI can import from a single place.
 export {
   applyCommunicationsFilters,
+  buildCommunicationsBackendFilters,
   COMMUNICATIONS_INITIAL_FILTER_STATE,
+  hasCommunicationsBackendFilterChange,
   type CommunicationsFilterState,
   type CommunicationsStatusFilter,
 } from "@/lib/admin-ui/communications-filters";

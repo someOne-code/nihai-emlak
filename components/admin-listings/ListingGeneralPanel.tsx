@@ -63,9 +63,19 @@ export default function ListingGeneralPanel({
     numericFieldValue(detail.listing.grossAreaM2),
   );
   const [isFurnished, setIsFurnished] = useState(detail.listing.isFurnished);
+  const [showErrors, setShowErrors] = useState(false);
+
+  const titleError = showErrors && !title.trim() ? "Bu alan zorunludur" : null;
+  const districtError = showErrors && !district.trim() ? "Bu alan zorunludur" : null;
+  const descriptionError = showErrors && !description.trim() ? "Bu alan zorunludur" : null;
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!title.trim() || !district.trim() || !description.trim()) {
+      setShowErrors(true);
+      return;
+    }
+    setShowErrors(false);
     onSave({
       title: title.trim(),
       summary: summary.trim() || null,
@@ -88,6 +98,18 @@ export default function ListingGeneralPanel({
 
   const isActive = detail.listing.status === "active";
   const typeLabel = detail.listing.type === "rent" ? "Kiralık" : "Satılık";
+  const isRent = detail.listing.type === "rent";
+  const isCheckoutReady = detail.checkoutEligibility.isCheckoutReady;
+  const isPublishReady = detail.publishReadiness.isPublishReady;
+  const canPublish = isPublishReady && (!isRent || isCheckoutReady);
+  const publishBlockReasons: string[] = [];
+  const publishFieldLabels: Record<string, string> = { description: "Açıklama", district: "İlçe", image: "Görsel" };
+  for (const key of detail.publishReadiness.missing) {
+    publishBlockReasons.push(publishFieldLabels[key] ?? key);
+  }
+  if (isRent && !isCheckoutReady) {
+    publishBlockReasons.push("Checkout yapılandırması");
+  }
 
   return (
     <Card>
@@ -100,17 +122,34 @@ export default function ListingGeneralPanel({
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2 items-center">
-            <Badge variant={isActive ? "success" : "warning"} aria-label="Mevcut durum">
-              {isActive ? "Aktif" : "Pasif"}
+            <Badge
+              variant={isActive ? "success" : "warning"}
+              aria-label={
+                isActive
+                  ? "Yayın durumu: ilan şu anda müşterilere görünür."
+                  : "Yayın durumu: ilan müşterilere görünmüyor."
+              }
+              title={
+                isActive
+                  ? "Yayın durumu: ilan şu anda müşterilere görünür."
+                  : "Yayın durumu: ilan müşterilere görünmüyor."
+              }
+            >
+              {isActive ? "Yayında" : "Yayın dışı"}
             </Badge>
             <Button
               type="button"
               variant="outline"
               size="sm"
-              disabled={busy || isActive}
+              disabled={busy || isActive || !canPublish}
               onClick={() => onStatusChange("active")}
+              title={
+                !canPublish
+                  ? `Yayına almak için eksikleri tamamlayın: ${publishBlockReasons.join(", ")}`
+                  : "İlanı yayına alır ve müşterilere görünür yapar."
+              }
             >
-              Aktifleştir
+              Yayına al
             </Button>
             <Button
               type="button"
@@ -118,20 +157,34 @@ export default function ListingGeneralPanel({
               size="sm"
               disabled={busy || !isActive}
               onClick={() => onStatusChange("passive")}
+              title="İlanı yayından kaldırır; müşteri tarafında görünmez."
             >
-              Pasife al
+              Yayından kaldır
             </Button>
           </div>
+          {!canPublish && !isActive && publishBlockReasons.length > 0 && (
+            <div className="mt-2 rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 px-3 py-2">
+              <p className="text-xs font-medium text-amber-800 dark:text-amber-300 mb-1">
+                Yayına almak için aşağıdaki eksikleri tamamlayın:
+              </p>
+              <ul className="text-xs text-amber-700 dark:text-amber-400 list-disc list-inside space-y-0.5">
+                {publishBlockReasons.map((reason) => (
+                  <li key={reason}>{reason}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-6">
           <FieldGroup title="Temel Bilgiler">
-            <Field label="İlan başlığı">
+            <Field label="İlan başlığı" required error={titleError}>
               <Input
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
                 required
+                className={titleError ? "border-destructive focus-visible:ring-destructive" : ""}
               />
             </Field>
             <Field label="İlan türü">
@@ -156,11 +209,12 @@ export default function ListingGeneralPanel({
                 placeholder="Örn: İstanbul"
               />
             </Field>
-            <Field label="İlçe">
+            <Field label="İlçe" required error={districtError}>
               <Input
                 value={district}
                 onChange={(event) => setDistrict(event.target.value)}
                 placeholder="Örn: Kadıköy"
+                className={districtError ? "border-destructive focus-visible:ring-destructive" : ""}
               />
             </Field>
           </FieldGroup>
@@ -239,11 +293,12 @@ export default function ListingGeneralPanel({
                 rows={3}
               />
             </Field>
-            <Field label="Detaylı açıklama">
+            <Field label="Detaylı açıklama" required error={descriptionError}>
               <Textarea
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
                 rows={5}
+                className={descriptionError ? "border-destructive focus-visible:ring-destructive" : ""}
               />
             </Field>
           </FieldGroup>
@@ -277,11 +332,15 @@ function FieldGroup({
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function Field({ label, children, required, error }: { label: string; children: ReactNode; required?: boolean; error?: string | null }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <Label className="text-sm font-medium">{label}</Label>
+      <Label className="text-sm font-medium">
+        {label}
+        {required && <span className="text-destructive ml-0.5">*</span>}
+      </Label>
       {children}
+      {error && <p className="text-xs text-destructive mt-0.5">{error}</p>}
     </div>
   );
 }

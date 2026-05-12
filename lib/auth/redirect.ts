@@ -12,3 +12,8 @@ export function resolveSafeAuthRedirect(
 
   return fallback;
 }
+
+export function getLoginRedirectUrl(currentPath: string): string {
+  const safePath = resolveSafeAuthRedirect(currentPath, "/");
+  return `/auth/login?redirect=${encodeURIComponent(safePath)}`;
+}

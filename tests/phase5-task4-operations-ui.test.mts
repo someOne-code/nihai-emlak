@@ -214,7 +214,7 @@ test("task 4 operations view localizes workflow conflict errors for admins", asy
   );
 });
 
-test("task 4 loader fetches overview, selected reservation snapshot, and related listing snapshot", async () => {
+test("task 4 loader fetches overview only when no reservation is selected", async () => {
   const calls: string[] = [];
   const model = await loadOperationsModel({
     fetchListingWorkflowSnapshot: async (listingId) => {
@@ -238,6 +238,35 @@ test("task 4 loader fetches overview, selected reservation snapshot, and related
     },
     loadAdminPaymentEvents: async () => ({ items: [], limit: 20, offset: 0 }),
   });
+
+  assert.deepEqual(calls, ["overview"]);
+  assert.equal(model.selectedReservationId, null);
+});
+
+test("task 4 loader fetches detail when reservation is explicitly selected", async () => {
+  const calls: string[] = [];
+  const model = await loadOperationsModel({
+    fetchListingWorkflowSnapshot: async (listingId) => {
+      calls.push(`listing:${listingId}`);
+      return {
+        listing: { id: listingId, status: "passive" },
+        eligibility: { can_reopen: true },
+      };
+    },
+    fetchReservationWorkflowSnapshot: async (reservationId) => {
+      calls.push(`reservation:${reservationId}`);
+      return {
+        reservation: { id: reservationId, status: "pending" },
+        listing: { id: "listing-1", status: "passive" },
+        eligibility: { can_cancel: true, can_confirm: true },
+      };
+    },
+    loadAdminOperationsOverview: async () => {
+      calls.push("overview");
+      return createOverview();
+    },
+    loadAdminPaymentEvents: async () => ({ items: [], limit: 20, offset: 0 }),
+  }, "reservation-1");
 
   assert.deepEqual(calls, ["overview", "reservation:reservation-1", "listing:listing-1"]);
   assert.equal(model.selectedReservationId, "reservation-1");

@@ -21,7 +21,7 @@ export type AdminOperationsOverview = {
 
 export type OperationsOverviewFilters = {
   reservationStatus?: "all" | "pending" | "confirmed" | "cancelled" | "expired";
-  reservationQueue?: "all" | "document_waiting" | "refund_requests" | "manual_refunds" | "payment_issues" | "completed";
+  reservationQueue?: "all" | "document_waiting" | "refund_requests" | "manual_refunds" | "payment_issues" | "payment_waiting" | "completed";
   paymentStatus?: "all" | "pending" | "succeeded" | "failed" | "cancelled" | "refunded" | "conflict";
 };
 
@@ -56,7 +56,8 @@ export async function loadAdminOperationsOverview(
   paymentParams.set("limit", "100");
   paymentParams.set("offset", "0");
 
-  const [reservations, orders, payments] = await Promise.all([
+  const emptyList: AdminOperationsListResult = { items: [], limit: 0, offset: 0 };
+  const results = await Promise.allSettled([
     requestAdminJson<AdminOperationsListResult>(
       `/api/admin/read/reservations?${reservationParams.toString()}`,
       { method: "GET" },
@@ -74,10 +75,15 @@ export async function loadAdminOperationsOverview(
     ),
   ]);
 
+  // Reservations is critical — if it fails, propagate the error.
+  if (results[0].status === "rejected") {
+    throw results[0].reason;
+  }
+
   return {
-    reservations,
-    orders,
-    payments,
+    reservations: results[0].value,
+    orders: results[1].status === "fulfilled" ? results[1].value : emptyList,
+    payments: results[2].status === "fulfilled" ? results[2].value : emptyList,
   };
 }
 

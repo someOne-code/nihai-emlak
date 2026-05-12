@@ -66,9 +66,9 @@ test("catalog view-model: main item pricingStrategyLabel maps DB codes to Turkis
     pricing_strategy: "mystery_code",
   });
 
-  assert.equal(fixedRow.pricingStrategyLabel, "Sabit Tutar");
-  assert.equal(listingMult.pricingStrategyLabel, "İlan Fiyatı Çarpanı");
-  assert.equal(stayMult.pricingStrategyLabel, "Konaklama Ayı Çarpanı");
+  assert.equal(fixedRow.pricingStrategyLabel, "Sabit tutar");
+  assert.equal(listingMult.pricingStrategyLabel, "İlan fiyatına oranlı");
+  assert.equal(stayMult.pricingStrategyLabel, "Aylık (süreye bağlı)");
   // Unknown codes should fall back to the raw code so admins can still debug.
   assert.equal(unknown.pricingStrategyLabel, "mystery_code");
 });

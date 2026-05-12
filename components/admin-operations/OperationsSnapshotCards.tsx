@@ -201,7 +201,7 @@ export function PricingBreakdownCard({
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
         <div className="grid grid-cols-[minmax(80px,0.4fr)_1fr] gap-2">
-          <dt className="font-medium text-muted-foreground">Sipariş kaydı</dt>
+          <dt className="font-medium text-muted-foreground">{getOrderRecordLabel(orderStatus, paymentStatus)}</dt>
           <dd className="space-y-1 font-semibold">
             {orderStatus ? <OperationsStatusBadge status={translateStatus(orderStatus)} /> : "-"}
             {getOrderStatusHelpText(orderStatus) && (
@@ -466,10 +466,18 @@ function deriveReservationOperationStatusLabel({
 
 function getOrderStatusHelpText(status: string | null): string | null {
   if (status?.toLowerCase() === "pending") {
-    return "Ödeme başarılı olmadığı için sipariş kaydı tamamlanmadı.";
+    return "Banka ödemesi başarılı olmadıkça bu kayıt ödeme işlemi olarak kalır.";
   }
 
   return null;
+}
+
+function getOrderRecordLabel(orderStatus: string | null, paymentStatus: string | null): string {
+  if (orderStatus?.toLowerCase() === "completed" && paymentStatus?.toLowerCase() === "succeeded") {
+    return "Sipariş kaydı";
+  }
+
+  return "Ödeme işlemi";
 }
 
 function getPaymentStatusHelpText(status: string | null): string | null {

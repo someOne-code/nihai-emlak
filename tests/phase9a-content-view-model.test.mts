@@ -95,6 +95,28 @@ test("buildCategoriesListViewModel maps isActive to Turkish label", () => {
   assert.equal(vm.rows[1].isActiveLabel, "Pasif");
 });
 
+test("buildCategoriesListViewModel includes row detail for immediate edit form rendering", () => {
+  const vm = buildCategoriesListViewModel({
+    items: [{
+      id: "cat1",
+      title: "Local Guide",
+      slug: "local-guide",
+      description: "Guides",
+      isActive: true,
+      sortOrder: 2,
+      createdAt: "2024-01-01",
+      updatedAt: "2024-01-02",
+    }],
+    total: 1,
+    page: 1,
+    totalPages: 1,
+  });
+
+  assert.equal(vm.rows[0].detail.slug, "local-guide");
+  assert.equal(vm.rows[0].detail.sortOrder, 2);
+  assert.deepEqual(vm.rows[0].detail.linkedPosts, []);
+});
+
 test("buildCategoryDetail returns null for invalid input", () => {
   assert.equal(buildCategoryDetail(null), null);
 });

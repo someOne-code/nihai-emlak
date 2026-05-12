@@ -10,6 +10,7 @@
 // normalization rules.
 
 import { slugifyTitle } from "../admin/content-slugify.ts";
+import type { PostRow } from "./content-view-model.ts";
 
 export { slugifyTitle };
 
@@ -20,6 +21,42 @@ export type PostsListFilters = {
   page?: number;
   limit?: number;
 };
+
+export type PostsUiFilterState = {
+  search: string;
+  status: PostStatusFilter;
+  category: string;
+};
+
+export function buildPostsBackendFilters(
+  filters: PostsUiFilterState,
+): PostsListFilters {
+  const apiFilters: PostsListFilters = {};
+  if (filters.status) apiFilters.status = filters.status;
+  if (filters.category) apiFilters.category = filters.category;
+  return apiFilters;
+}
+
+export function hasPostBackendFilterChange(
+  previous: PostsUiFilterState,
+  next: PostsUiFilterState,
+): boolean {
+  return previous.status !== next.status || previous.category !== next.category;
+}
+
+export function applyPostSearchFilter(
+  rows: PostRow[],
+  search: string,
+): PostRow[] {
+  const query = search.trim().toLowerCase();
+  if (query.length === 0) return rows;
+
+  return rows.filter((row) =>
+    [row.title, row.slug, row.categoryLabel, row.statusLabel].some((value) =>
+      value.toLowerCase().includes(query),
+    ),
+  );
+}
 
 export function buildPostsUrl(filters: PostsListFilters): string {
   const params = new URLSearchParams();

@@ -1,5 +1,6 @@
 import { createAdminClient } from "../supabase/admin.ts";
 import {
+  readStateChangingJsonRequestPayload,
   validateStateChangingJsonRequestEnvelope,
   type StateChangingJsonRouteConfig,
 } from "../http/state-changing-json-route.ts";
@@ -126,19 +127,20 @@ export async function handleAdminUsersInvitePost(
     return jsonError(envelope.error, envelope.status);
   }
 
+  const bodyResult = await readStateChangingJsonRequestPayload(
+    request,
+    ADMIN_USERS_JSON_ROUTE_CONFIG,
+  );
+  if (!bodyResult.ok) {
+    return jsonError(bodyResult.error, bodyResult.status);
+  }
+
   const guard = await guardAdminUsersRequest(dependencies);
   if (!guard.ok) {
     return guard.response;
   }
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return jsonError("Valid email is required", 400);
-  }
-
-  const email = parseInviteEmail(body);
+  const email = parseInviteEmail(bodyResult.value);
   if (!email) {
     return jsonError("Valid email is required", 400);
   }
@@ -155,8 +157,11 @@ export async function handleAdminUsersInvitePost(
   if (!redirectTo) {
     return jsonError("Admin invite service is unavailable", 500);
   }
-  const invited = await inviteOrResolveExistingUser(service, email, redirectTo);
-  if (!invited) {
+  const inviteResult = await service.auth.admin.inviteUserByEmail(email, {
+    redirectTo,
+  });
+  const invited = inviteResult.data.user;
+  if (inviteResult.error || !invited?.id) {
     return jsonError("Admin invite failed", 500);
   }
 
@@ -225,37 +230,6 @@ async function defaultCreateServerSupabaseClient(): Promise<unknown> {
   return server.createClient();
 }
 
-async function inviteOrResolveExistingUser(
-  service: AdminServiceClient,
-  email: string,
-  redirectTo: string,
-): Promise<AdminAuthUser | null> {
-  const inviteResult = await service.auth.admin.inviteUserByEmail(email, {
-    redirectTo,
-  });
-  if (inviteResult.data.user?.id && !inviteResult.error) {
-    return inviteResult.data.user;
-  }
-
-  if (!service.auth.admin.listUsers) {
-    return null;
-  }
-
-  const listResult = await service.auth.admin.listUsers({
-    page: 1,
-    perPage: 200,
-  });
-  if (listResult.error) {
-    return null;
-  }
-
-  return (
-    listResult.data?.users?.find(
-      (user) => user.email?.toLowerCase() === email,
-    ) ?? null
-  );
-}
-
 function sanitizeAdminProfile(row: AdminProfileRow) {
   const id = asNonEmptyString(row.id);
   const email = asNonEmptyString(row.email);
@@ -291,7 +265,8 @@ function buildInviteRedirectTo(
   request: Request,
   dependencies: AdminUsersRouteDependencies,
 ): string | null {
-  const configuredSiteUrl = dependencies.siteUrl;
+  const configuredSiteUrl =
+    dependencies.siteUrl === undefined ? process.env.SITE_URL : dependencies.siteUrl;
   if (
     (dependencies.nodeEnv ?? process.env.NODE_ENV) === "production" &&
     (!configuredSiteUrl || configuredSiteUrl.trim().length === 0)

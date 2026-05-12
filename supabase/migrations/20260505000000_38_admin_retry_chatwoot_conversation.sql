@@ -82,6 +82,102 @@ begin
 end;
 $$;
 
+create or replace function internal.admin_mark_chatwoot_retry_dispatch_failed(
+  p_conversation_id uuid,
+  p_failure_reason text
+)
+returns table (
+  result text,
+  conversation_id uuid,
+  listing_id uuid,
+  user_id uuid,
+  status public.chatwoot_conversation_status,
+  failure_reason text
+)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_admin_user_id uuid;
+  v_mapping public.chatwoot_conversations%rowtype;
+  v_failure_reason text := left(coalesce(nullif(btrim(p_failure_reason), ''), 'Chatwoot retry dispatch failed'), 200);
+begin
+  v_admin_user_id := auth.uid();
+
+  if v_admin_user_id is null then
+    raise exception 'authenticated admin is required' using errcode = '28000';
+  end if;
+
+  if not (select public.is_admin()) then
+    raise exception 'admin role is required' using errcode = '42501';
+  end if;
+
+  if p_conversation_id is null then
+    raise exception 'p_conversation_id is required' using errcode = '22023';
+  end if;
+
+  select *
+  into v_mapping
+  from public.chatwoot_conversations
+  where id = p_conversation_id
+  for update;
+
+  if not found then
+    raise exception 'chatwoot conversation mapping not found: %', p_conversation_id
+      using errcode = 'P0002';
+  end if;
+
+  if v_mapping.status <> 'provisioning' then
+    raise exception 'chatwoot conversation mapping is not in provisioning state: %', v_mapping.status
+      using errcode = '22023';
+  end if;
+
+  if not exists (
+    select 1
+    from public.admin_workflow_events e
+    where e.workflow_name = 'admin_retry_chatwoot_conversation'
+      and e.admin_user_id = v_admin_user_id
+      and e.listing_id = v_mapping.listing_id
+      and e.payload->>'conversation_mapping_id' = v_mapping.id::text
+      and e.payload->>'target_user_id' = v_mapping.user_id::text
+      and e.created_at >= v_mapping.updated_at
+  ) then
+    raise exception 'chatwoot conversation mapping has no matching admin retry dispatch attempt'
+      using errcode = '22023';
+  end if;
+
+  update public.chatwoot_conversations
+  set
+    status = 'failed',
+    chatwoot_source_id = null,
+    chatwoot_conversation_id = null,
+    failure_reason = v_failure_reason
+  where id = v_mapping.id
+  returning * into v_mapping;
+
+  perform internal.log_admin_workflow_event(
+    p_workflow_name => 'admin_mark_chatwoot_retry_dispatch_failed',
+    p_admin_user_id => v_admin_user_id,
+    p_listing_id => v_mapping.listing_id,
+    p_payload => jsonb_build_object(
+      'conversation_mapping_id', v_mapping.id,
+      'target_user_id', v_mapping.user_id,
+      'failure_reason', v_mapping.failure_reason
+    )
+  );
+
+  return query
+  select
+    'retry_dispatch_failed'::text,
+    v_mapping.id,
+    v_mapping.listing_id,
+    v_mapping.user_id,
+    v_mapping.status,
+    v_mapping.failure_reason;
+end;
+$$;
+
 -- Public wrapper so Supabase client can call it via rpc(). The wrapper
 -- delegates to the internal function (which enforces auth + admin role).
 -- Must be SECURITY DEFINER so authenticated callers (which lack USAGE on
@@ -105,8 +201,32 @@ as $$
   select * from internal.admin_retry_chatwoot_conversation(p_conversation_id);
 $$;
 
+create or replace function public.admin_mark_chatwoot_retry_dispatch_failed(
+  p_conversation_id uuid,
+  p_failure_reason text
+)
+returns table (
+  result text,
+  conversation_id uuid,
+  listing_id uuid,
+  user_id uuid,
+  status public.chatwoot_conversation_status,
+  failure_reason text
+)
+language sql
+security definer
+set search_path = ''
+as $$
+  select * from internal.admin_mark_chatwoot_retry_dispatch_failed(p_conversation_id, p_failure_reason);
+$$;
+
 revoke all on function internal.admin_retry_chatwoot_conversation(uuid) from public;
+revoke all on function internal.admin_mark_chatwoot_retry_dispatch_failed(uuid, text) from public;
 
 revoke all on function public.admin_retry_chatwoot_conversation(uuid) from public;
 revoke execute on function public.admin_retry_chatwoot_conversation(uuid) from anon;
 grant execute on function public.admin_retry_chatwoot_conversation(uuid) to authenticated;
+
+revoke all on function public.admin_mark_chatwoot_retry_dispatch_failed(uuid, text) from public;
+revoke execute on function public.admin_mark_chatwoot_retry_dispatch_failed(uuid, text) from anon;
+grant execute on function public.admin_mark_chatwoot_retry_dispatch_failed(uuid, text) to authenticated;

@@ -26,6 +26,9 @@ import {
 
 import {
   buildPostsUrl,
+  buildPostsBackendFilters,
+  applyPostSearchFilter,
+  hasPostBackendFilterChange,
   type PostsListFilters,
 } from "../lib/admin-ui/content-posts-ui-helpers.ts";
 
@@ -74,6 +77,84 @@ test("PostRow has all fields the list table requires", () => {
     "row.publishedAt must be string | null",
   );
   assert.ok(typeof row.updatedAt === "string", "row.updatedAt must be string");
+});
+
+test("PostRow carries enough detail to open the edit form without a second detail fetch", () => {
+  const data = {
+    items: [{
+      id: "p1",
+      title: "Test Post",
+      slug: "test-post",
+      excerpt: "Short",
+      content: "Full body",
+      category: { id: "c1", title: "Tech" },
+      status: "published",
+      publishedAt: "2024-01-01T00:00:00Z",
+      coverImageUrl: "https://example.test/cover.jpg",
+      seoTitle: "SEO title",
+      seoDescription: "SEO description",
+      createdAt: "2024-01-01T00:00:00Z",
+      updatedAt: "2024-01-02T00:00:00Z",
+    }],
+    total: 1,
+    page: 1,
+    totalPages: 1,
+  };
+  const vm = buildPostsListViewModel(data);
+
+  assert.equal(vm.rows[0].detail.title, "Test Post");
+  assert.equal(vm.rows[0].detail.content, "Full body");
+  assert.equal(vm.rows[0].detail.coverImageUrl, "https://example.test/cover.jpg");
+  assert.equal(vm.rows[0].detail.seoTitle, "SEO title");
+  assert.equal(vm.rows[0].detail.seoDescription, "SEO description");
+});
+
+test("applyPostSearchFilter filters loaded rows locally without changing backend filters", () => {
+  const data = {
+    items: [
+      { id: "p1", title: "Smoke Post", slug: "smoke-post", status: "published", category: { id: "c1", title: "Blog" }, updatedAt: "2024-01-01" },
+      { id: "p2", title: "Market Note", slug: "market-note", status: "draft", category: { id: "c2", title: "News" }, updatedAt: "2024-01-02" },
+    ],
+    total: 2,
+    page: 1,
+    totalPages: 1,
+  };
+  const vm = buildPostsListViewModel(data);
+
+  const result = applyPostSearchFilter(vm.rows, "smoke");
+
+  assert.equal(result.length, 1);
+  assert.equal(result[0].title, "Smoke Post");
+});
+
+test("buildPostsBackendFilters omits search so typing does not refetch server search", () => {
+  const filters = buildPostsBackendFilters({
+    search: "smoke",
+    status: "published",
+    category: "c1",
+  });
+
+  assert.deepEqual(filters, {
+    status: "published",
+    category: "c1",
+  });
+});
+
+test("hasPostBackendFilterChange ignores search-only changes", () => {
+  assert.equal(
+    hasPostBackendFilterChange(
+      { search: "", status: "published", category: "c1" },
+      { search: "s", status: "published", category: "c1" },
+    ),
+    false,
+  );
+  assert.equal(
+    hasPostBackendFilterChange(
+      { search: "s", status: "published", category: "c1" },
+      { search: "s", status: "draft", category: "c1" },
+    ),
+    true,
+  );
 });
 
 test("PostsListViewModel isEmpty flag is true when no items", () => {
@@ -261,6 +342,17 @@ test("opening the post create panel refreshes category options", () => {
   assert.match(source, /const openCreatePostPanel = useCallback/);
   assert.match(source, /void refreshCategoryOptions\(\);/);
   assert.match(source, /onCreateClick=\{openCreatePostPanel\}/);
+});
+
+test("selecting a post uses the row detail immediately instead of refetching detail", () => {
+  const source = readFileSync(
+    resolve(import.meta.dirname, "..", "components", "admin-posts", "AdminPostsView.tsx"),
+    "utf-8",
+  );
+
+  assert.match(source, /const handleSelectPost = useCallback\(\(row: PostRowType\)/);
+  assert.match(source, /setDetail\(row\.detail\)/);
+  assert.doesNotMatch(source, /await loadPostDetail\(postId\)/);
 });
 
 test("EditPostPanel payload round-trips through parsePostUpdateBodyForTest with all form fields", () => {

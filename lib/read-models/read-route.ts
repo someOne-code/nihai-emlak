@@ -1,6 +1,8 @@
 type SupabaseError = {
   code?: string | null;
   message?: string | null;
+  details?: string | null;
+  hint?: string | null;
 };
 
 type SupabaseMaybeSingleResponse = {
@@ -9,6 +11,11 @@ type SupabaseMaybeSingleResponse = {
 };
 
 type SupabaseRpcResponse = {
+  data: unknown;
+  error: SupabaseError | null;
+};
+
+type SupabaseQueryResponse = {
   data: unknown;
   error: SupabaseError | null;
 };
@@ -30,9 +37,12 @@ type SupabaseClient = {
       error: SupabaseError | null;
     }>;
   };
-  from: (table: "profiles") => {
+  from: (table: string) => {
     select: (columns: string) => {
+      in?: (column: string, values: string[]) => PublicReadQueryBuilder;
+      order?: (column: string, options?: { ascending?: boolean; foreignTable?: string }) => PublicReadQueryBuilder;
       eq: (column: string, value: string) => {
+        order?: (column: string, options?: { ascending?: boolean }) => PublicReadQueryBuilder;
         maybeSingle: () => Promise<SupabaseMaybeSingleResponse>;
       };
     };
@@ -41,6 +51,13 @@ type SupabaseClient = {
     functionName: ReadModelRpcName,
     args: Record<string, unknown>,
   ) => Promise<SupabaseRpcResponse>;
+};
+
+type PublicReadQueryBuilder = {
+  eq: (column: string, value: string) => PublicReadQueryBuilder;
+  in: (column: string, values: string[]) => PublicReadQueryBuilder;
+  order: (column: string, options?: { ascending?: boolean; foreignTable?: string }) => PublicReadQueryBuilder;
+  range: (from: number, to: number) => Promise<SupabaseQueryResponse>;
 };
 
 export type ReadModelRouteDependencies = {
@@ -67,10 +84,162 @@ export async function handlePublicListingsGet(
     p_offset: query.value.offset,
   });
   if (rpcResult.error) {
+    const mappedError = mapPublicReadRpcError(rpcResult.error);
+    if (mappedError[1] === 500) {
+      const fallbackResult = await listPublicListingsFromTables(supabase, query.value);
+      if (!fallbackResult.error) {
+        return jsonSuccess(fallbackResult.data);
+      }
+    }
+
     return jsonError(...mapPublicReadRpcError(rpcResult.error));
   }
 
   return jsonSuccess(rpcResult.data);
+}
+
+async function listPublicListingsFromTables(
+  supabase: SupabaseClient,
+  query: { type: "rent" | "sale" | null; city: string | null; limit: number; offset: number },
+): Promise<{ data: unknown; error: SupabaseError | null }> {
+  let listingsQuery = supabase
+    .from("listings")
+    .select(
+      "id,type,status,title,slug,summary,city,district,price,currency,room_count,bathroom_count,gross_area_m2,is_furnished,created_at",
+    ) as unknown as PublicReadQueryBuilder;
+
+  listingsQuery = listingsQuery.eq("status", "active");
+  if (query.type) {
+    listingsQuery = listingsQuery.eq("type", query.type);
+  }
+  if (query.city) {
+    listingsQuery = listingsQuery.eq("city", query.city);
+  }
+
+  const listingsResult = await listingsQuery
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: true })
+    .range(query.offset, query.offset + query.limit - 1);
+
+  if (listingsResult.error) {
+    if (isDevelopmentSupabaseUnavailable(listingsResult.error)) {
+      return {
+        data: {
+          items: [],
+          limit: query.limit,
+          offset: query.offset,
+        },
+        error: null,
+      };
+    }
+
+    return {
+      data: null,
+      error: listingsResult.error,
+    };
+  }
+
+  const listingRows = Array.isArray(listingsResult.data) ? listingsResult.data : [];
+  if (listingRows.length === 0) {
+    return {
+      data: {
+        items: [],
+        limit: query.limit,
+        offset: query.offset,
+      },
+      error: null,
+    };
+  }
+
+  const listingIds = listingRows
+    .map((row) => readStringField(row, "id"))
+    .filter((id): id is string => id !== null);
+
+  let imagesByListingId = new Map<string, string>();
+  if (listingIds.length > 0) {
+    const imagesResult = await (supabase
+      .from("listing_images")
+      .select("id,listing_id,image_url,is_primary,sort_order,created_at") as unknown as PublicReadQueryBuilder)
+      .in("listing_id", listingIds)
+      .order("is_primary", { ascending: false })
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(0, listingIds.length * 10);
+
+    if (imagesResult.error) {
+      return {
+        data: null,
+        error: imagesResult.error,
+      };
+    }
+
+    imagesByListingId = selectPrimaryImages(imagesResult.data);
+  }
+
+  return {
+    data: {
+      items: listingRows.map((row) => ({
+        id: readField(row, "id"),
+        type: readField(row, "type"),
+        status: readField(row, "status"),
+        title: readField(row, "title"),
+        slug: readField(row, "slug"),
+        summary: readField(row, "summary"),
+        city: readField(row, "city"),
+        district: readField(row, "district"),
+        price: readField(row, "price"),
+        currency: readField(row, "currency"),
+        room_count: readField(row, "room_count"),
+        bathroom_count: readField(row, "bathroom_count"),
+        gross_area_m2: readField(row, "gross_area_m2"),
+        is_furnished: readField(row, "is_furnished"),
+        primary_image_url: imagesByListingId.get(String(readField(row, "id"))) ?? null,
+        created_at: readField(row, "created_at"),
+      })),
+      limit: query.limit,
+      offset: query.offset,
+    },
+    error: null,
+  };
+}
+
+function isDevelopmentSupabaseUnavailable(error: SupabaseError): boolean {
+  if (process.env.NODE_ENV === "production") {
+    return false;
+  }
+
+  const text = `${error.message ?? ""}\n${error.details ?? ""}\n${error.hint ?? ""}`;
+  return /fetch failed|ECONNREFUSED|ENOTFOUND|ECONNRESET/i.test(text);
+}
+
+function selectPrimaryImages(data: unknown): Map<string, string> {
+  const byListingId = new Map<string, string>();
+  if (!Array.isArray(data)) {
+    return byListingId;
+  }
+
+  for (const row of data) {
+    const listingId = readStringField(row, "listing_id");
+    const imageUrl = readStringField(row, "image_url");
+    if (!listingId || !imageUrl || byListingId.has(listingId)) {
+      continue;
+    }
+    byListingId.set(listingId, imageUrl);
+  }
+
+  return byListingId;
+}
+
+function readField(row: unknown, key: string): unknown {
+  return typeof row === "object" && row !== null && key in row
+    ? (row as Record<string, unknown>)[key]
+    : null;
+}
+
+function readStringField(row: unknown, key: string): string | null {
+  const value = readField(row, key);
+  return typeof value === "string" && value.trim().length > 0 ? value : null;
 }
 
 export async function handlePublicListingDetailGet(
@@ -128,7 +297,7 @@ export async function handleAdminReservationsGet(
     statusParam: "status",
     allowedStatuses: ["pending", "confirmed", "cancelled", "expired"],
     queueParam: "queue",
-    allowedQueues: ["all", "document_waiting", "refund_requests", "manual_refunds", "payment_issues", "completed"],
+    allowedQueues: ["all", "payment_waiting", "document_waiting", "refund_requests", "manual_refunds", "payment_issues", "completed"],
   });
   if (!query.ok) {
     return jsonError(query.error, 400);

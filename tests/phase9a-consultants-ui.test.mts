@@ -2,8 +2,12 @@
 //
 // Pure helper / copy-constant tests only. No React, no DOM, no fetch.
 
-import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import test from "node:test";
+
+import { buildConsultantsListViewModel } from "../lib/admin-ui/content-view-model.ts";
 
 // ── Empty state copy ──────────────────────────────────────────────────────────
 
@@ -19,6 +23,47 @@ test("CONSULTANTS_FILTERED_EMPTY_TEXT must be non-empty", async () => {
     "../lib/admin-ui/content-consultants-ui-helpers.ts"
   );
   assert.ok(CONSULTANTS_FILTERED_EMPTY_TEXT.length > 0, "must be non-empty");
+});
+
+test("ConsultantRow carries enough detail to open the edit form without a second detail fetch", () => {
+  const vm = buildConsultantsListViewModel({
+    items: [{
+      id: "c1",
+      fullName: "Smoke Consultant",
+      slug: "smoke-consultant",
+      title: "Advisor",
+      photoUrl: "https://example.test/photo.jpg",
+      shortBio: "Bio",
+      phone: "+905551112233",
+      email: "smoke@example.test",
+      whatsappUrl: "https://wa.me/905551112233",
+      linkedinUrl: "https://linkedin.com/in/smoke",
+      isPublished: true,
+      sortOrder: 3,
+      previewLink: "/consultants/smoke-consultant",
+      relatedCounts: { contactChannels: 3, externalLinks: 1 },
+      createdAt: "2024-01-01T00:00:00Z",
+      updatedAt: "2024-01-02T00:00:00Z",
+    }],
+    total: 1,
+    page: 1,
+    totalPages: 1,
+  });
+
+  assert.equal(vm.rows[0].detail.fullName, "Smoke Consultant");
+  assert.equal(vm.rows[0].detail.email, "smoke@example.test");
+  assert.equal(vm.rows[0].detail.relatedCounts.externalLinks, 1);
+});
+
+test("selecting a consultant uses the row detail immediately instead of refetching detail", () => {
+  const source = readFileSync(
+    resolve(import.meta.dirname, "..", "components", "admin-consultants", "AdminConsultantsView.tsx"),
+    "utf-8",
+  );
+
+  assert.match(source, /const handleSelectConsultant = useCallback\(\(row: ConsultantRowType\)/);
+  assert.match(source, /setDetail\(row\.detail\)/);
+  assert.doesNotMatch(source, /await loadConsultantDetail\(consultantId\)/);
 });
 
 // ── Slug field copy ────────────────────────────────────────────────────────────

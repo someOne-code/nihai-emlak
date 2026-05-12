@@ -188,6 +188,7 @@ test("conversation open returns existing ready mapping without Chatwoot calls", 
 test("conversation open provisions a new Chatwoot conversation and optional initial message", async (t) => {
   setupCommunicationEnv(t);
   const rpcCalls: RpcCall[] = [];
+  const adminRpcCalls: RpcCall[] = [];
   const chatwootCalls: ChatwootCall[] = [];
 
   const response = await handleListingConversationPost(
@@ -236,6 +237,20 @@ test("conversation open provisions a new Chatwoot conversation and optional init
           error: null,
         };
       },
+      adminRpc: (functionName, args) => {
+        adminRpcCalls.push({ functionName, args });
+        return {
+          data: {
+            conversation_id: MAPPING_ID,
+            listing_id: LISTING_ID,
+            status: "ready",
+            chatwoot_source_id: CHATWOOT_SOURCE_ID,
+            chatwoot_conversation_id: CHATWOOT_CONVERSATION_ID,
+            failure_reason: null,
+          },
+          error: null,
+        };
+      },
     }),
     { listingId: LISTING_ID },
   );
@@ -246,8 +261,10 @@ test("conversation open provisions a new Chatwoot conversation and optional init
       functionName: "claim_chatwoot_conversation",
       args: { p_listing_id: LISTING_ID },
     },
+  ]);
+  assert.deepEqual(adminRpcCalls, [
     {
-      functionName: "complete_chatwoot_conversation_claim",
+      functionName: "system_complete_chatwoot_conversation_claim",
       args: {
         p_mapping_id: MAPPING_ID,
         p_chatwoot_source_id: CHATWOOT_SOURCE_ID,
@@ -326,6 +343,7 @@ test("conversation open maps duplicate first-claim race to in-progress response"
 test("conversation open marks claims failed and sanitizes provider failures", async (t) => {
   setupCommunicationEnv(t);
   const rpcCalls: RpcCall[] = [];
+  const adminRpcCalls: RpcCall[] = [];
 
   const response = await handleListingConversationPost(
     createJsonRequest({ initial_message: "Merhaba" }),
@@ -368,6 +386,16 @@ test("conversation open marks claims failed and sanitizes provider failures", as
           error: null,
         };
       },
+      adminRpc: (functionName, args) => {
+        adminRpcCalls.push({ functionName, args });
+        return {
+          data: {
+            conversation_id: MAPPING_ID,
+            status: "failed",
+          },
+          error: null,
+        };
+      },
     }),
     { listingId: LISTING_ID },
   );
@@ -384,8 +412,10 @@ test("conversation open marks claims failed and sanitizes provider failures", as
       functionName: "claim_chatwoot_conversation",
       args: { p_listing_id: LISTING_ID },
     },
+  ]);
+  assert.deepEqual(adminRpcCalls, [
     {
-      functionName: "mark_chatwoot_conversation_claim_failed",
+      functionName: "system_mark_chatwoot_conversation_claim_failed",
       args: {
         p_mapping_id: MAPPING_ID,
         p_failure_reason: "Communication provider request failed",
@@ -418,6 +448,10 @@ function createFailingDependencies(): ConversationOpenRouteDependencies {
 }
 
 function createDependencies(options: {
+  adminRpc?: (
+    functionName: string,
+    args: Record<string, unknown>,
+  ) => { data: unknown; error: SupabaseError | null };
   authError?: SupabaseError | null;
   chatwootClient?: Record<string, (input: Record<string, unknown>) => Promise<unknown>>;
   rpc: (
@@ -427,6 +461,15 @@ function createDependencies(options: {
   userId?: string | null;
 }): ConversationOpenRouteDependencies {
   return {
+    createAdminSupabaseClient: () => ({
+      rpc: async (functionName: string, args: Record<string, unknown>) => {
+        if (!options.adminRpc) {
+          throw new Error("admin rpc should not run for this test");
+        }
+
+        return options.adminRpc(functionName, args);
+      },
+    }),
     createChatwootClient: () => options.chatwootClient ?? createFailingChatwootClient(),
     createServerSupabaseClient: async () => ({
       auth: {

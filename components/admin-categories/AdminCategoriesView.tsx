@@ -150,20 +150,14 @@ export default function AdminCategoriesView() {
     setDetail(result?.type === "category" ? result.detail : null);
   }, []);
 
-  const handleSelectCategory = useCallback(async (categoryId: string) => {
+  const handleSelectCategory = useCallback((row: CategoryRowType) => {
     setActionError(null);
     setActionSuccess(null);
-    setSelectedId(categoryId);
+    setSelectedId(row.id);
     setShowCreate(false);
-    setDetailLoading(true);
-    try {
-      await loadCategoryDetail(categoryId);
-    } catch (err) {
-      if (!mountedRef.current) return;
-      setActionError(safeErrorMessage(err));
-    } finally {
-      if (mountedRef.current) setDetailLoading(false);
-    }
+    setDetail(row.detail);
+    setDetailLoading(false);
+    void loadCategoryDetail(row.id);
   }, [loadCategoryDetail]);
 
   const refreshAfterMutation = useCallback(
@@ -370,12 +364,12 @@ function CategoryRowItem({
 }: {
   row: CategoryRowType;
   selected: boolean;
-  onSelect: (id: string) => void;
+  onSelect: (row: CategoryRowType) => void;
 }) {
   return (
     <button
       type="button"
-      onClick={() => onSelect(row.id)}
+      onClick={() => onSelect(row)}
       className={selected ? adminLayout.listItemSelected : adminLayout.listItem}
     >
       <div className={adminLayout.listItemHeader}>

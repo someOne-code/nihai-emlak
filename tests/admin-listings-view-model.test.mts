@@ -173,6 +173,10 @@ function createSnapshot() {
       is_checkout_ready: true,
       missing: [] as string[],
     },
+    publish_readiness: {
+      is_publish_ready: true,
+      missing: [] as string[],
+    },
   };
 }
 
@@ -266,6 +270,10 @@ test("admin listings view-model returns sanitized detail when snapshot is provid
   assert.equal(model.detail.availableServices[1].code, "phase8_extra_service");
   assert.deepEqual(model.detail.checkoutEligibility, {
     isCheckoutReady: true,
+    missing: [],
+  });
+  assert.deepEqual(model.detail.publishReadiness, {
+    isPublishReady: true,
     missing: [],
   });
 });
@@ -688,6 +696,10 @@ function createReadinessDetail(overrides: {
     checkoutEligibility: {
       isCheckoutReady: overrides.isReady ?? false,
       missing: overrides.missing ?? [],
+    },
+    publishReadiness: {
+      isPublishReady: true,
+      missing: [],
     },
   };
 }

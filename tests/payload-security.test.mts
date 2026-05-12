@@ -136,7 +136,7 @@ test("Payload users admin surface requires admin role", () => {
   );
 });
 
-test("Payload legacy users without role keep admin access until backfill", () => {
+test("Payload legacy users with null role are no longer promoted to admin after backfill", () => {
   assert.equal(
     canAccessPayloadAdmin({
       req: {
@@ -146,7 +146,7 @@ test("Payload legacy users without role keep admin access until backfill", () =>
         },
       },
     }),
-    true,
+    false,
   );
 
   assert.equal(
@@ -158,7 +158,7 @@ test("Payload legacy users without role keep admin access until backfill", () =>
         },
       },
     }),
-    true,
+    false,
   );
 });
 

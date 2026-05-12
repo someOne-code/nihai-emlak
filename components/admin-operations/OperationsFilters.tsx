@@ -21,6 +21,7 @@ const RESERVATION_STATUS_OPTIONS = [
 
 const QUEUE_OPTIONS = [
   { value: "all", label: "Tümü" },
+  { value: "payment_waiting", label: "Ödeme Bekleyenler" },
   { value: "document_waiting", label: "Belge Bekleyenler" },
   { value: "refund_requests", label: "İptal / İade Talepleri" },
   { value: "manual_refunds", label: "Manuel İade Bekleyenler" },

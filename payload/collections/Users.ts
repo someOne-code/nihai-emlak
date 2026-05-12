@@ -101,6 +101,5 @@ function canAccessOwnPayloadUser(args: PayloadUserAccessArgs): boolean | OwnUser
 }
 
 function isPayloadAdmin(user: PayloadUserAccessArgs["req"]["user"]): boolean {
-  // Legacy Payload users predate the explicit role field; only persisted null keeps admin access during backfill.
-  return user?.collection === "users" && (user.role === "admin" || user.role === null);
+  return user?.collection === "users" && user.role === "admin";
 }

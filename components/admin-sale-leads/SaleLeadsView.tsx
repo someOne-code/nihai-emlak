@@ -35,6 +35,8 @@ import {
   SALE_LEADS_INITIAL_FILTER_STATE,
   SaleLeadsFilters,
   applySaleLeadFilters,
+  buildSaleLeadsBackendFilters,
+  hasSaleLeadsBackendFilterChange,
   type SaleLeadsFilterState,
 } from "./SaleLeadsFilters";
 import { SaleLeadStatusBadge } from "./SaleLeadStatusBadge";
@@ -64,7 +66,9 @@ export default function SaleLeadsView() {
     setLoading(true);
     setError(null);
     try {
-      const result = await loadSaleLeadsModel({ filters: nextFilters });
+      const result = await loadSaleLeadsModel({
+        filters: buildSaleLeadsBackendFilters(nextFilters),
+      });
       if (!mountedRef.current) return;
       if (!result.ok) {
         setError(result.error);
@@ -81,10 +85,13 @@ export default function SaleLeadsView() {
 
   const handleFiltersChange = useCallback(
     (nextFilters: SaleLeadsFilterState) => {
+      const shouldReload = hasSaleLeadsBackendFilterChange(filters, nextFilters);
       setFilters(nextFilters);
-      void loadData(nextFilters);
+      if (shouldReload) {
+        void loadData(nextFilters);
+      }
     },
-    [loadData],
+    [filters, loadData],
   );
 
   useEffect(() => {

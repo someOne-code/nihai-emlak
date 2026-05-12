@@ -220,7 +220,7 @@ export async function handlePaymentCallbackPost(
   const verified = safeCompareHash(providedHash, calculatedHash);
 
   if (!verified) {
-    await dependencies.sendInngestEvent({
+    await sendBestEffortInngestEvent(dependencies, {
       name: "payment/callback.rejected",
       data: {
         provider: "isbank",
@@ -252,7 +252,7 @@ export async function handlePaymentCallbackPost(
   );
   if (!preparedCallback.ok) {
     if (preparedCallback.callbackContractRejection) {
-      await dependencies.sendInngestEvent({
+      await sendBestEffortInngestEvent(dependencies, {
         name: "payment/callback.rejected",
         data: {
           provider: "isbank",
@@ -387,7 +387,7 @@ export async function handlePaymentCallbackPost(
     );
   }
 
-  await dependencies.sendInngestEvent({
+  await sendBestEffortInngestEvent(dependencies, {
     name: "payment/callback.received",
     data: {
       provider: "isbank",
@@ -417,6 +417,23 @@ export async function handlePaymentCallbackPost(
       paymentId: checkoutResult.paymentId,
     },
   });
+}
+
+async function sendBestEffortInngestEvent(
+  dependencies: PaymentCallbackRouteDependencies,
+  event: {
+    name: string;
+    data: Record<string, unknown>;
+  },
+): Promise<void> {
+  try {
+    await dependencies.sendInngestEvent(event);
+  } catch (error) {
+    console.error("Payment callback Inngest event dispatch failed", {
+      eventName: event.name,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
 }
 
 async function registerCallbackReceipt(

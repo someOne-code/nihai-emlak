@@ -151,6 +151,8 @@ values
   'TRY'
 );
 
+reset role;
+
 insert into public.main_item_catalog (
   id,
   code,
@@ -165,7 +167,7 @@ values
 (
   '88888888-7777-4777-8777-777777777761'::uuid,
   'deposit_t4',
-  'Kapora',
+  'Kapora T4',
   'fixed',
   15000,
   null,
@@ -175,7 +177,7 @@ values
 (
   '88888888-7777-4777-8777-777777777762'::uuid,
   'first_rent_t4',
-  'Bir Aylik Kira',
+  'Bir Aylik Kira T4',
   'listing_price_multiplier',
   null,
   1.0,
@@ -183,25 +185,29 @@ values
   2
 ),
 (
-  '88888888-7777-4777-8777-777777777763'::uuid,
-  'dup_one_t4',
-  'Ayni Etiket',
-  'fixed',
-  1000,
+	  '88888888-7777-4777-8777-777777777763'::uuid,
+	  'dup_one_t4',
+	  'Ek Kalem Bir',
+	  'fixed',
+	  1000,
   null,
   true,
   3
 ),
 (
-  '88888888-7777-4777-8777-777777777764'::uuid,
-  'dup_two_t4',
-  'Ayni Etiket',
-  'fixed',
-  2000,
+	  '88888888-7777-4777-8777-777777777764'::uuid,
+	  'dup_two_t4',
+	  'Ek Kalem Iki',
+	  'fixed',
+	  2000,
   null,
   true,
-  4
-);
+	  4
+	);
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', '66666666-7777-4777-8777-777777777761', false);
+select set_config('request.jwt.claim.role', 'authenticated', false);
 
 insert into public.listing_main_item_options (
   id,
@@ -245,6 +251,8 @@ values
   2
 );
 
+reset role;
+
 insert into public.service_catalog (
   id,
   code,
@@ -257,8 +265,12 @@ values (
   'cleaning_t4',
   'Temizlik',
   2500,
-  true
-);
+	  true
+	);
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', '66666666-7777-4777-8777-777777777761', false);
+select set_config('request.jwt.claim.role', 'authenticated', false);
 
 insert into public.listing_service_options (
   id,
@@ -902,7 +914,7 @@ begin
 end;
 $$;
 
--- TEST 4: same display label with different main item codes remains a valid checkout
+-- TEST 4: multiple active main item codes remain a valid checkout when visible labels are distinct
 do $$
 declare
   v_result jsonb;
@@ -912,7 +924,7 @@ declare
   v_order_count integer;
   v_payment_count integer;
   v_order_item_count integer;
-  v_duplicate_label_count integer;
+  v_main_item_label_count integer;
   v_code_count integer;
   v_item_sum numeric(12, 2);
 begin
@@ -923,7 +935,7 @@ begin
     1,
     array['dup_one_t4', 'dup_two_t4'],
     array[]::text[],
-    'Ayni etiket farkli kod kontrolu',
+    'Coklu ana kalem kontrolu',
     'Phase3 Contact User',
     '+905551112233',
     null,
@@ -935,7 +947,7 @@ begin
   );
 
   if v_result->>'result' <> 'created' then
-    raise exception 'TEST 4 FAILED: expected created result for duplicate labels with distinct codes, got %',
+    raise exception 'TEST 4 FAILED: expected created result for distinct main item codes, got %',
       v_result;
   end if;
 
@@ -976,11 +988,11 @@ begin
   where r.listing_id = '77777777-7777-4777-8777-777777777762'::uuid;
 
   select count(*), coalesce(sum(amount), 0)
-  into v_duplicate_label_count, v_item_sum
+  into v_main_item_label_count, v_item_sum
   from public.order_items
   where order_id = v_order_id
     and item_type = 'main_item'
-    and label = 'Ayni Etiket';
+    and label in ('Ek Kalem Bir', 'Ek Kalem Iki');
 
   select count(*)
   into v_code_count
@@ -991,18 +1003,18 @@ begin
 
   if v_reservation_count <> 1
      or v_order_count <> 1
-     or v_payment_count <> 1
-     or v_order_item_count <> 2
-     or v_duplicate_label_count <> 2
-     or v_code_count <> 2
-     or v_item_sum <> 3000 then
-    raise exception
-      'TEST 4 FAILED: duplicate-label checkout mismatch reservation=% order=% payment=% item=% label_count=% code_count=% sum=%',
+	     or v_payment_count <> 1
+	     or v_order_item_count <> 2
+	     or v_main_item_label_count <> 2
+	     or v_code_count <> 2
+	     or v_item_sum <> 3000 then
+	    raise exception
+	      'TEST 4 FAILED: multi-main-item checkout mismatch reservation=% order=% payment=% item=% label_count=% code_count=% sum=%',
       v_reservation_count,
       v_order_count,
       v_payment_count,
       v_order_item_count,
-      v_duplicate_label_count,
+	      v_main_item_label_count,
       v_code_count,
       v_item_sum;
   end if;

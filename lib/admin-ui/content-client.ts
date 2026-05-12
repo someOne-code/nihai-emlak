@@ -14,6 +14,7 @@ export type ContentAdminFetch = (
 
 export type ContentAdminClientOptions = {
   fetcher?: ContentAdminFetch;
+  requestTimeoutMs?: number;
 };
 
 export class ContentAdminClientError extends Error {
@@ -54,11 +55,25 @@ async function requestJson<T = unknown>(
   options: ContentAdminClientOptions,
 ): Promise<T> {
   const fetcher = options.fetcher ?? globalThis.fetch.bind(globalThis);
-  const response = await fetcher(url, {
-    ...init,
-    credentials: "same-origin",
-    cache: "no-store",
-  });
+  const controller = new AbortController();
+  const timeoutMs = options.requestTimeoutMs ?? 15_000;
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let response: Response;
+  try {
+    response = await fetcher(url, {
+      ...init,
+      credentials: "same-origin",
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new ContentAdminClientError("İçerik isteği zaman aşımına uğradı.", 408);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
   const envelope = await readEnvelope(response);
   if (!envelope.success) throw new ContentAdminClientError(envelope.error, response.status);
   return envelope.data as T;

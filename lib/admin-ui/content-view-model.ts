@@ -17,6 +17,7 @@ export type PostRow = {
   categoryLabel: string;
   publishedAt: string | null;
   updatedAt: string;
+  detail: PostDetail;
 };
 
 export type PostDetail = {
@@ -67,6 +68,7 @@ export function buildPostsListViewModel(data: unknown): PostsListViewModel {
     categoryLabel: isRecord(item.category) ? (asString(item.category.title) ?? "—") : "—",
     publishedAt: asString(item.publishedAt),
     updatedAt: asString(item.updatedAt) ?? "",
+    detail: buildPostDetail(item) ?? buildFallbackPostDetail(item),
   }));
   return {
     rows,
@@ -74,6 +76,24 @@ export function buildPostsListViewModel(data: unknown): PostsListViewModel {
     page: asNumber(data.page) ?? 1,
     totalPages: asNumber(data.totalPages) ?? 0,
     isEmpty: rows.length === 0,
+  };
+}
+
+function buildFallbackPostDetail(item: Record<string, unknown>): PostDetail {
+  return {
+    id: asString(item.id) ?? "",
+    title: asString(item.title) ?? "",
+    slug: asString(item.slug) ?? "",
+    excerpt: null,
+    content: "",
+    category: null,
+    status: normalizePostStatus(item.status),
+    publishedAt: asString(item.publishedAt),
+    coverImageUrl: null,
+    seoTitle: null,
+    seoDescription: null,
+    createdAt: asString(item.createdAt) ?? "",
+    updatedAt: asString(item.updatedAt) ?? "",
   };
 }
 
@@ -109,6 +129,7 @@ export type CategoryRow = {
   isActiveLabel: string;
   sortOrder: number;
   updatedAt: string;
+  detail: CategoryDetail;
 };
 
 export type CategoryDetail = {
@@ -156,6 +177,7 @@ export function buildCategoriesListViewModel(data: unknown): CategoriesListViewM
     isActiveLabel: item.isActive === true ? "Aktif" : "Pasif",
     sortOrder: asNumber(item.sortOrder) ?? 0,
     updatedAt: asString(item.updatedAt) ?? "",
+    detail: buildCategoryDetail(item) ?? buildFallbackCategoryDetail(item),
   }));
   return {
     rows,
@@ -163,6 +185,26 @@ export function buildCategoriesListViewModel(data: unknown): CategoriesListViewM
     page: asNumber(data.page) ?? 1,
     totalPages: asNumber(data.totalPages) ?? 0,
     isEmpty: rows.length === 0,
+  };
+}
+
+function buildFallbackCategoryDetail(item: Record<string, unknown>): CategoryDetail {
+  return {
+    id: asString(item.id) ?? "",
+    title: asString(item.title) ?? "",
+    slug: asString(item.slug) ?? "",
+    description: asString(item.description),
+    isActive: item.isActive === true,
+    sortOrder: asNumber(item.sortOrder) ?? 0,
+    linkedPosts: [],
+    linkedPostCount: 0,
+    deleteWarning: {
+      hasLinkedPosts: false,
+      linkedPostCount: 0,
+      message: null,
+    },
+    createdAt: asString(item.createdAt) ?? "",
+    updatedAt: asString(item.updatedAt) ?? "",
   };
 }
 
@@ -218,6 +260,7 @@ export type ConsultantRow = {
   isPublishedLabel: string;
   sortOrder: number;
   updatedAt: string;
+  detail: ConsultantDetail;
 };
 
 export type ConsultantDetail = {
@@ -263,6 +306,7 @@ export function buildConsultantsListViewModel(data: unknown): ConsultantsListVie
     isPublishedLabel: item.isPublished === true ? "Yayında" : "Taslak",
     sortOrder: asNumber(item.sortOrder) ?? 0,
     updatedAt: asString(item.updatedAt) ?? "",
+    detail: buildConsultantDetail(item) ?? buildFallbackConsultantDetail(item),
   }));
   return {
     rows,
@@ -270,6 +314,27 @@ export function buildConsultantsListViewModel(data: unknown): ConsultantsListVie
     page: asNumber(data.page) ?? 1,
     totalPages: asNumber(data.totalPages) ?? 0,
     isEmpty: rows.length === 0,
+  };
+}
+
+function buildFallbackConsultantDetail(item: Record<string, unknown>): ConsultantDetail {
+  return {
+    id: asString(item.id) ?? "",
+    fullName: asString(item.fullName) ?? "",
+    slug: asString(item.slug) ?? "",
+    title: asString(item.title),
+    photoUrl: null,
+    shortBio: null,
+    phone: null,
+    email: null,
+    whatsappUrl: null,
+    linkedinUrl: null,
+    isPublished: item.isPublished === true,
+    sortOrder: asNumber(item.sortOrder) ?? 0,
+    previewLink: "",
+    relatedCounts: { contactChannels: 0, externalLinks: 0 },
+    createdAt: asString(item.createdAt) ?? "",
+    updatedAt: asString(item.updatedAt) ?? "",
   };
 }
 

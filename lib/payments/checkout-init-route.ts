@@ -77,6 +77,7 @@ type OrderRow = {
 type PendingPaymentRow = {
   id: string;
   orderId: string;
+  userId: string | null;
   amount: number;
   currency: string;
   providerRef: string;
@@ -247,6 +248,7 @@ export async function handleCheckoutInitPost(
     dependencies.createServiceRoleSupabaseClient,
     payment,
     order,
+    userId,
   );
   if (!reconciledPaymentResult.ok) {
     return Response.json(
@@ -304,7 +306,7 @@ async function getExistingPendingIsbankPayment(
 > {
   const pendingPaymentSelect = await supabase
     .from("payments")
-    .select("id,order_id,amount,currency,status,provider_ref")
+    .select("id,order_id,user_id,amount,currency,status,provider_ref")
     .eq("order_id", orderId)
     .eq("user_id", userId)
     .eq("provider", "isbank")
@@ -353,6 +355,7 @@ async function reconcilePendingPaymentWithOrder(
   createServiceRoleSupabaseClient: () => Promise<unknown>,
   payment: PendingPaymentRow,
   order: OrderRow,
+  userId: string,
 ): Promise<
   | { ok: true; payment: PendingPaymentRow }
   | { ok: false; status: number; error: string }
@@ -380,6 +383,17 @@ async function reconcilePendingPaymentWithOrder(
       ok: false,
       status: 409,
       error: "Pending payment no longer belongs to order",
+    };
+  }
+
+  if (
+    refreshedPaymentResult.payment.userId !== null
+    && refreshedPaymentResult.payment.userId !== userId
+  ) {
+    return {
+      ok: false,
+      status: 409,
+      error: "Pending payment no longer belongs to user",
     };
   }
 
@@ -417,7 +431,7 @@ async function refreshPendingPaymentForCheckoutInit(
 
   const paymentSelect = await supabase
     .from("payments")
-    .select("id,order_id,amount,currency,status,provider_ref")
+    .select("id,order_id,user_id,amount,currency,status,provider_ref")
     .eq("id", paymentId)
     .eq("status", "pending")
     .maybeSingle();
@@ -553,18 +567,28 @@ function parsePendingPaymentRow(value: unknown): PendingPaymentRow | null {
   const row = value as Record<string, unknown>;
   const id = asUuid(row.id);
   const orderId = asUuid(row.order_id);
+  const userId = row.user_id === undefined ? null : asUuid(row.user_id);
   const amount = asAmount(row.amount);
   const currency = asCurrency(row.currency);
   const status = asNonEmptyString(row.status);
   const providerRef = asNonEmptyString(row.provider_ref);
 
-  if (!id || !orderId || amount === null || !currency || !providerRef || status !== "pending") {
+  if (
+    !id
+    || !orderId
+    || (row.user_id !== undefined && !userId)
+    || amount === null
+    || !currency
+    || !providerRef
+    || status !== "pending"
+  ) {
     return null;
   }
 
   return {
     id,
     orderId,
+    userId,
     amount,
     currency,
     providerRef,

@@ -443,7 +443,7 @@ test("operations view model assigns queue labels and sorts risky work first", ()
       ["reservation-refund-request", "refund_requests", "İptal / iade talebi"],
       ["reservation-refund", "manual_refunds", "Manuel iade bekliyor"],
       ["reservation-docs", "document_waiting", "Belge bekliyor"],
-      ["reservation-waiting-payment", "all", "\u00d6deme bekliyor"],
+      ["reservation-waiting-payment", "payment_waiting", "Ödeme bekleniyor"],
       ["reservation-payment-closed", "all", "Ödeme alınmadı / süreç kapandı"],
     ],
   );
@@ -503,6 +503,423 @@ test("operations view model labels confirmed paid reservations as rented contrac
 
   assert.equal(model.rows[0]?.queue, "completed");
   assert.equal(model.rows[0]?.primaryStatus, "Kiralandı / Sözleşme tamamlandı");
+});
+
+test("operations queue: refund_required without successful payment does NOT route to refund_requests", () => {
+  const model = buildOperationsViewModel({
+    overview: createOverview({
+      reservations: {
+        items: [
+          {
+            ...reservationRow("res-no-pay-refund", "Unpaid Refund Listing", "pending"),
+            finance_ops: { status: "refund_required" },
+          },
+          {
+            ...reservationRow("res-pending-pay-refund", "Pending Pay Refund Listing", "cancelled"),
+            finance_ops: { status: "refund_required" },
+          },
+          {
+            ...reservationRow("res-paid-refund", "Paid Refund Listing", "pending"),
+            finance_ops: { status: "refund_required" },
+          },
+        ],
+        limit: 20,
+        offset: 0,
+      },
+      orders: {
+        items: [
+          orderRow("order-pending-pay", "res-pending-pay-refund"),
+          orderRow("order-paid", "res-paid-refund"),
+        ],
+        limit: 100,
+        offset: 0,
+      },
+      payments: {
+        items: [
+          paymentRow("pay-pending", "order-pending-pay", "pending"),
+          paymentRow("pay-succeeded", "order-paid", "succeeded"),
+        ],
+        limit: 100,
+        offset: 0,
+      },
+    }),
+    selectedReservationId: null,
+    actionPending: null,
+  });
+
+  const rowMap = Object.fromEntries(model.rows.map((r) => [r.reservationId, r.queue]));
+
+  // No payment at all → should NOT be in refund queue
+  assert.notEqual(rowMap["res-no-pay-refund"], "refund_requests",
+    "reservation without any payment must not be in refund_requests");
+
+  // Payment pending → should NOT be in refund queue
+  assert.notEqual(rowMap["res-pending-pay-refund"], "refund_requests",
+    "reservation with pending payment must not be in refund_requests");
+
+  // Payment succeeded → correctly in refund queue
+  assert.equal(rowMap["res-paid-refund"], "refund_requests",
+    "reservation with succeeded payment and refund_required should be in refund_requests");
+});
+
+test("operations queue: pending bank payment routes to payment waiting, not generic operations", () => {
+  const model = buildOperationsViewModel({
+    overview: createOverview({
+      reservations: {
+        items: [
+          reservationRow("res-pending-payment", "Pending Payment Listing", "pending"),
+        ],
+        limit: 20,
+        offset: 0,
+      },
+      orders: {
+        items: [
+          { ...orderRow("order-pending-payment", "res-pending-payment"), status: "pending" },
+        ],
+        limit: 100,
+        offset: 0,
+      },
+      payments: {
+        items: [
+          paymentRow("pay-pending-payment", "order-pending-payment", "pending"),
+        ],
+        limit: 100,
+        offset: 0,
+      },
+    }),
+    selectedReservationId: null,
+    actionPending: null,
+  });
+
+  const row = model.rows.find((r) => r.reservationId === "res-pending-payment");
+
+  assert.equal(row?.queue, "payment_waiting");
+  assert.equal(row?.primaryStatus, "Ödeme bekleniyor");
+  assert.equal(row?.orderRecordLabel, "Ödeme işlemi");
+});
+
+test("operations queue: pending payment with stale finance issue still routes to payment waiting", () => {
+  const model = buildOperationsViewModel({
+    overview: createOverview({
+      reservations: {
+        items: [
+          {
+            ...reservationRow("res-pending-stale-issue", "Pending Stale Issue", "pending"),
+            finance_ops: { status: "manual_resolution_required" },
+          },
+        ],
+        limit: 20,
+        offset: 0,
+      },
+      orders: {
+        items: [
+          { ...orderRow("order-pending-stale-issue", "res-pending-stale-issue"), status: "pending" },
+        ],
+        limit: 100,
+        offset: 0,
+      },
+      payments: {
+        items: [],
+        limit: 100,
+        offset: 0,
+      },
+    }),
+    selectedReservationId: null,
+    actionPending: null,
+  });
+
+  const row = model.rows.find((r) => r.reservationId === "res-pending-stale-issue");
+
+  assert.equal(row?.queue, "payment_waiting");
+  assert.equal(row?.primaryStatus, "Ödeme bekleniyor");
+});
+
+test("operations queue: cancelled reservation with failed payment stays in 'all', not manual_refunds", () => {
+  const model = buildOperationsViewModel({
+    overview: createOverview({
+      reservations: {
+        items: [
+          reservationRow("res-cancelled-failed", "Cancelled Failed Listing", "cancelled"),
+        ],
+        limit: 20,
+        offset: 0,
+      },
+      orders: {
+        items: [
+          { ...orderRow("order-failed", "res-cancelled-failed"), status: "failed" },
+        ],
+        limit: 100,
+        offset: 0,
+      },
+      payments: {
+        items: [
+          paymentRow("pay-failed", "order-failed", "failed"),
+        ],
+        limit: 100,
+        offset: 0,
+      },
+    }),
+    selectedReservationId: null,
+    actionPending: null,
+  });
+
+  const row = model.rows.find((r) => r.reservationId === "res-cancelled-failed");
+  assert.notEqual(row?.queue, "manual_refunds",
+    "cancelled + failed payment has nothing to refund, must not be in manual_refunds");
+  assert.notEqual(row?.queue, "refund_requests",
+    "cancelled + failed payment has nothing to refund, must not be in refund_requests");
+});
+
+test("operations queue: expired reservation with succeeded payment routes to manual_refunds, not document_waiting", () => {
+  const model = buildOperationsViewModel({
+    overview: createOverview({
+      reservations: {
+        items: [
+          reservationRow("res-expired-paid", "Expired Paid Listing", "expired"),
+        ],
+        limit: 20,
+        offset: 0,
+      },
+      orders: {
+        items: [
+          { ...orderRow("order-expired", "res-expired-paid"), status: "completed" },
+        ],
+        limit: 100,
+        offset: 0,
+      },
+      payments: {
+        items: [
+          paymentRow("pay-expired", "order-expired", "succeeded"),
+        ],
+        limit: 100,
+        offset: 0,
+      },
+    }),
+    selectedReservationId: null,
+    actionPending: null,
+  });
+
+  const row = model.rows.find((r) => r.reservationId === "res-expired-paid");
+  assert.notEqual(row?.queue, "document_waiting",
+    "expired reservation cannot wait for documents — payment must be refunded");
+  assert.equal(row?.queue, "manual_refunds",
+    "expired + succeeded payment should route to manual_refunds");
+});
+
+test("operations queue: refunded payment routes to completed, not 'all'", () => {
+  const model = buildOperationsViewModel({
+    overview: createOverview({
+      reservations: {
+        items: [
+          reservationRow("res-refunded", "Refunded Listing", "cancelled"),
+        ],
+        limit: 20,
+        offset: 0,
+      },
+      orders: {
+        items: [
+          { ...orderRow("order-refunded", "res-refunded"), status: "completed" },
+        ],
+        limit: 100,
+        offset: 0,
+      },
+      payments: {
+        items: [
+          paymentRow("pay-refunded", "order-refunded", "refunded"),
+        ],
+        limit: 100,
+        offset: 0,
+      },
+    }),
+    selectedReservationId: null,
+    actionPending: null,
+  });
+
+  const row = model.rows.find((r) => r.reservationId === "res-refunded");
+  assert.equal(row?.queue, "completed",
+    "refunded payment means the process is complete — should be in completed queue");
+});
+
+test("operations queue: confirmed reservation without successful payment does NOT route to completed", () => {
+  const model = buildOperationsViewModel({
+    overview: createOverview({
+      reservations: {
+        items: [
+          reservationRow("res-confirmed-no-pay", "Confirmed No Pay", "confirmed"),
+          reservationRow("res-confirmed-pending", "Confirmed Pending Pay", "confirmed"),
+          reservationRow("res-confirmed-paid", "Confirmed Paid", "confirmed"),
+        ],
+        limit: 20,
+        offset: 0,
+      },
+      orders: {
+        items: [
+          orderRow("order-pending-conf", "res-confirmed-pending"),
+          { ...orderRow("order-paid-conf", "res-confirmed-paid"), status: "completed" },
+        ],
+        limit: 100,
+        offset: 0,
+      },
+      payments: {
+        items: [
+          paymentRow("pay-pending-conf", "order-pending-conf", "pending"),
+          paymentRow("pay-paid-conf", "order-paid-conf", "succeeded"),
+        ],
+        limit: 100,
+        offset: 0,
+      },
+    }),
+    selectedReservationId: null,
+    actionPending: null,
+  });
+
+  const rowMap = Object.fromEntries(model.rows.map((r) => [r.reservationId, r.queue]));
+
+  // No payment at all → should NOT be completed
+  assert.notEqual(rowMap["res-confirmed-no-pay"], "completed",
+    "confirmed without any payment must not be in completed — payment anomaly");
+
+  // Payment pending → should NOT be completed
+  assert.notEqual(rowMap["res-confirmed-pending"], "completed",
+    "confirmed with pending payment must not be in completed");
+
+  // Payment succeeded → correctly completed
+  assert.equal(rowMap["res-confirmed-paid"], "completed",
+    "confirmed with succeeded payment should be in completed");
+});
+
+test("operations queue: reservations without any order are excluded from rows (pre-checkout)", () => {
+  const model = buildOperationsViewModel({
+    overview: createOverview({
+      reservations: {
+        items: [
+          reservationRow("res-with-order", "Has Order Listing", "pending"),
+          reservationRow("res-no-order", "No Order Listing", "pending"),
+          reservationRow("res-no-order-2", "No Order Listing 2", "pending"),
+        ],
+        limit: 20,
+        offset: 0,
+      },
+      orders: {
+        items: [
+          orderRow("order-1", "res-with-order"),
+        ],
+        limit: 100,
+        offset: 0,
+      },
+      payments: {
+        items: [
+          paymentRow("pay-1", "order-1", "pending"),
+        ],
+        limit: 100,
+        offset: 0,
+      },
+    }),
+    selectedReservationId: null,
+    actionPending: null,
+  });
+
+  const ids = model.rows.map((r) => r.reservationId);
+
+  assert.ok(ids.includes("res-with-order"),
+    "reservation with an order should appear in rows");
+  assert.ok(!ids.includes("res-no-order"),
+    "reservation without any order must NOT appear in operations queue");
+  assert.ok(!ids.includes("res-no-order-2"),
+    "reservation without any order must NOT appear in operations queue");
+});
+
+test("operations queue: primaryStatus labels for terminal payment states are descriptive", () => {
+  const model = buildOperationsViewModel({
+    overview: createOverview({
+      reservations: {
+        items: [
+          reservationRow("res-refunded-label", "Refunded Label", "cancelled"),
+          reservationRow("res-failed-label", "Failed Label", "pending"),
+        ],
+        limit: 20,
+        offset: 0,
+      },
+      orders: {
+        items: [
+          { ...orderRow("order-refunded-label", "res-refunded-label"), status: "completed" },
+          { ...orderRow("order-failed-label", "res-failed-label"), status: "failed" },
+        ],
+        limit: 100,
+        offset: 0,
+      },
+      payments: {
+        items: [
+          paymentRow("pay-refunded-label", "order-refunded-label", "refunded"),
+          paymentRow("pay-failed-label", "order-failed-label", "failed"),
+        ],
+        limit: 100,
+        offset: 0,
+      },
+    }),
+    selectedReservationId: null,
+    actionPending: null,
+  });
+
+  const refundedRow = model.rows.find((r) => r.reservationId === "res-refunded-label");
+  const failedRow = model.rows.find((r) => r.reservationId === "res-failed-label");
+
+  assert.notEqual(refundedRow?.primaryStatus, "Kiralandı / Sözleşme tamamlandı",
+    "refunded payment should NOT show 'rented' label");
+  assert.match(refundedRow?.primaryStatus ?? "", /[İi]ade/,
+    "refunded payment primaryStatus should mention 'iade' (refund)");
+
+  assert.notEqual(failedRow?.primaryStatus, "Operasyon",
+    "failed payment should have a descriptive label, not generic 'Operasyon'");
+  assert.match(failedRow?.primaryStatus ?? "", /başarısız/i,
+    "failed payment primaryStatus should mention 'başarısız' (failed)");
+});
+
+test("operations queue: refund_requested without successful payment does NOT route to manual_refunds", () => {
+  const model = buildOperationsViewModel({
+    overview: createOverview({
+      reservations: {
+        items: [
+          {
+            ...reservationRow("res-no-pay-manual", "Unpaid Manual Listing", "cancelled"),
+            finance_ops: { status: "refund_requested" },
+          },
+          {
+            ...reservationRow("res-paid-manual", "Paid Manual Listing", "cancelled"),
+            finance_ops: { status: "refund_requested" },
+          },
+        ],
+        limit: 20,
+        offset: 0,
+      },
+      orders: {
+        items: [
+          orderRow("order-paid-manual", "res-paid-manual"),
+        ],
+        limit: 100,
+        offset: 0,
+      },
+      payments: {
+        items: [
+          paymentRow("pay-manual-succeeded", "order-paid-manual", "succeeded"),
+        ],
+        limit: 100,
+        offset: 0,
+      },
+    }),
+    selectedReservationId: null,
+    actionPending: null,
+  });
+
+  const rowMap = Object.fromEntries(model.rows.map((r) => [r.reservationId, r.queue]));
+
+  // No payment → should NOT be in manual_refunds
+  assert.notEqual(rowMap["res-no-pay-manual"], "manual_refunds",
+    "reservation without payment must not be in manual_refunds");
+
+  // Payment succeeded → correctly in manual_refunds
+  assert.equal(rowMap["res-paid-manual"], "manual_refunds",
+    "reservation with succeeded payment and refund_requested should be in manual_refunds");
 });
 
 test("operations action executor requires cancel note and sends refund decision", async () => {
@@ -1166,6 +1583,45 @@ test("operations loader clears stale selection when filtered overview does not i
   assert.deepEqual(model.actions, []);
 });
 
+test("operations loader does not auto-select the first reservation on initial load", async () => {
+  const calls: string[] = [];
+  const model = await loadOperationsModel({
+    loadAdminOperationsOverview: async () => {
+      calls.push("overview");
+      return createOverview();
+    },
+    fetchReservationWorkflowSnapshot: async (reservationId) => {
+      calls.push(`reservation:${reservationId}`);
+      return {};
+    },
+    fetchReservationDocumentTracking: async (reservationId) => {
+      calls.push(`documents:${reservationId}`);
+      return {};
+    },
+    fetchReservationFinanceOps: async (reservationId) => {
+      calls.push(`finance:${reservationId}`);
+      return {};
+    },
+    fetchReservationEventHistory: async (reservationId) => {
+      calls.push(`events:${reservationId}`);
+      return { items: [] };
+    },
+    fetchListingWorkflowSnapshot: async (listingId) => {
+      calls.push(`listing:${listingId}`);
+      return {};
+    },
+    loadAdminPaymentEvents: async () => ({ items: [], limit: 20, offset: 0 }),
+  });
+
+  assert.deepEqual(calls, ["overview"]);
+  assert.equal(model.selectedReservationId, null);
+  assert.equal(model.reservationSnapshot, null);
+  assert.equal(model.documentTracking, null);
+  assert.equal(model.financeOps, null);
+  assert.deepEqual(model.eventHistory, []);
+  assert.equal(model.listingSnapshot, null);
+});
+
 test("operations loader starts independent selected reservation detail requests in parallel", async () => {
   const calls: string[] = [];
   let releaseDetails!: () => void;
@@ -1173,49 +1629,52 @@ test("operations loader starts independent selected reservation detail requests 
     releaseDetails = resolve;
   });
 
-  const modelPromise = loadOperationsModel({
-    loadAdminOperationsOverview: async () => {
-      calls.push("overview");
-      return {
-        reservations: {
-          items: [{ id: "reservation-1", listing_id: "listing-1" }],
-          limit: 20,
-          offset: 0,
-        },
-        orders: { items: [], limit: 100, offset: 0 },
-        payments: { items: [], limit: 100, offset: 0 },
-      };
+  const modelPromise = loadOperationsModel(
+    {
+      loadAdminOperationsOverview: async () => {
+        calls.push("overview");
+        return {
+          reservations: {
+            items: [{ id: "reservation-1", listing_id: "listing-1" }],
+            limit: 20,
+            offset: 0,
+          },
+          orders: { items: [{ id: "order-1", reservation_id: "reservation-1", status: "pending" }], limit: 100, offset: 0 },
+          payments: { items: [], limit: 100, offset: 0 },
+        };
+      },
+      fetchReservationWorkflowSnapshot: async (reservationId) => {
+        calls.push(`reservation:${reservationId}`);
+        await detailsCanResolve;
+        return {
+          reservation: { id: reservationId, status: "pending" },
+          listing: { id: "listing-1", status: "passive" },
+        };
+      },
+      fetchReservationDocumentTracking: async (reservationId) => {
+        calls.push(`documents:${reservationId}`);
+        await detailsCanResolve;
+        return { reservation_id: reservationId };
+      },
+      fetchReservationFinanceOps: async (reservationId) => {
+        calls.push(`finance:${reservationId}`);
+        await detailsCanResolve;
+        return { reservation_id: reservationId };
+      },
+      fetchReservationEventHistory: async (reservationId) => {
+        calls.push(`events:${reservationId}`);
+        await detailsCanResolve;
+        return { items: [] };
+      },
+      fetchListingWorkflowSnapshot: async (listingId) => {
+        calls.push(`listing:${listingId}`);
+        await detailsCanResolve;
+        return { listing: { id: listingId, status: "passive" } };
+      },
+      loadAdminPaymentEvents: async () => ({ items: [], limit: 20, offset: 0 }),
     },
-    fetchReservationWorkflowSnapshot: async (reservationId) => {
-      calls.push(`reservation:${reservationId}`);
-      await detailsCanResolve;
-      return {
-        reservation: { id: reservationId, status: "pending" },
-        listing: { id: "listing-1", status: "passive" },
-      };
-    },
-    fetchReservationDocumentTracking: async (reservationId) => {
-      calls.push(`documents:${reservationId}`);
-      await detailsCanResolve;
-      return { reservation_id: reservationId };
-    },
-    fetchReservationFinanceOps: async (reservationId) => {
-      calls.push(`finance:${reservationId}`);
-      await detailsCanResolve;
-      return { reservation_id: reservationId };
-    },
-    fetchReservationEventHistory: async (reservationId) => {
-      calls.push(`events:${reservationId}`);
-      await detailsCanResolve;
-      return { items: [] };
-    },
-    fetchListingWorkflowSnapshot: async (listingId) => {
-      calls.push(`listing:${listingId}`);
-      await detailsCanResolve;
-      return { listing: { id: listingId, status: "passive" } };
-    },
-    loadAdminPaymentEvents: async () => ({ items: [], limit: 20, offset: 0 }),
-  });
+    "reservation-1",
+  );
 
   await new Promise((resolve) => setImmediate(resolve));
 
@@ -1338,6 +1797,117 @@ test("operations view model maps expired status to Turkish label", () => {
   });
 
   assert.equal(model.rows[0]?.reservationStatus, "S\u00fcresi doldu");
+});
+
+test("operations loader tolerates partial detail fetch failures without crashing", async () => {
+  const model = await loadOperationsModel(
+    {
+      loadAdminOperationsOverview: async () => createOverview(),
+      fetchReservationWorkflowSnapshot: async (reservationId) => ({
+        reservation: { id: reservationId, status: "pending" },
+        listing: { id: "listing-1", status: "passive" },
+        eligibility: { can_cancel: true, can_confirm: true },
+      }),
+      fetchReservationDocumentTracking: async () => {
+        throw new Error("simulated document tracking 500");
+      },
+      fetchReservationFinanceOps: async () => {
+        throw new Error("simulated finance ops 404");
+      },
+      fetchReservationEventHistory: async () => ({ items: [] }),
+      fetchListingWorkflowSnapshot: async (listingId) => ({
+        listing: { id: listingId, status: "passive" },
+      }),
+      loadAdminPaymentEvents: async () => ({ items: [], limit: 20, offset: 0 }),
+    },
+    "reservation-1",
+  );
+
+  assert.equal(model.selectedReservationId, "reservation-1");
+  assert.notEqual(model.reservationSnapshot, null, "snapshot should still load when siblings fail");
+  assert.notEqual(model.listingSnapshot, null, "listing should still load when siblings fail");
+  assert.equal(model.documentTracking, null, "failed document tracking should be null, not throw");
+  assert.equal(model.financeOps, null, "failed finance ops should be null, not throw");
+});
+
+test("operations loader tolerates listing snapshot failure in fallback path without crashing", async () => {
+  const model = await loadOperationsModel(
+    {
+      loadAdminOperationsOverview: async () => ({
+        reservations: {
+          items: [{ id: "reservation-1", status: "pending" }],
+          limit: 20,
+          offset: 0,
+        },
+        orders: { items: [{ id: "order-1", reservation_id: "reservation-1", status: "pending" }], limit: 100, offset: 0 },
+        payments: { items: [], limit: 100, offset: 0 },
+      }),
+      fetchReservationWorkflowSnapshot: async (reservationId) => ({
+        reservation: { id: reservationId, status: "pending" },
+        listing: { id: "listing-fallback", status: "passive" },
+        eligibility: { can_cancel: true, can_confirm: true },
+      }),
+      fetchReservationDocumentTracking: async () => ({}),
+      fetchReservationFinanceOps: async () => ({}),
+      fetchReservationEventHistory: async () => ({ items: [] }),
+      fetchListingWorkflowSnapshot: async () => {
+        throw new Error("simulated listing snapshot 500");
+      },
+      loadAdminPaymentEvents: async () => ({ items: [], limit: 20, offset: 0 }),
+    },
+    "reservation-1",
+  );
+
+  assert.equal(model.selectedReservationId, "reservation-1");
+  assert.notEqual(model.reservationSnapshot, null, "reservation snapshot should survive listing failure");
+  assert.equal(model.listingSnapshot, null, "failed listing snapshot should be null, not throw");
+});
+
+test("operations loader skips overview fetch when cachedOverview is provided", async () => {
+  const calls: string[] = [];
+  const cached = createOverview();
+
+  const model = await loadOperationsModel(
+    {
+      loadAdminOperationsOverview: async () => {
+        calls.push("overview");
+        return createOverview();
+      },
+      fetchReservationWorkflowSnapshot: async (reservationId) => {
+        calls.push(`reservation:${reservationId}`);
+        return {
+          reservation: { id: reservationId, status: "pending" },
+          listing: { id: "listing-1", status: "passive" },
+          eligibility: { can_cancel: true, can_confirm: true },
+        };
+      },
+      fetchReservationDocumentTracking: async (reservationId) => {
+        calls.push(`documents:${reservationId}`);
+        return { reservation_id: reservationId };
+      },
+      fetchReservationFinanceOps: async (reservationId) => {
+        calls.push(`finance:${reservationId}`);
+        return { reservation_id: reservationId };
+      },
+      fetchReservationEventHistory: async (reservationId) => {
+        calls.push(`events:${reservationId}`);
+        return { items: [] };
+      },
+      fetchListingWorkflowSnapshot: async (listingId) => {
+        calls.push(`listing:${listingId}`);
+        return { listing: { id: listingId, status: "passive" } };
+      },
+      loadAdminPaymentEvents: async () => ({ items: [], limit: 20, offset: 0 }),
+    },
+    "reservation-1",
+    undefined,
+    cached,
+  );
+
+  assert.ok(!calls.includes("overview"), "overview must NOT be fetched when cachedOverview is provided");
+  assert.ok(calls.includes("reservation:reservation-1"), "detail fetches must still run");
+  assert.equal(model.selectedReservationId, "reservation-1");
+  assert.notEqual(model.reservationSnapshot, null);
 });
 
 function createOverview(overrides: Partial<Parameters<typeof buildOperationsViewModel>[0]["overview"]> = {}) {

@@ -22,10 +22,10 @@ test("admin listings detail tabs expose the product panel order", () => {
   );
 });
 
-test("sale listing detail tabs hide checkout configuration surfaces", () => {
+test("sale listing detail tabs hide all checkout configuration surfaces", () => {
   assert.deepEqual(
     getAdminListingDetailTabsForType("sale").map((tab) => tab.id),
-    ["general", "images", "checkout"],
+    ["general", "images"],
   );
 });
 

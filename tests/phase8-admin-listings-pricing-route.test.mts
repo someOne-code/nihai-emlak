@@ -236,7 +236,7 @@ test("admin listings main item patch maps 22023 to 400", async (t) => {
   );
 
   assert.equal(response.status, 400);
-  assert.equal((await response.json()).error, "Invalid admin listing request");
+  assert.equal((await response.json()).error, "Geçersiz ilan isteği");
 });
 
 // ----------------------------------------------------------------------------
@@ -424,7 +424,7 @@ test("admin listings service patch maps 22023 to 400", async (t) => {
   );
 
   assert.equal(response.status, 400);
-  assert.equal((await response.json()).error, "Invalid admin listing request");
+  assert.equal((await response.json()).error, "Geçersiz ilan isteği");
 });
 
 // ----------------------------------------------------------------------------

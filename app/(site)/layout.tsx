@@ -3,9 +3,12 @@ import { Geist } from "next/font/google";
 import { headers } from "next/headers";
 import { ThemeProvider } from "next-themes";
 import { Suspense } from "react";
+import { AosInit } from "@/components/site/aos-init";
 import { resolvePublicSiteOrigin } from "@/payload/server-url";
+import "aos/dist/aos.css";
 import "../globals.css";
 import "./operations.css";
+import "./property-pro.css";
 
 const metadataBaseUrl = resolvePublicSiteOrigin({
   nodeEnv: process.env.NODE_ENV,
@@ -35,7 +38,13 @@ export default function RootLayout({
     <html lang="tr" suppressHydrationWarning>
       <body className={`${geistSans.className} antialiased`}>
         <Suspense fallback={null}>
-          <NoncedThemeProvider>{children}</NoncedThemeProvider>
+          <NoncedThemeProvider>
+            <AosInit>
+              <div className="property-pro">
+                {children}
+              </div>
+            </AosInit>
+          </NoncedThemeProvider>
         </Suspense>
       </body>
     </html>
@@ -55,6 +64,7 @@ async function NoncedThemeProvider({
       defaultTheme="system"
       enableSystem
       disableTransitionOnChange
+      enableColorScheme={false}
       nonce={nonce}
     >
       {children}

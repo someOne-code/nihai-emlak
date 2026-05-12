@@ -21,14 +21,14 @@ test("admin users can create, update, and delete content", () => {
   assert.equal(isAdminContentManager({ req }), true);
 });
 
-test("legacy admin users with null role can create, update, and delete content", () => {
+test("legacy users with null role are denied content management after backfill", () => {
   const legacyAdmin = { collection: "users", id: "legacy-1", role: null };
   const req = { user: legacyAdmin };
 
-  assert.equal(canCreateContent({ req }), true);
-  assert.equal(canUpdateContent({ req }), true);
-  assert.equal(canDeleteContent({ req }), true);
-  assert.equal(isAdminContentManager({ req }), true);
+  assert.equal(canCreateContent({ req }), false);
+  assert.equal(canUpdateContent({ req }), false);
+  assert.equal(canDeleteContent({ req }), false);
+  assert.equal(isAdminContentManager({ req }), false);
 });
 
 test("non-admin users cannot create, update, or delete content", () => {
@@ -122,7 +122,7 @@ test("admin read access returns true for all content types", () => {
   assert.equal(consultantResult, true);
 });
 
-test("legacy admin with null role read access returns true", () => {
+test("null role read access returns public filter after backfill", () => {
   const legacyAdmin = { collection: "users", id: "legacy-1", role: null };
   const req = { user: legacyAdmin };
 
@@ -130,9 +130,9 @@ test("legacy admin with null role read access returns true", () => {
   const categoryResult = activeCategoryReadFilter({ req });
   const consultantResult = publishedConsultantReadFilter({ req });
 
-  assert.equal(blogResult, true);
-  assert.equal(categoryResult, true);
-  assert.equal(consultantResult, true);
+  assert.deepEqual(blogResult, { status: { equals: "published" } });
+  assert.deepEqual(categoryResult, { isActive: { equals: true } });
+  assert.deepEqual(consultantResult, { isPublished: { equals: true } });
 });
 
 test("non-admin read access returns public filter", () => {

@@ -7,6 +7,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
+import { buildCategoriesListViewModel } from "../lib/admin-ui/content-view-model.ts";
+
 // ── Empty state copy ──────────────────────────────────────────────────────────
 
 test("CATEGORIES_EMPTY_TEXT must be non-empty Turkish copy", async () => {
@@ -21,6 +23,40 @@ test("CATEGORIES_FILTERED_EMPTY_TEXT must be non-empty", async () => {
     "../lib/admin-ui/content-categories-ui-helpers.ts"
   );
   assert.ok(CATEGORIES_FILTERED_EMPTY_TEXT.length > 0, "must be non-empty");
+});
+
+test("CategoryRow carries enough detail to open the edit form without a blocking detail fetch", () => {
+  const vm = buildCategoriesListViewModel({
+    items: [{
+      id: "cat1",
+      title: "Smoke Category",
+      slug: "smoke-category",
+      description: "Category description",
+      isActive: true,
+      sortOrder: 4,
+      createdAt: "2024-01-01T00:00:00Z",
+      updatedAt: "2024-01-02T00:00:00Z",
+    }],
+    total: 1,
+    page: 1,
+    totalPages: 1,
+  });
+
+  assert.equal(vm.rows[0].detail.title, "Smoke Category");
+  assert.equal(vm.rows[0].detail.description, "Category description");
+  assert.equal(vm.rows[0].detail.linkedPosts.length, 0);
+  assert.equal(vm.rows[0].detail.deleteWarning.hasLinkedPosts, false);
+});
+
+test("selecting a category opens from row detail immediately instead of awaiting detail fetch", () => {
+  const source = readFileSync(
+    resolve(import.meta.dirname, "..", "components", "admin-categories", "AdminCategoriesView.tsx"),
+    "utf-8",
+  );
+
+  assert.match(source, /const handleSelectCategory = useCallback\(\(row: CategoryRowType\)/);
+  assert.match(source, /setDetail\(row\.detail\)/);
+  assert.doesNotMatch(source, /await loadCategoryDetail\(categoryId\)/);
 });
 
 // ── Slug field copy ────────────────────────────────────────────────────────────

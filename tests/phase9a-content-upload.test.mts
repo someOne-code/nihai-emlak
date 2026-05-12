@@ -23,6 +23,8 @@ import {
   MAX_IMAGE_SIZE_LABEL,
 } from "../lib/admin/content-upload-validators.ts";
 
+const MAX_UPLOAD_ENVELOPE_BYTES = 6 * 1024 * 1024;
+
 function setupContentAdminEnv(t: TestContext): void {
   const previousNodeEnv = process.env.NODE_ENV;
   const previousSiteUrl = process.env.SITE_URL;
@@ -243,7 +245,131 @@ test("MAX_IMAGE_SIZE_LABEL is human-readable", () => {
   assert.equal(MAX_IMAGE_SIZE_LABEL, "5 MB");
 });
 
+class FormDataSpyRequest extends Request {
+  formDataCalls = 0;
+
+  constructor(headers: Record<string, string>) {
+    super("http://localhost:3000/api/admin/content/uploads/blog-cover", {
+      method: "POST",
+      headers: {
+        origin: "http://localhost:3000",
+        ...headers,
+      },
+      body: "not-read",
+    });
+  }
+
+  override async formData(): Promise<FormData> {
+    this.formDataCalls += 1;
+    return new FormData();
+  }
+}
+
+function createAuthCountingUploadDeps(authCalls: { count: number }) {
+  return {
+    createServerSupabaseClient: async () => {
+      authCalls.count += 1;
+      return {
+        auth: {
+          getUser: async () => ({ data: { user: null }, error: null }),
+        },
+        from: () => ({
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({ data: null, error: null }),
+            }),
+          }),
+        }),
+        storage: { from: () => ({}) },
+      };
+    },
+  };
+}
+
 // ── Route helper: auth guard (mock-based) ───────────────────────────────────
+
+test("handleBlogCoverUpload rejects oversized Content-Length before auth and formData", async (t) => {
+  setupContentAdminEnv(t);
+  const { handleBlogCoverUpload } = await import(
+    "../lib/admin/content-upload-route.ts"
+  );
+
+  const request = new FormDataSpyRequest({
+    "content-length": String(MAX_UPLOAD_ENVELOPE_BYTES + 1),
+  });
+  const authCalls = { count: 0 };
+
+  const response = await handleBlogCoverUpload(
+    request,
+    createAuthCountingUploadDeps(authCalls),
+  );
+
+  assert.equal(response.status, 413);
+  assert.equal(authCalls.count, 0, "auth must not run for oversized upload envelope");
+  assert.equal(request.formDataCalls, 0, "request.formData must not be called for oversized upload envelope");
+});
+
+test("handleBlogCoverUpload rejects missing Content-Length before auth and formData", async (t) => {
+  setupContentAdminEnv(t);
+  const { handleBlogCoverUpload } = await import(
+    "../lib/admin/content-upload-route.ts"
+  );
+
+  const request = new FormDataSpyRequest({});
+  const authCalls = { count: 0 };
+
+  const response = await handleBlogCoverUpload(
+    request,
+    createAuthCountingUploadDeps(authCalls),
+  );
+
+  assert.equal(response.status, 411);
+  assert.equal(authCalls.count, 0, "auth must not run without upload Content-Length");
+  assert.equal(request.formDataCalls, 0, "request.formData must not be called without upload Content-Length");
+});
+
+test("handleBlogCoverUpload rejects invalid Content-Length before auth and formData", async (t) => {
+  setupContentAdminEnv(t);
+  const { handleBlogCoverUpload } = await import(
+    "../lib/admin/content-upload-route.ts"
+  );
+
+  const request = new FormDataSpyRequest({
+    "content-length": "invalid",
+  });
+  const authCalls = { count: 0 };
+
+  const response = await handleBlogCoverUpload(
+    request,
+    createAuthCountingUploadDeps(authCalls),
+  );
+
+  assert.equal(response.status, 400);
+  assert.equal(authCalls.count, 0, "auth must not run with invalid upload Content-Length");
+  assert.equal(request.formDataCalls, 0, "request.formData must not be called with invalid upload Content-Length");
+});
+
+test("handleBlogCoverUpload rejects non-multipart Content-Type before auth and formData", async (t) => {
+  setupContentAdminEnv(t);
+  const { handleBlogCoverUpload } = await import(
+    "../lib/admin/content-upload-route.ts"
+  );
+
+  const request = new FormDataSpyRequest({
+    "content-type": "text/plain",
+    "content-length": "8",
+  });
+  const authCalls = { count: 0 };
+
+  const response = await handleBlogCoverUpload(
+    request,
+    createAuthCountingUploadDeps(authCalls),
+  );
+
+  assert.equal(response.status, 415);
+  assert.equal(authCalls.count, 0, "auth must not run for non-multipart uploads");
+  assert.equal(request.formDataCalls, 0, "request.formData must not be called for non-multipart uploads");
+});
 
 test("handleBlogCoverUpload rejects untrusted origins before auth", async (t) => {
   setupContentAdminEnv(t);
@@ -287,6 +413,7 @@ test("handleBlogCoverUpload rejects unauthenticated request", async (t) => {
     method: "POST",
     headers: {
       origin: "http://localhost:3000",
+      "content-length": String(MAX_UPLOAD_ENVELOPE_BYTES),
     },
     body: formData,
   });
@@ -319,6 +446,7 @@ test("handleBlogCoverUpload rejects non-admin user", async (t) => {
     method: "POST",
     headers: {
       origin: "http://localhost:3000",
+      "content-length": String(MAX_UPLOAD_ENVELOPE_BYTES),
     },
     body: formData,
   });
@@ -355,6 +483,7 @@ test("handleBlogCoverUpload rejects unsupported MIME type", async (t) => {
     method: "POST",
     headers: {
       origin: "http://localhost:3000",
+      "content-length": String(MAX_UPLOAD_ENVELOPE_BYTES),
     },
     body: formData,
   });
@@ -385,6 +514,7 @@ test("handleBlogCoverUpload rejects oversized file", async (t) => {
     method: "POST",
     headers: {
       origin: "http://localhost:3000",
+      "content-length": String(MAX_UPLOAD_ENVELOPE_BYTES),
     },
     body: formData,
   });
@@ -412,6 +542,7 @@ test("handleBlogCoverUpload rejects missing file", async (t) => {
     method: "POST",
     headers: {
       origin: "http://localhost:3000",
+      "content-length": String(MAX_UPLOAD_ENVELOPE_BYTES),
     },
     body: formData,
   });
@@ -436,6 +567,7 @@ test("handleBlogCoverUpload returns success shape on mocked upload", async (t) =
     method: "POST",
     headers: {
       origin: "http://localhost:3000",
+      "content-length": String(MAX_UPLOAD_ENVELOPE_BYTES),
     },
     body: formData,
   });
@@ -472,6 +604,7 @@ test("handleBlogCoverUpload wraps storage error without leaking details", async 
     method: "POST",
     headers: {
       origin: "http://localhost:3000",
+      "content-length": String(MAX_UPLOAD_ENVELOPE_BYTES),
     },
     body: formData,
   });
@@ -505,6 +638,7 @@ test("handleListingImageUpload rejects unsupported MIME type", async (t) => {
     method: "POST",
     headers: {
       origin: "http://localhost:3000",
+      "content-length": String(MAX_UPLOAD_ENVELOPE_BYTES),
     },
     body: formData,
   });
@@ -532,6 +666,7 @@ test("handleListingImageUpload returns success with listing-images path prefix a
     method: "POST",
     headers: {
       origin: "http://localhost:3000",
+      "content-length": String(MAX_UPLOAD_ENVELOPE_BYTES),
     },
     body: formData,
   });
@@ -683,6 +818,7 @@ test("handleConsultantPhotoUpload rejects unsupported MIME type", async (t) => {
     method: "POST",
     headers: {
       origin: "http://localhost:3000",
+      "content-length": String(MAX_UPLOAD_ENVELOPE_BYTES),
     },
     body: formData,
   });
@@ -711,6 +847,7 @@ test("handleConsultantPhotoUpload rejects oversized file", async (t) => {
     method: "POST",
     headers: {
       origin: "http://localhost:3000",
+      "content-length": String(MAX_UPLOAD_ENVELOPE_BYTES),
     },
     body: formData,
   });
@@ -738,6 +875,7 @@ test("handleConsultantPhotoUpload returns success with consultants/photos/ path 
     method: "POST",
     headers: {
       origin: "http://localhost:3000",
+      "content-length": String(MAX_UPLOAD_ENVELOPE_BYTES),
     },
     body: formData,
   });

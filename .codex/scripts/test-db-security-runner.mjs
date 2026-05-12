@@ -27,7 +27,7 @@ export function resolveSupabaseDbContainerName({ repoRoot, names }) {
     return expected;
   }
 
-  return names.find((name) => name.startsWith("supabase_db_")) ?? null;
+  return null;
 }
 
 export function buildSqlLogPath({ repoRoot, sqlPath }) {

@@ -1,5 +1,7 @@
 import type { CollectionConfig } from "payload";
 
+import { validateImageUrl } from "../../lib/validation/image-url.ts";
+
 import {
   canCreateContent,
   canDeleteContent,
@@ -37,6 +39,7 @@ export const Consultants: CollectionConfig = {
     {
       name: "photoUrl",
       type: "text",
+      validate: validateImageUrl,
     },
     {
       name: "shortBio",

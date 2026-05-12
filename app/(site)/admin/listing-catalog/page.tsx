@@ -6,7 +6,6 @@ import { redirect } from "next/navigation";
 
 import { createClient as createServerSupabaseClient } from "@/lib/supabase/server";
 import AdminCatalogView from "@/components/admin-catalog/AdminCatalogView";
-import "@/components/admin-catalog/catalog.css";
 
 // Note: `export const dynamic = "force-dynamic"` is intentionally omitted.
 // `nextConfig.cacheComponents: true` disallows that segment config. The page

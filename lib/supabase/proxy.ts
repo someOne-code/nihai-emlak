@@ -4,6 +4,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { buildContentSecurityPolicy } from "../security/csp";
 import { resolveSupabaseProxyEnvMode } from "../utils";
+import { isProtectedPath } from "./proxy-auth-guard";
 
 export async function updateSession(request: NextRequest) {
   const nonce = createNonce();
@@ -55,8 +56,7 @@ export async function updateSession(request: NextRequest) {
   const { data } = await supabase.auth.getClaims();
   const user = data?.claims;
 
-  const requiresSupabaseAuth =
-    request.nextUrl.pathname.startsWith("/protected");
+  const requiresSupabaseAuth = isProtectedPath(request.nextUrl.pathname);
 
   if (
     requiresSupabaseAuth &&

@@ -7,6 +7,7 @@ import {
   toBackendFilters,
   type OperationsFilterState,
 } from "../lib/admin-ui/operations-filters.ts";
+import { createOperationsFilterRefreshController } from "../lib/admin-ui/operations-filter-refresh.ts";
 import type { OperationsOverviewRow } from "../lib/admin-ui/operations-view-model.ts";
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
@@ -129,6 +130,16 @@ test("toBackendFilters converts filter state to backend enum format", () => {
   assert.equal(backend.paymentStatus, "succeeded");
 });
 
+test("toBackendFilters sends payment waiting as an explicit reservation queue", () => {
+  const backend = toBackendFilters({
+    ...INITIAL_FILTER_STATE,
+    queue: "payment_waiting",
+  });
+
+  assert.equal(backend.reservationQueue, "payment_waiting");
+  assert.equal(backend.paymentStatus, undefined);
+});
+
 test("toBackendFilters omits 'all' values", () => {
   const backend = toBackendFilters(INITIAL_FILTER_STATE);
   assert.equal(backend.reservationStatus, undefined);
@@ -151,3 +162,81 @@ test("INITIAL_FILTER_STATE has expected default values with backend enum keys", 
   assert.equal(INITIAL_FILTER_STATE.reservationStatus, "all");
   assert.equal(INITIAL_FILTER_STATE.paymentStatus, "all");
 });
+
+test("filter refresh controller keeps search changes client-side", () => {
+  const refreshes: Array<{ reservationId?: string | null }> = [];
+  const timers = createManualTimers();
+  const controller = createOperationsFilterRefreshController({
+    delayMs: 250,
+    clearTimeout: timers.clearTimeout,
+    loadData: (reservationId) => {
+      refreshes.push({ reservationId });
+    },
+    setTimeout: timers.setTimeout,
+  });
+
+  controller.applyFilterChange(
+    { ...INITIAL_FILTER_STATE, search: "den" },
+    INITIAL_FILTER_STATE,
+  );
+  timers.runAll();
+
+  assert.deepEqual(refreshes, []);
+});
+
+test("filter refresh controller debounces queue backend refreshes", () => {
+  const refreshes: Array<{ reservationId?: string | null }> = [];
+  const timers = createManualTimers();
+  const controller = createOperationsFilterRefreshController({
+    delayMs: 250,
+    clearTimeout: timers.clearTimeout,
+    loadData: (reservationId) => {
+      refreshes.push({ reservationId });
+    },
+    setTimeout: timers.setTimeout,
+  });
+
+  controller.applyFilterChange(
+    { ...INITIAL_FILTER_STATE, queue: "document_waiting" },
+    INITIAL_FILTER_STATE,
+    "reservation-1",
+  );
+  controller.applyFilterChange(
+    { ...INITIAL_FILTER_STATE, queue: "payment_issues" },
+    { ...INITIAL_FILTER_STATE, queue: "document_waiting" },
+    "reservation-1",
+  );
+
+  assert.equal(refreshes.length, 0);
+  assert.equal(timers.pendingCount(), 1);
+
+  timers.runAll();
+
+  assert.deepEqual(refreshes, [{ reservationId: "reservation-1" }]);
+});
+
+function createManualTimers() {
+  let nextId = 1;
+  const pending = new Map<number, () => void>();
+
+  return {
+    setTimeout(callback: () => void) {
+      const id = nextId++;
+      pending.set(id, callback);
+      return id;
+    },
+    clearTimeout(id: number) {
+      pending.delete(id);
+    },
+    pendingCount() {
+      return pending.size;
+    },
+    runAll() {
+      const callbacks = [...pending.values()];
+      pending.clear();
+      for (const callback of callbacks) {
+        callback();
+      }
+    },
+  };
+}

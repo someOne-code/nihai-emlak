@@ -104,6 +104,119 @@ test("callback route resolves signed oid as payment_id when supplemental payment
   assert.equal(json.data?.paymentId, paymentId);
 });
 
+test("callback route keeps successful response when received event dispatch fails", async (t) => {
+  const callbackClientId = setupCallbackRouteEnv(t);
+
+  const paymentId = "c5f6a8ba-58bf-42eb-8db9-cc318ef5e34f";
+  const callbackPayload = {
+    clientid: callbackClientId,
+    oid: paymentId,
+    amount: "1250.00",
+    currency: "TRY",
+    okurl: "https://example.com/ok",
+    failurl: "https://example.com/fail",
+    txnType: "Auth",
+    instalment: "0",
+    rnd: "rnd-123",
+    ProcReturnCode: "00",
+    Response: "Approved",
+  };
+
+  const providedHash = sha1Upper(
+    buildIsbankSha1Input(callbackPayload, process.env.ISBANK_STORE_KEY),
+  );
+  const rawBody = new URLSearchParams(callbackPayload).toString();
+
+  let processCheckoutCalled = false;
+  const response = await handlePaymentCallbackPost(
+    new Request("http://localhost/api/payment/callback", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        "x-isbank-hash": providedHash,
+      },
+      body: rawBody,
+    }),
+    {
+      createSupabaseClient: (_url, key) => {
+        assert.equal(key, "service-key");
+        return {
+          from: buildPaymentsTableMock({
+            paymentRowsById: {
+              [paymentId]: {
+                id: paymentId,
+                amount: "1250.00",
+                currency: "TRY",
+                provider: "isbank",
+                provider_ref: paymentId,
+                status: "pending",
+              },
+            },
+          }),
+          rpc: async (functionName: string) => {
+            if (functionName === "register_payment_callback_receipt") {
+              return { data: true, error: null };
+            }
+
+            processCheckoutCalled = true;
+            return { data: { result: "succeeded" }, error: null };
+          },
+        };
+      },
+      sendInngestEvent: async () => {
+        throw new Error("Inngest unavailable");
+      },
+    },
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(processCheckoutCalled, true);
+  const json = await response.json();
+  assert.equal(json.success, true);
+  assert.equal(json.data?.paymentId, paymentId);
+});
+
+test("callback route keeps invalid signature response when rejection event dispatch fails", async (t) => {
+  const callbackClientId = setupCallbackRouteEnv(t);
+  const callbackPayload = {
+    clientid: callbackClientId,
+    oid: "c6f6a8ba-58bf-42eb-8db9-cc318ef5e34f",
+    amount: "1250.00",
+    currency: "TRY",
+    okurl: "https://example.com/ok",
+    failurl: "https://example.com/fail",
+    txnType: "Auth",
+    instalment: "0",
+    rnd: "rnd-123",
+    ProcReturnCode: "00",
+    Response: "Approved",
+  };
+
+  const response = await handlePaymentCallbackPost(
+    new Request("http://localhost/api/payment/callback", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        "x-isbank-hash": "ABCDEF0123456789ABCDEF0123456789ABCDEF01",
+      },
+      body: new URLSearchParams(callbackPayload).toString(),
+    }),
+    {
+      createSupabaseClient: () => {
+        throw new Error("Supabase should not be called after invalid signature");
+      },
+      sendInngestEvent: async () => {
+        throw new Error("Inngest unavailable");
+      },
+    },
+  );
+
+  assert.equal(response.status, 401);
+  const json = await response.json();
+  assert.equal(json.success, false);
+  assert.equal(json.error, "Invalid payment callback signature");
+});
+
 test("callback route rejects when oid and payment_id conflict", async (t) => {
   const callbackClientId = setupCallbackRouteEnv(t);
 
@@ -860,6 +973,76 @@ test("callback route rejects when resolved payment provider is not isbank", asyn
   assert.equal(processCheckoutCalled, false);
   assert.equal(registerReceiptCalled, false);
 
+  const json = await response.json();
+  assert.equal(json.success, false);
+  assert.equal(json.error, "Payment callback contract validation failed");
+});
+
+test("callback route keeps contract rejection response when rejection event dispatch fails", async (t) => {
+  const callbackClientId = setupCallbackRouteEnv(t);
+  const paymentId = "6ab18c57-69e8-4cb6-8289-9df2d8f7f942";
+  const callbackPayload = {
+    clientid: callbackClientId,
+    oid: paymentId,
+    amount: "999.00",
+    currency: "TRY",
+    okurl: "https://example.com/ok",
+    failurl: "https://example.com/fail",
+    txnType: "Auth",
+    instalment: "0",
+    rnd: "rnd-123",
+    ProcReturnCode: "00",
+    Response: "Approved",
+  };
+
+  const providedHash = sha1Upper(
+    buildIsbankSha1Input(callbackPayload, process.env.ISBANK_STORE_KEY),
+  );
+
+  let processCheckoutCalled = false;
+  const response = await handlePaymentCallbackPost(
+    new Request("http://localhost/api/payment/callback", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        "x-isbank-hash": providedHash,
+      },
+      body: new URLSearchParams(callbackPayload).toString(),
+    }),
+    {
+      createSupabaseClient: (_url, key) => {
+        assert.equal(key, "service-key");
+        return {
+          from: buildPaymentsTableMock({
+            paymentRowsById: {
+              [paymentId]: {
+                id: paymentId,
+                amount: "1250.00",
+                currency: "TRY",
+                provider: "isbank",
+                provider_ref: paymentId,
+                status: "pending",
+              },
+            },
+          }),
+          rpc: async (functionName: string) => {
+            if (functionName === "register_payment_callback_receipt") {
+              return { data: true, error: null };
+            }
+
+            processCheckoutCalled = true;
+            return { data: { result: "succeeded" }, error: null };
+          },
+        };
+      },
+      sendInngestEvent: async () => {
+        throw new Error("Inngest unavailable");
+      },
+    },
+  );
+
+  assert.equal(response.status, 422);
+  assert.equal(processCheckoutCalled, false);
   const json = await response.json();
   assert.equal(json.success, false);
   assert.equal(json.error, "Payment callback contract validation failed");

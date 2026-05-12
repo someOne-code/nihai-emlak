@@ -13,6 +13,8 @@ import {
 export {
   SALE_LEADS_INITIAL_FILTER_STATE,
   applySaleLeadFilters,
+  buildSaleLeadsBackendFilters,
+  hasSaleLeadsBackendFilterChange,
   type SaleLeadStatusFilter,
   type SaleLeadsFilterState,
 } from "@/lib/admin-ui/sale-leads-filters";

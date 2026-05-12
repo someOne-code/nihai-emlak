@@ -429,7 +429,7 @@ test("operations queue cards use business labels for order and payment states", 
   );
 
   assert.match(source, /<OperationsStatusBadge status=\{row\.primaryStatus\}/, "The queue card should still show the operation state.");
-  assert.match(source, /label="Sipari\u015f kayd\u0131"/, "The order lifecycle label should not be shortened to Sipari\u015f.");
+  assert.match(source, /label=\{row\.orderRecordLabel\}/, "The queue card should use a dynamic Turkish lifecycle label.");
   assert.match(source, /label="Banka \u00f6demesi"/, "The payment lifecycle label should explain that this is the bank payment state.");
   assert.doesNotMatch(source, />Durum</, "The ambiguous Durum column label should not be used in the operations queue.");
 });
@@ -440,7 +440,7 @@ test("payment summary explains pending order and bank payment states", () => {
     "utf8",
   );
 
-  assert.match(source, /Sipariş kaydı/, "Payment summary should show the order record state.");
+  assert.match(source, /getOrderRecordLabel/, "Payment summary should choose the order/payment label from the lifecycle state.");
   assert.match(source, /Banka ödemesi/, "Payment summary should show the bank payment state.");
   assert.match(
     source,
@@ -449,8 +449,8 @@ test("payment summary explains pending order and bank payment states", () => {
   );
   assert.match(
     source,
-    /ödeme başarılı olmadığı için sipariş kaydı tamamlanmadı/i,
-    "Pending order must explain why the order record is still waiting.",
+    /Banka ödemesi başarılı olmadıkça bu kayıt ödeme işlemi olarak kalır/i,
+    "Pending order must explain why the record is still a payment operation.",
   );
 });
 

@@ -5,6 +5,7 @@
 // Payload users auth is not used for custom admin UI route guards.
 
 import {
+  readStateChangingJsonRequestPayload,
   validateStateChangingJsonRequestEnvelope,
   validateStateChangingRequestOrigin,
   type StateChangingJsonRouteConfig,
@@ -35,6 +36,12 @@ export function validateContentAdminOrigin(
     missingConfigError: "Content admin private SITE_URL must be configured outside development/test",
     strategy: "site-url-only",
   });
+}
+
+export async function readContentAdminJsonPayload(
+  request: Request,
+): Promise<{ ok: true; value: unknown } | { ok: false; status: number; error: string }> {
+  return readStateChangingJsonRequestPayload(request, CONTENT_ADMIN_JSON_ROUTE_CONFIG);
 }
 
 // ── Supabase types ──────────────────────────────────────────────────────────

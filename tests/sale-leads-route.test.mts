@@ -80,6 +80,15 @@ test("admin sale leads GET applies status search and pagination before reading r
   ]);
 });
 
+test("admin sale leads GET preserves Supabase query builder context when ordering rows", async () => {
+  const response = await handleAdminSaleLeadsGet(
+    new Request("http://localhost:3000/api/admin/sale-leads?limit=1"),
+    createDependencies({ selectData: [], requireBoundOrderThis: true }),
+  );
+
+  assert.equal(response.status, 200);
+});
+
 test("admin sale leads POST rejects untrusted origins before auth", async (t) => {
   setupSaleLeadsAdminEnv(t);
 
@@ -93,6 +102,24 @@ test("admin sale leads POST rejects untrusted origins before auth", async (t) =>
       body: JSON.stringify({ lead_id: VALID_LEAD_ID, status: "called" }),
     }),
     createDependencies({}),
+  );
+
+  assert.equal(response.status, 403);
+});
+
+test("admin sale leads POST rejects public origin when admin and public sites are split", async (t) => {
+  setupSplitAdminOriginEnv(t);
+
+  const response = await handleAdminSaleLeadsPost(
+    new Request("https://admin.example.com/api/admin/sale-leads", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "https://www.example.com",
+      },
+      body: JSON.stringify({ lead_id: VALID_LEAD_ID, status: "called" }),
+    }),
+    createDependencies({ userId: null }),
   );
 
   assert.equal(response.status, 403);
@@ -165,6 +192,7 @@ type DepsOptions = {
   selectData?: unknown[];
   selectError?: { code?: string | null; message?: string | null } | null;
   queryCalls?: Array<{ method: string; column?: string; value?: unknown; from?: number; to?: number }>;
+  requireBoundOrderThis?: boolean;
   rpc?: (
     name: "admin_update_sale_lead_status",
     args: Record<string, unknown>,
@@ -217,7 +245,10 @@ function createDependencies(options: DepsOptions): AdminSaleLeadsRouteDependenci
                 options.queryCalls?.push({ method: "or", value });
                 return query;
               },
-              order: (column: string, value: { ascending: boolean }) => {
+              order(column: string, value: { ascending: boolean }) {
+                if (options.requireBoundOrderThis) {
+                  assert.equal(this, query);
+                }
                 options.queryCalls?.push({ method: "order", column, value });
                 return query;
               },
@@ -270,4 +301,32 @@ function setupSaleLeadsAdminEnv(t: TestContext): void {
     if (previousPublicSiteUrl !== undefined) process.env.NEXT_PUBLIC_SITE_URL = previousPublicSiteUrl;
     if (previousVercelUrl !== undefined) process.env.VERCEL_URL = previousVercelUrl;
   });
+}
+
+function setupSplitAdminOriginEnv(t: TestContext): void {
+  const previousNodeEnv = process.env.NODE_ENV;
+  const previousSiteUrl = process.env.SITE_URL;
+  const previousPublicSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+  const previousVercelUrl = process.env.VERCEL_URL;
+
+  process.env.NODE_ENV = "production";
+  process.env.SITE_URL = "https://admin.example.com";
+  process.env.NEXT_PUBLIC_SITE_URL = "https://www.example.com";
+  delete process.env.VERCEL_URL;
+
+  t.after(() => {
+    restoreEnv("NODE_ENV", previousNodeEnv);
+    restoreEnv("SITE_URL", previousSiteUrl);
+    restoreEnv("NEXT_PUBLIC_SITE_URL", previousPublicSiteUrl);
+    restoreEnv("VERCEL_URL", previousVercelUrl);
+  });
+}
+
+function restoreEnv(key: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[key];
+    return;
+  }
+
+  process.env[key] = value;
 }

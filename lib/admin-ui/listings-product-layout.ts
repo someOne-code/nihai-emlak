@@ -32,7 +32,7 @@ export function getAdminListingDetailTabsForType(
 ): ReadonlyArray<AdminListingDetailTab> {
   if (listingType === "sale") {
     return ADMIN_LISTING_DETAIL_TABS.filter(
-      (tab) => tab.id !== "main-items" && tab.id !== "services",
+      (tab) => tab.id !== "main-items" && tab.id !== "services" && tab.id !== "checkout",
     );
   }
   return ADMIN_LISTING_DETAIL_TABS;

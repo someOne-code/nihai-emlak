@@ -47,6 +47,16 @@
 - `proxy.ts` is only for network-boundary/session refresh behavior, not detailed authorization.
 - Detailed authorization and data ownership belong in RLS and database-side logic.
 
+### CORS Policy
+
+- **Current state:** Frontend, API routes, and Payload CMS admin all run within the same Next.js application on the same origin. CORS headers are **not needed** in this configuration.
+- **If the architecture changes** to separate domains (e.g., `nihaiemlak.com`, `api.nihaiemlak.com`, `admin.nihaiemlak.com`):
+  1. Add explicit CORS allowlist in `next.config.ts` headers or proxy middleware.
+  2. Allowed origins (production): `https://nihaiemlak.com`, `https://www.nihaiemlak.com`.
+  3. Allowed origins (development): `http://localhost:3000`.
+  4. **Never use wildcard `*`** in production CORS configuration.
+  5. Credentials (`Access-Control-Allow-Credentials: true`) must be set if cookies/auth headers are sent cross-origin.
+
 ## Supabase-First Rules
 
 - Prefer Supabase native features before writing custom application code.
@@ -79,6 +89,30 @@
 - **Private Schemas:** Keep sensitive internal logic and `SECURITY DEFINER` functions in private schemas (e.g., `private`, `internal`, or `vault`) rather than the `public` schema to prevent accidental API exposure.
 - **Principle of Least Privilege:** Never use `service_role` for client-side requests. Limit its use to necessary server-side orchestration (e.g., Inngest, Edge Functions) where RLS bypass is explicitly required.
 - **Audit Trails:** Critical state changes and external callbacks (e.g., payments) must be logged in dedicated event tables for auditability.
+
+## Payload Local API Rules
+
+- When calling the Payload Local API from server-side code (Server Components, Route Handlers, Inngest workers):
+  - **Public/user-facing data:** Always pass `overrideAccess: false` so that collection-level access control is enforced.
+  - **Admin-only internal operations:** `overrideAccess: true` is allowed only when the caller is a trusted server-side context (e.g., migration, seed script, Inngest worker) and the bypass is explicitly documented in the calling code.
+- Default assumption: if `overrideAccess` is not specified, treat it as a review flag — every Payload Local API call should have an explicit `overrideAccess` value.
+- Example (public read):
+  ```ts
+  await payload.find({
+    collection: "blog_posts",
+    overrideAccess: false,
+  });
+  ```
+- Example (admin-only migration):
+  ```ts
+  // overrideAccess: true — intentional bypass for backfill migration
+  await payload.update({
+    collection: "users",
+    where: { role: { equals: null } },
+    data: { role: "admin" },
+    overrideAccess: true,
+  });
+  ```
 
 ## Production Readiness
 

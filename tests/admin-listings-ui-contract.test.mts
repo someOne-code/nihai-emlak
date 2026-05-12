@@ -22,6 +22,25 @@ test("admin listings renders checkout readiness in a single detail surface", () 
   assert.doesNotMatch(source, /variant="side"/);
 });
 
+test("services panel gates on enabled main item before allowing service config", () => {
+  const source = readFileSync(
+    resolve(repoRoot, "components/admin-listings/ListingServicesPanel.tsx"),
+    "utf8",
+  );
+
+  // The panel must check for an enabled main item and show a locked message.
+  assert.match(
+    source,
+    /hasEnabledMainItem/,
+    "ListingServicesPanel must check for an enabled main item before allowing service configuration.",
+  );
+  assert.match(
+    source,
+    /Ana Ödeme Kalemleri/,
+    "ListingServicesPanel must reference the main items tab when locked.",
+  );
+});
+
 test("admin listings product shell uses the current two-surface layout", () => {
   const css = readFileSync(
     resolve(repoRoot, "app/(site)/admin/listings/listings.css"),

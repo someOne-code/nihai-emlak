@@ -68,6 +68,169 @@ test("public listings route rejects invalid pagination query before RPC", async 
   assert.equal((await response.json()).error, "Invalid query parameter: limit");
 });
 
+test("public listings route falls back to table read when read RPC is unavailable", async () => {
+  const response = await handlePublicListingsGet(
+    new Request("http://localhost:3000/api/public/listings?limit=6"),
+    createDependencies({
+      rpc: () => ({
+        data: null,
+        error: {
+          code: "PGRST202",
+          message: "function public.list_public_listings was not found",
+        },
+      }),
+      tableRead: {
+        listings: [],
+        images: [],
+      },
+    }),
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    success: true,
+    data: {
+      items: [],
+      limit: 6,
+      offset: 0,
+    },
+  });
+});
+
+test("public listings route table fallback maps active listing rows to public list shape", async () => {
+  const response = await handlePublicListingsGet(
+    new Request("http://localhost:3000/api/public/listings?type=rent&limit=6"),
+    createDependencies({
+      rpc: () => ({
+        data: null,
+        error: {
+          code: "PGRST202",
+          message: "function public.list_public_listings was not found",
+        },
+      }),
+      tableRead: {
+        listings: [
+          {
+            id: "11111111-1111-4111-8111-111111111111",
+            type: "rent",
+            status: "active",
+            title: "Test listing",
+            slug: "test-listing",
+            summary: null,
+            city: "Kayseri",
+            district: "Talas",
+            price: 35000,
+            currency: "TRY",
+            room_count: 3,
+            bathroom_count: 2,
+            gross_area_m2: 145,
+            is_furnished: true,
+            created_at: "2026-05-01T00:00:00.000Z",
+          },
+        ],
+        images: [
+          {
+            id: "22222222-2222-4222-8222-222222222222",
+            listing_id: "11111111-1111-4111-8111-111111111111",
+            image_url: "https://example.com/cover.jpg",
+            is_primary: true,
+            sort_order: 0,
+            created_at: "2026-05-01T00:00:00.000Z",
+          },
+        ],
+      },
+    }),
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    success: true,
+    data: {
+      items: [
+        {
+          id: "11111111-1111-4111-8111-111111111111",
+          type: "rent",
+          status: "active",
+          title: "Test listing",
+          slug: "test-listing",
+          summary: null,
+          city: "Kayseri",
+          district: "Talas",
+          price: 35000,
+          currency: "TRY",
+          room_count: 3,
+          bathroom_count: 2,
+          gross_area_m2: 145,
+          is_furnished: true,
+          primary_image_url: "https://example.com/cover.jpg",
+          created_at: "2026-05-01T00:00:00.000Z",
+        },
+      ],
+      limit: 6,
+      offset: 0,
+    },
+  });
+});
+
+test("public listings route returns an empty list when local Supabase is unavailable outside production", async () => {
+  const response = await handlePublicListingsGet(
+    new Request("http://localhost:3000/api/public/listings?limit=6"),
+    createDependencies({
+      rpc: () => ({
+        data: null,
+        error: {
+          code: "",
+          message: "TypeError: fetch failed",
+        },
+      }),
+      tableRead: {
+        listings: [],
+        images: [],
+        listingsError: {
+          code: "",
+          message: "TypeError: fetch failed",
+        },
+      },
+    }),
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    success: true,
+    data: {
+      items: [],
+      limit: 6,
+      offset: 0,
+    },
+  });
+});
+
+test("public listings route keeps unexpected table fallback errors as server errors", async () => {
+  const response = await handlePublicListingsGet(
+    new Request("http://localhost:3000/api/public/listings?limit=6"),
+    createDependencies({
+      rpc: () => ({
+        data: null,
+        error: {
+          code: "XX000",
+          message: "unexpected rpc failure",
+        },
+      }),
+      tableRead: {
+        listings: [],
+        images: [],
+        listingsError: {
+          code: "42501",
+          message: "permission denied",
+        },
+      },
+    }),
+  );
+
+  assert.equal(response.status, 500);
+  assert.equal((await response.json()).error, "Public read RPC failed");
+});
+
 test("public listing detail route maps not found RPC error to 404", async () => {
   const response = await handlePublicListingDetailGet(
     new Request("http://localhost:3000/api/public/listings/11111111-1111-4111-8111-111111111111"),
@@ -178,6 +341,37 @@ test("admin reservations route calls list_admin_reservations RPC", async () => {
         p_queue: null,
         p_limit: 5,
         p_offset: 1,
+      },
+    },
+  ]);
+
+  calls.length = 0;
+  const paymentWaitingResponse = await handleAdminReservationsGet(
+    new Request("http://localhost:3000/api/admin/read/reservations?queue=payment_waiting&limit=10&offset=20"),
+    createDependencies({
+      rpc: (functionName, args) => {
+        calls.push({ functionName, args });
+        return {
+          data: {
+            items: [],
+            limit: 10,
+            offset: 20,
+          },
+          error: null,
+        };
+      },
+    }),
+  );
+
+  assert.equal(paymentWaitingResponse.status, 200);
+  assert.deepEqual(calls, [
+    {
+      functionName: "list_admin_reservations",
+      args: {
+        p_status: null,
+        p_queue: "payment_waiting",
+        p_limit: 10,
+        p_offset: 20,
       },
     },
   ]);
@@ -402,6 +596,12 @@ function createDependencies(options: {
   userId?: string | null;
   getProfileRole?: () => string | null;
   profileError?: { code?: string | null; message?: string | null } | null;
+  tableRead?: {
+    listings: unknown[];
+    images: unknown[];
+    listingsError?: { code?: string | null; message?: string | null } | null;
+    imagesError?: { code?: string | null; message?: string | null } | null;
+  };
   rpc: (
     functionName: string,
     args: Record<string, unknown>,
@@ -419,22 +619,84 @@ function createDependencies(options: {
           error: null,
         }),
       },
-      from: () => ({
-        select: () => ({
-          eq: () => ({
-            maybeSingle: async () => ({
-              data: options.profileError
-                ? null
-                : {
-                    role: options.getProfileRole?.() ?? "admin",
-                  },
-              error: options.profileError ?? null,
-            }),
-          }),
-        }),
-      }),
+      from: (table: string) => createTableMock(table, options),
       rpc: async (functionName: string, args: Record<string, unknown>) =>
         options.rpc(functionName, args),
     }),
   };
+}
+
+function createTableMock(
+  table: string,
+  options: {
+    getProfileRole?: () => string | null;
+    profileError?: { code?: string | null; message?: string | null } | null;
+    tableRead?: {
+      listings: unknown[];
+      images: unknown[];
+      listingsError?: { code?: string | null; message?: string | null } | null;
+      imagesError?: { code?: string | null; message?: string | null } | null;
+    };
+  },
+) {
+  if (table === "profiles") {
+    return {
+      select: () => ({
+        eq: () => ({
+          maybeSingle: async () => ({
+            data: options.profileError
+              ? null
+              : {
+                  role: options.getProfileRole?.() ?? "admin",
+                },
+            error: options.profileError ?? null,
+          }),
+        }),
+      }),
+    };
+  }
+
+  if (table === "listings") {
+    return {
+      select: () => createListingsQuery(options.tableRead?.listings ?? [], options.tableRead?.listingsError ?? null),
+    };
+  }
+
+  if (table === "listing_images") {
+    return {
+      select: () => createListingImagesQuery(options.tableRead?.images ?? [], options.tableRead?.imagesError ?? null),
+    };
+  }
+
+  throw new Error(`unexpected table: ${table}`);
+}
+
+function createListingsQuery(
+  rows: unknown[],
+  error: { code?: string | null; message?: string | null } | null,
+) {
+  const query = {
+    eq: () => query,
+    order: () => query,
+    range: async () => ({
+      data: error ? null : rows,
+      error,
+    }),
+  };
+  return query;
+}
+
+function createListingImagesQuery(
+  rows: unknown[],
+  error: { code?: string | null; message?: string | null } | null,
+) {
+  const query = {
+    in: () => query,
+    order: () => query,
+    range: async () => ({
+      data: error ? null : rows,
+      error,
+    }),
+  };
+  return query;
 }

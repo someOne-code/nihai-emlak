@@ -7,26 +7,27 @@
 // DTO is simplified; the UI does not consume raw Payload shapes.
 
 import { getPayload } from "payload";
-import configPromise from "@payload-config";
+import configPromise from "../../payload.config.ts";
 
 import {
   guardContentAdminRequest,
   jsonError,
   jsonResponse,
+  readContentAdminJsonPayload,
   validateContentAdminJsonEnvelope,
   validateContentAdminOrigin,
-} from "./content-shared";
-import type { ContentAdminRouteDependencies } from "./content-shared";
+} from "./content-shared.ts";
+import type { ContentAdminRouteDependencies } from "./content-shared.ts";
 import {
   parsePostCreateBodyForTest as parsePostCreateBody,
   parsePostUpdateBodyForTest as parsePostUpdateBody,
   type PostCreateInput,
   type PostUpdateInput,
-} from "./content-posts-parsers";
+} from "./content-posts-parsers.ts";
 import {
   buildPayloadPostCreateData,
   buildPayloadPostUpdateData,
-} from "./content-posts-payload";
+} from "./content-posts-payload.ts";
 
 // ── DTO types ──────────────────────────────────────────────────────────────
 
@@ -191,17 +192,13 @@ export async function handlePostsCreatePost(
   const envelope = validateContentAdminJsonEnvelope(request);
   if (!envelope.ok) return jsonError(envelope.error, envelope.status);
 
+  const bodyResult = await readContentAdminJsonPayload(request);
+  if (!bodyResult.ok) return jsonError(bodyResult.error, bodyResult.status);
+
   const guard = await guardContentAdminRequest(deps);
   if (!guard.ok) return guard.response;
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return jsonError("Invalid JSON request body", 400);
-  }
-
-  const parsed = parsePostCreateBody(body);
+  const parsed = parsePostCreateBody(bodyResult.value);
   if (!parsed.ok) {
     return jsonError(parsed.error, parsed.status);
   }
@@ -262,17 +259,13 @@ export async function handlePostUpdate(
   const envelope = validateContentAdminJsonEnvelope(request);
   if (!envelope.ok) return jsonError(envelope.error, envelope.status);
 
+  const bodyResult = await readContentAdminJsonPayload(request);
+  if (!bodyResult.ok) return jsonError(bodyResult.error, bodyResult.status);
+
   const guard = await guardContentAdminRequest(deps);
   if (!guard.ok) return guard.response;
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return jsonError("Invalid JSON request body", 400);
-  }
-
-  const parsed = parsePostUpdateBody(body);
+  const parsed = parsePostUpdateBody(bodyResult.value);
   if (!parsed.ok) {
     return jsonError(parsed.error, parsed.status);
   }

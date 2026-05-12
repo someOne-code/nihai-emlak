@@ -30,6 +30,7 @@ import {
 
 /** Supabase Storage bucket for content media. */
 export const CONTENT_MEDIA_BUCKET = "content-media";
+const CONTENT_UPLOAD_MAX_ENVELOPE_BYTES = 6 * 1024 * 1024;
 
 // ── Extended Supabase client type for storage ───────────────────────────────
 
@@ -85,6 +86,16 @@ async function handleContentImageUpload(
   }
 
   // 1. Auth guard — reuses existing content admin pattern
+  const contentLengthCheck = validateUploadContentLengthEnvelope(request);
+  if (!contentLengthCheck.ok) {
+    return jsonError(contentLengthCheck.error, contentLengthCheck.status);
+  }
+
+  const contentTypeCheck = validateUploadContentTypeEnvelope(request);
+  if (!contentTypeCheck.ok) {
+    return jsonError(contentTypeCheck.error, contentTypeCheck.status);
+  }
+
   const guard = await guardContentAdminRequest(dependencies);
   if (!guard.ok) {
     return guard.response;
@@ -187,6 +198,53 @@ async function handleContentImageUpload(
 }
 
 // ── Public handlers ─────────────────────────────────────────────────────────
+
+function validateUploadContentLengthEnvelope(
+  request: Request,
+): { ok: true } | { ok: false; status: number; error: string } {
+  const rawContentLength = request.headers.get("content-length");
+  if (!rawContentLength || rawContentLength.trim().length === 0) {
+    return {
+      ok: false,
+      status: 411,
+      error: "Content-Length header is required",
+    };
+  }
+
+  const contentLength = Number(rawContentLength);
+  if (!Number.isSafeInteger(contentLength) || contentLength < 0) {
+    return {
+      ok: false,
+      status: 400,
+      error: "Content-Length header is invalid",
+    };
+  }
+
+  if (contentLength > CONTENT_UPLOAD_MAX_ENVELOPE_BYTES) {
+    return {
+      ok: false,
+      status: 413,
+      error: "Content upload payload is too large",
+    };
+  }
+
+  return { ok: true };
+}
+
+function validateUploadContentTypeEnvelope(
+  request: Request,
+): { ok: true } | { ok: false; status: number; error: string } {
+  const contentType = request.headers.get("content-type");
+  if (contentType?.toLowerCase().split(";")[0]?.trim() !== "multipart/form-data") {
+    return {
+      ok: false,
+      status: 415,
+      error: "Content upload requires multipart/form-data",
+    };
+  }
+
+  return { ok: true };
+}
 
 export async function handleBlogCoverUpload(
   request: Request,

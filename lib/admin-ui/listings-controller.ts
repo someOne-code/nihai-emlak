@@ -51,9 +51,14 @@ export async function loadAdminListingsModel(
 ): Promise<AdminListingsViewModel> {
   const list = await dependencies.fetchAdminListingsList(input.filters ?? {});
   const targetListingId = resolveTargetListingId(list, input.selectedListingId);
-  const snapshot = targetListingId
-    ? await dependencies.fetchAdminListingSnapshot(targetListingId)
-    : null;
+  let snapshot: unknown = null;
+  if (targetListingId) {
+    try {
+      snapshot = await dependencies.fetchAdminListingSnapshot(targetListingId);
+    } catch {
+      // Snapshot failure is non-critical; list still loads.
+    }
+  }
 
   return buildAdminListingsViewModel({
     list,
@@ -67,9 +72,14 @@ export async function selectAdminListing(
   input: AdminListingsSelectInput,
 ): Promise<AdminListingsViewModel> {
   const targetListingId = resolveTargetListingId(input.list, input.listingId);
-  const snapshot = targetListingId && targetListingId === input.listingId
-    ? await dependencies.fetchAdminListingSnapshot(targetListingId)
-    : null;
+  let snapshot: unknown = null;
+  if (targetListingId && targetListingId === input.listingId) {
+    try {
+      snapshot = await dependencies.fetchAdminListingSnapshot(targetListingId);
+    } catch {
+      // Snapshot failure is non-critical; selection still updates.
+    }
+  }
 
   return buildAdminListingsViewModel({
     list: input.list,

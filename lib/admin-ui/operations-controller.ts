@@ -92,8 +92,9 @@ export async function loadOperationsModel(
   dependencies: OperationsLoaderDependencies = DEFAULT_LOADER_DEPENDENCIES,
   selectedReservationId?: string | null,
   filters?: OperationsOverviewFilters,
+  cachedOverview?: AdminOperationsOverview,
 ): Promise<OperationsViewModel> {
-  const overview = await dependencies.loadAdminOperationsOverview(undefined, filters);
+  const overview = cachedOverview ?? await dependencies.loadAdminOperationsOverview(undefined, filters);
   const selectedId = getSelectedReservationIdFromOverview(overview, selectedReservationId);
   let reservationSnapshot: unknown = null;
   let documentTracking: unknown = null;
@@ -103,13 +104,7 @@ export async function loadOperationsModel(
 
   if (selectedId) {
     const listingIdFromOverview = getListingIdFromOverview(overview, selectedId);
-    const [
-      nextReservationSnapshot,
-      nextDocumentTracking,
-      nextFinanceOps,
-      nextEventHistory,
-      nextListingSnapshot,
-    ] = await Promise.all([
+    const results = await Promise.allSettled([
       dependencies.fetchReservationWorkflowSnapshot(selectedId),
       dependencies.fetchReservationDocumentTracking(selectedId),
       dependencies.fetchReservationFinanceOps(selectedId),
@@ -119,16 +114,20 @@ export async function loadOperationsModel(
         : Promise.resolve(null),
     ]);
 
-    reservationSnapshot = nextReservationSnapshot;
-    documentTracking = nextDocumentTracking;
-    financeOps = nextFinanceOps;
-    eventHistory = nextEventHistory;
-    listingSnapshot = nextListingSnapshot;
+    reservationSnapshot = results[0].status === "fulfilled" ? results[0].value : null;
+    documentTracking = results[1].status === "fulfilled" ? results[1].value : null;
+    financeOps = results[2].status === "fulfilled" ? results[2].value : null;
+    eventHistory = results[3].status === "fulfilled" ? results[3].value : null;
+    listingSnapshot = results[4].status === "fulfilled" ? results[4].value : null;
 
     if (!listingSnapshot) {
       const listingId = getListingId(reservationSnapshot);
       if (listingId) {
-        listingSnapshot = await dependencies.fetchListingWorkflowSnapshot(listingId);
+        try {
+          listingSnapshot = await dependencies.fetchListingWorkflowSnapshot(listingId);
+        } catch {
+          // Listing snapshot is non-critical; continue without it.
+        }
       }
     }
   }
@@ -260,17 +259,12 @@ export async function executeOperationsAction(
   };
 }
 
-function getFirstReservationId(overview: AdminOperationsOverview): string | null {
-  const firstItem = overview.reservations.items[0];
-  return isRecord(firstItem) ? asString(firstItem.id) : null;
-}
-
 function getSelectedReservationIdFromOverview(
   overview: AdminOperationsOverview,
   selectedReservationId?: string | null,
 ): string | null {
   if (!selectedReservationId) {
-    return getFirstReservationId(overview);
+    return null;
   }
 
   return overview.reservations.items

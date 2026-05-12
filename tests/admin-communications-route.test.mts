@@ -96,6 +96,15 @@ test("GET applies status search and pagination before reading conversations", as
   ]);
 });
 
+test("GET preserves Supabase query builder context when ordering conversations", async () => {
+  const response = await handleAdminCommunicationsGet(
+    new Request("http://localhost:3000/api/admin/communications?limit=1", { method: "GET" }),
+    createDeps({ selectData: [], requireBoundOrderThis: true }),
+  );
+
+  assert.equal(response.status, 200);
+});
+
 test("GET returns non-secret Chatwoot open-link config for admin", async (t) => {
   const previousBaseUrl = process.env.CHATWOOT_BASE_URL;
   const previousAccountId = process.env.CHATWOOT_ACCOUNT_ID;
@@ -156,6 +165,24 @@ test("POST rejects request with untrusted origin", async (t) => {
       body: JSON.stringify({ conversation_id: VALID_CONVERSATION_ID }),
     }),
     createDeps({}),
+  );
+
+  assert.equal(response.status, 403);
+});
+
+test("POST rejects public origin when admin and public sites are split", async (t) => {
+  setupSplitAdminOriginEnv(t);
+
+  const response = await handleAdminCommunicationsPost(
+    new Request("https://admin.example.com/api/admin/communications", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "https://www.example.com",
+      },
+      body: JSON.stringify({ conversation_id: VALID_CONVERSATION_ID }),
+    }),
+    createDeps({ userId: null }),
   );
 
   assert.equal(response.status, 403);
@@ -262,6 +289,80 @@ test("POST calls admin_retry_chatwoot_conversation RPC and returns success", asy
   ]);
 });
 
+test("POST restores retry mapping and returns 502 when dispatch fails", async (t) => {
+  setupCommunicationsAdminEnv(t);
+  const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
+
+  const response = await handleAdminCommunicationsPost(
+    createPostRequest({ conversation_id: VALID_CONVERSATION_ID }),
+    createDeps({
+      rpc: (name, args) => {
+        calls.push({ name, args });
+        if (name === "admin_mark_chatwoot_retry_dispatch_failed") {
+          return { data: { result: "retry_dispatch_failed" }, error: null };
+        }
+        return {
+          data: {
+            result: "retry_started",
+            conversation_id: VALID_CONVERSATION_ID,
+            listing_id: "33333333-3333-4333-8333-333333333333",
+            user_id: ADMIN_USER_ID,
+          },
+          error: null,
+        };
+      },
+      sendInngestEvent: async () => {
+        throw new Error("Inngest dispatch unavailable");
+      },
+    }),
+  );
+
+  assert.equal(response.status, 502);
+  const body = await response.json();
+  assert.equal(body.success, false);
+  assert.doesNotMatch(JSON.stringify(body), /retry_started/);
+  assert.equal(calls.length, 2);
+  assert.deepEqual(calls[0], {
+    name: "admin_retry_chatwoot_conversation",
+    args: { p_conversation_id: VALID_CONVERSATION_ID },
+  });
+  assert.equal(calls[1].name, "admin_mark_chatwoot_retry_dispatch_failed");
+  assert.equal(calls[1].args.p_conversation_id, VALID_CONVERSATION_ID);
+  assert.match(String(calls[1].args.p_failure_reason), /Inngest dispatch unavailable/);
+});
+
+test("POST returns 500 when retry dispatch fails and restore RPC fails", async (t) => {
+  setupCommunicationsAdminEnv(t);
+
+  const response = await handleAdminCommunicationsPost(
+    createPostRequest({ conversation_id: VALID_CONVERSATION_ID }),
+    createDeps({
+      rpc: (name) => {
+        if (name === "admin_mark_chatwoot_retry_dispatch_failed") {
+          return {
+            data: null,
+            error: { code: "P0004", message: "restore invariant failed" },
+          };
+        }
+        return {
+          data: {
+            result: "retry_started",
+            conversation_id: VALID_CONVERSATION_ID,
+            listing_id: "33333333-3333-4333-8333-333333333333",
+            user_id: ADMIN_USER_ID,
+          },
+          error: null,
+        };
+      },
+      sendInngestEvent: async () => {
+        throw new Error("Inngest dispatch unavailable");
+      },
+    }),
+  );
+
+  assert.equal(response.status, 500);
+});
+
 // ── helpers ──────────────────────────────────────────────────────────
 
 function createPostRequest(body: Record<string, unknown>): Request {
@@ -275,6 +376,34 @@ function createPostRequest(body: Record<string, unknown>): Request {
   });
 }
 
+function setupSplitAdminOriginEnv(t: TestContext): void {
+  const previousNodeEnv = process.env.NODE_ENV;
+  const previousSiteUrl = process.env.SITE_URL;
+  const previousPublicSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+  const previousVercelUrl = process.env.VERCEL_URL;
+
+  process.env.NODE_ENV = "production";
+  process.env.SITE_URL = "https://admin.example.com";
+  process.env.NEXT_PUBLIC_SITE_URL = "https://www.example.com";
+  delete process.env.VERCEL_URL;
+
+  t.after(() => {
+    restoreEnv("NODE_ENV", previousNodeEnv);
+    restoreEnv("SITE_URL", previousSiteUrl);
+    restoreEnv("NEXT_PUBLIC_SITE_URL", previousPublicSiteUrl);
+    restoreEnv("VERCEL_URL", previousVercelUrl);
+  });
+}
+
+function restoreEnv(key: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[key];
+    return;
+  }
+
+  process.env[key] = value;
+}
+
 type DepsOptions = {
   userId?: string | null;
   profileRole?: string | null;
@@ -282,8 +411,9 @@ type DepsOptions = {
   selectData?: unknown[];
   selectError?: { code?: string | null; message?: string | null } | null;
   queryCalls?: Array<{ method: string; column?: string; value?: unknown; from?: number; to?: number }>;
+  requireBoundOrderThis?: boolean;
   rpc?: (
-    name: "admin_retry_chatwoot_conversation",
+    name: "admin_retry_chatwoot_conversation" | "admin_mark_chatwoot_retry_dispatch_failed",
     args: Record<string, unknown>,
   ) => {
     data: unknown;
@@ -336,7 +466,10 @@ function createDeps(options: DepsOptions): AdminCommunicationsRouteDependencies 
                   options.queryCalls?.push({ method: "or", value });
                   return query;
                 },
-                order: (column: string, value: { ascending: boolean }) => {
+                order(column: string, value: { ascending: boolean }) {
+                  if (options.requireBoundOrderThis) {
+                    assert.equal(this, query);
+                  }
                   options.queryCalls?.push({ method: "order", column, value });
                   return query;
                 },
@@ -366,7 +499,7 @@ function createDeps(options: DepsOptions): AdminCommunicationsRouteDependencies 
           return { data: null, error: null };
         }
         return options.rpc(
-          name as "admin_retry_chatwoot_conversation",
+          name as "admin_retry_chatwoot_conversation" | "admin_mark_chatwoot_retry_dispatch_failed",
           args,
         );
       },

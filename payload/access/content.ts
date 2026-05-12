@@ -15,7 +15,7 @@ type ContentWhereFilter = {
 };
 
 function isPayloadAdmin(user: PayloadUserAccessArgs["req"]["user"]): boolean {
-  return user?.collection === "users" && (user.role === "admin" || user.role === null);
+  return user?.collection === "users" && user.role === "admin";
 }
 
 export function isAdminContentManager(args: PayloadUserAccessArgs): boolean {

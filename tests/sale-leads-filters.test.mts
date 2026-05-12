@@ -4,6 +4,8 @@ import test from "node:test";
 import {
   SALE_LEADS_INITIAL_FILTER_STATE,
   applySaleLeadFilters,
+  buildSaleLeadsBackendFilters,
+  hasSaleLeadsBackendFilterChange,
   type SaleLeadsOverviewRow,
 } from "../lib/admin-ui/sale-leads-filters.ts";
 
@@ -36,6 +38,30 @@ test("applySaleLeadFilters combines search and status filters", () => {
 
   assert.equal(result.length, 1);
   assert.equal(result[0].status, "new");
+});
+
+test("buildSaleLeadsBackendFilters omits search so typing filters local rows only", () => {
+  assert.deepEqual(
+    buildSaleLeadsBackendFilters({ search: "moda", status: "actionable" }),
+    { status: "actionable" },
+  );
+});
+
+test("hasSaleLeadsBackendFilterChange ignores search-only changes", () => {
+  assert.equal(
+    hasSaleLeadsBackendFilterChange(
+      { search: "", status: "actionable" },
+      { search: "m", status: "actionable" },
+    ),
+    false,
+  );
+  assert.equal(
+    hasSaleLeadsBackendFilterChange(
+      { search: "m", status: "actionable" },
+      { search: "m", status: "all" },
+    ),
+    true,
+  );
 });
 
 function makeRow(overrides: Partial<SaleLeadsOverviewRow> = {}): SaleLeadsOverviewRow {

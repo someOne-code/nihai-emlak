@@ -1,6 +1,6 @@
 -- Phase 9B: Admin catalog management RPCs for main_item_catalog and service_catalog.
 --
--- Adds:
+-- Adds route-facing public wrappers:
 --   admin_list_main_item_catalog()
 --   admin_create_main_item_catalog(p_payload jsonb)
 --   admin_update_main_item_catalog(p_code text, p_payload jsonb)
@@ -8,18 +8,24 @@
 --   admin_create_service_catalog(p_payload jsonb)
 --   admin_update_service_catalog(p_code text, p_payload jsonb)
 --
--- Security: all functions are SECURITY DEFINER and check is_admin() internally.
--- No service_role exposure. Public read policies remain unchanged.
+-- Privileged implementations live in the unexposed internal schema. Public RPC
+-- names remain thin wrappers so Next routes do not change.
+
+create schema if not exists internal;
+
+revoke all on schema internal from public;
+revoke usage on schema internal from anon, authenticated;
+grant usage on schema internal to service_role;
 
 -- ---------------------------------------------------------------------------
--- Main item catalog RPCs
+-- Main item catalog internal implementations
 -- ---------------------------------------------------------------------------
 
-create or replace function public.admin_list_main_item_catalog()
+create or replace function internal.admin_list_main_item_catalog()
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 begin
   if not public.is_admin() then
@@ -51,11 +57,11 @@ begin
 end;
 $$;
 
-create or replace function public.admin_create_main_item_catalog(p_payload jsonb)
+create or replace function internal.admin_create_main_item_catalog(p_payload jsonb)
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_id       uuid;
@@ -81,7 +87,6 @@ begin
     raise exception 'label is required' using errcode = '22023';
   end if;
 
-  -- Parse numeric fields; reject negative values explicitly
   if p_payload ? 'default_amount' and p_payload->>'default_amount' is not null then
     v_amount := (p_payload->>'default_amount')::numeric;
     if v_amount < 0 then
@@ -125,11 +130,11 @@ begin
 end;
 $$;
 
-create or replace function public.admin_update_main_item_catalog(p_code text, p_payload jsonb)
+create or replace function internal.admin_update_main_item_catalog(p_code text, p_payload jsonb)
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_id     uuid;
@@ -148,7 +153,6 @@ begin
     raise exception 'Catalog item not found' using errcode = 'P0002';
   end if;
 
-  -- Validate numeric fields before update
   if p_payload ? 'default_amount' and p_payload->>'default_amount' is not null then
     v_amount := (p_payload->>'default_amount')::numeric;
     if v_amount < 0 then
@@ -164,19 +168,19 @@ begin
   end if;
 
   update public.main_item_catalog set
-    label             = coalesce(nullif(trim(p_payload->>'label'), ''), label),
-    description       = case when p_payload ? 'description'
-                              then nullif(trim(p_payload->>'description'), '')
-                              else description end,
-    pricing_strategy  = coalesce(nullif(trim(p_payload->>'pricing_strategy'), ''), pricing_strategy),
-    default_amount    = case when p_payload ? 'default_amount'
-                              then v_amount
-                              else default_amount end,
+    label              = coalesce(nullif(trim(p_payload->>'label'), ''), label),
+    description        = case when p_payload ? 'description'
+                               then nullif(trim(p_payload->>'description'), '')
+                               else description end,
+    pricing_strategy   = coalesce(nullif(trim(p_payload->>'pricing_strategy'), ''), pricing_strategy),
+    default_amount     = case when p_payload ? 'default_amount'
+                               then v_amount
+                               else default_amount end,
     default_multiplier = case when p_payload ? 'default_multiplier'
                                then v_mult
                                else default_multiplier end,
-    is_active         = coalesce((p_payload->>'is_active')::boolean, is_active),
-    sort_order        = coalesce((p_payload->>'sort_order')::integer, sort_order)
+    is_active          = coalesce((p_payload->>'is_active')::boolean, is_active),
+    sort_order         = coalesce((p_payload->>'sort_order')::integer, sort_order)
   where id = v_id;
 
   return (
@@ -193,14 +197,14 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- Service catalog RPCs
+-- Service catalog internal implementations
 -- ---------------------------------------------------------------------------
 
-create or replace function public.admin_list_service_catalog()
+create or replace function internal.admin_list_service_catalog()
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 begin
   if not public.is_admin() then
@@ -229,11 +233,11 @@ begin
 end;
 $$;
 
-create or replace function public.admin_create_service_catalog(p_payload jsonb)
+create or replace function internal.admin_create_service_catalog(p_payload jsonb)
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_id    uuid;
@@ -286,11 +290,11 @@ begin
 end;
 $$;
 
-create or replace function public.admin_update_service_catalog(p_code text, p_payload jsonb)
+create or replace function internal.admin_update_service_catalog(p_code text, p_payload jsonb)
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_id    uuid;
@@ -335,7 +339,99 @@ begin
 end;
 $$;
 
--- Grant execute to authenticated users (RLS/is_admin() guards internally)
+-- ---------------------------------------------------------------------------
+-- Public RPC wrappers
+-- ---------------------------------------------------------------------------
+
+create or replace function public.admin_list_main_item_catalog()
+returns jsonb
+language sql
+security definer
+set search_path = ''
+as $$
+  select internal.admin_list_main_item_catalog();
+$$;
+
+create or replace function public.admin_create_main_item_catalog(p_payload jsonb)
+returns jsonb
+language sql
+security definer
+set search_path = ''
+as $$
+  select internal.admin_create_main_item_catalog(p_payload);
+$$;
+
+create or replace function public.admin_update_main_item_catalog(p_code text, p_payload jsonb)
+returns jsonb
+language sql
+security definer
+set search_path = ''
+as $$
+  select internal.admin_update_main_item_catalog(p_code, p_payload);
+$$;
+
+create or replace function public.admin_list_service_catalog()
+returns jsonb
+language sql
+security definer
+set search_path = ''
+as $$
+  select internal.admin_list_service_catalog();
+$$;
+
+create or replace function public.admin_create_service_catalog(p_payload jsonb)
+returns jsonb
+language sql
+security definer
+set search_path = ''
+as $$
+  select internal.admin_create_service_catalog(p_payload);
+$$;
+
+create or replace function public.admin_update_service_catalog(p_code text, p_payload jsonb)
+returns jsonb
+language sql
+security definer
+set search_path = ''
+as $$
+  select internal.admin_update_service_catalog(p_code, p_payload);
+$$;
+
+revoke all on function internal.admin_list_main_item_catalog() from public;
+revoke all on function internal.admin_create_main_item_catalog(jsonb) from public;
+revoke all on function internal.admin_update_main_item_catalog(text, jsonb) from public;
+revoke all on function internal.admin_list_service_catalog() from public;
+revoke all on function internal.admin_create_service_catalog(jsonb) from public;
+revoke all on function internal.admin_update_service_catalog(text, jsonb) from public;
+
+revoke execute on function internal.admin_list_main_item_catalog() from anon;
+revoke execute on function internal.admin_create_main_item_catalog(jsonb) from anon;
+revoke execute on function internal.admin_update_main_item_catalog(text, jsonb) from anon;
+revoke execute on function internal.admin_list_service_catalog() from anon;
+revoke execute on function internal.admin_create_service_catalog(jsonb) from anon;
+revoke execute on function internal.admin_update_service_catalog(text, jsonb) from anon;
+
+grant execute on function internal.admin_list_main_item_catalog() to service_role;
+grant execute on function internal.admin_create_main_item_catalog(jsonb) to service_role;
+grant execute on function internal.admin_update_main_item_catalog(text, jsonb) to service_role;
+grant execute on function internal.admin_list_service_catalog() to service_role;
+grant execute on function internal.admin_create_service_catalog(jsonb) to service_role;
+grant execute on function internal.admin_update_service_catalog(text, jsonb) to service_role;
+
+revoke all on function public.admin_list_main_item_catalog() from public;
+revoke all on function public.admin_create_main_item_catalog(jsonb) from public;
+revoke all on function public.admin_update_main_item_catalog(text, jsonb) from public;
+revoke all on function public.admin_list_service_catalog() from public;
+revoke all on function public.admin_create_service_catalog(jsonb) from public;
+revoke all on function public.admin_update_service_catalog(text, jsonb) from public;
+
+revoke execute on function public.admin_list_main_item_catalog() from anon;
+revoke execute on function public.admin_create_main_item_catalog(jsonb) from anon;
+revoke execute on function public.admin_update_main_item_catalog(text, jsonb) from anon;
+revoke execute on function public.admin_list_service_catalog() from anon;
+revoke execute on function public.admin_create_service_catalog(jsonb) from anon;
+revoke execute on function public.admin_update_service_catalog(text, jsonb) from anon;
+
 grant execute on function public.admin_list_main_item_catalog() to authenticated;
 grant execute on function public.admin_create_main_item_catalog(jsonb) to authenticated;
 grant execute on function public.admin_update_main_item_catalog(text, jsonb) to authenticated;

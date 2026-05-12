@@ -123,12 +123,25 @@ export async function handleAdminSystemGet(
     return jsonError("System health production configuration is incomplete", 500);
   }
 
-  const [supabaseDatabase, payload, storage, paymentEvents] = await Promise.all([
+  const results = await Promise.allSettled([
     buildSupabaseDatabaseStatus(guard.supabase),
     buildPayloadStatus(env, dependencies.runPayloadPreflight),
     buildStorageStatus(guard.supabase),
     readLatestPaymentEvent(guard.supabase),
   ]);
+
+  const supabaseDatabase = results[0].status === "fulfilled"
+    ? results[0].value
+    : buildDegradedStatus(["supabase_database"]);
+  const payload = results[1].status === "fulfilled"
+    ? results[1].value
+    : buildDegradedStatus(["payload"]);
+  const storage = results[2].status === "fulfilled"
+    ? results[2].value
+    : buildDegradedStatus(["storage"]);
+  const paymentEvents: PaymentEventReadiness = results[3].status === "fulfilled"
+    ? results[3].value
+    : { ok: false };
 
   return jsonSuccess({
     chatwoot: buildChatwootStatus(env),

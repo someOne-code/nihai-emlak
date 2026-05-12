@@ -1,5 +1,7 @@
 import type { CollectionConfig } from "payload";
 
+import { validateImageUrl } from "../../lib/validation/image-url.ts";
+
 import {
   canCreateContent,
   canDeleteContent,
@@ -65,6 +67,11 @@ export const BlogPosts: CollectionConfig = {
     },
     {
       name: "coverImageUrl",
+      type: "text",
+      validate: validateImageUrl,
+    },
+    {
+      name: "coverImageAlt",
       type: "text",
     },
     {

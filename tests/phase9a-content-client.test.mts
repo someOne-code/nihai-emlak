@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   ContentAdminClientError,
   fetchAdminPostsListFiltered,
+  fetchAdminPost,
   createAdminPost,
   deleteAdminPost,
   fetchAdminCategoriesList,
@@ -53,6 +54,32 @@ test("fetchAdminPostsListFiltered throws ContentAdminClientError on 401", async 
       return true;
     },
   );
+});
+
+test("fetchAdminPost times out when the detail request hangs", async () => {
+  const fetcher = async (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    await new Promise((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => {
+        reject(new DOMException("aborted", "AbortError"));
+      });
+    });
+    throw new Error("unreachable");
+  };
+
+  const result = await Promise.race([
+    fetchAdminPost("1", { fetcher, requestTimeoutMs: 5 }).then(
+      () => ({ ok: true as const }),
+      (error: unknown) => ({ ok: false as const, error }),
+    ),
+    new Promise<{ ok: false; error: Error }>((resolve) =>
+      setTimeout(() => resolve({ ok: false, error: new Error("client did not time out") }), 100),
+    ),
+  ]);
+
+  assert.equal(result.ok, false);
+  assert.ok(result.error instanceof ContentAdminClientError);
+  assert.equal(result.error.status, 408);
+  assert.equal(result.error.message, "İçerik isteği zaman aşımına uğradı.");
 });
 
 test("createAdminPost returns created document on 201", async () => {

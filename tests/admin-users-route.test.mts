@@ -10,6 +10,7 @@ import {
 
 const ADMIN_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const INVITED_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+const OVERSIZED_ADMIN_INVITE_JSON_BYTES = 4 * 1024 + 1;
 
 function setupAdminUsersEnv(t: TestContext): void {
   const previousNodeEnv = process.env.NODE_ENV;
@@ -40,6 +41,27 @@ function restoreEnv(key: string, value: string | undefined): void {
 }
 
 process.env.NODE_ENV = "test";
+
+class JsonSpyRequest extends Request {
+  jsonCalls = 0;
+
+  constructor(path: string, contentLength: number) {
+    super(`http://localhost:3000${path}`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "content-length": String(contentLength),
+        origin: "http://localhost:3000",
+      },
+      body: "x".repeat(contentLength),
+    });
+  }
+
+  override async json(): Promise<unknown> {
+    this.jsonCalls += 1;
+    return {};
+  }
+}
 
 test("admin users list rejects unauthenticated requests", async () => {
   const response = await handleAdminUsersGet(
@@ -151,6 +173,43 @@ test("admin invite rejects untrusted origins before auth", async (t) => {
   });
 });
 
+test("admin invite rejects oversized JSON before auth and request.json", async (t) => {
+  setupAdminUsersEnv(t);
+  const request = new JsonSpyRequest(
+    "/api/admin/users/invite",
+    OVERSIZED_ADMIN_INVITE_JSON_BYTES,
+  );
+  let authCalls = 0;
+  let adminServiceCalls = 0;
+
+  const response = await handleAdminUsersInvitePost(request, {
+    createServerSupabaseClient: async () => {
+      authCalls += 1;
+      return {
+        auth: {
+          getUser: async () => ({ data: { user: null }, error: null }),
+        },
+        from: () => ({
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({ data: null, error: null }),
+            }),
+          }),
+        }),
+      };
+    },
+    createAdminSupabaseClient: () => {
+      adminServiceCalls += 1;
+      return null;
+    },
+  });
+
+  assert.equal(response.status, 413);
+  assert.equal(authCalls, 0, "auth must not run for oversized admin invite JSON");
+  assert.equal(adminServiceCalls, 0, "admin service must not run for oversized admin invite JSON");
+  assert.equal(request.jsonCalls, 0, "request.json must not be called for oversized admin invite JSON");
+});
+
 test("admin invite rejects non-admin before Supabase Admin API", async () => {
   let inviteCalls = 0;
   const response = await handleAdminUsersInvitePost(
@@ -209,6 +268,49 @@ test("admin invite fails closed in production when site URL is missing", async (
   assert.deepEqual(await response.json(), {
     success: false,
     error: "Admin invite service is unavailable",
+  });
+});
+
+test("admin invite redirect uses private SITE_URL when public and private origins split", async (t) => {
+  setupAdminUsersEnv(t);
+  process.env.SITE_URL = "https://admin.example.com/internal/";
+  process.env.NEXT_PUBLIC_SITE_URL = "https://www.example.com";
+
+  const calls: Array<unknown> = [];
+  const dependencies = createDependencies({
+    inviteUserByEmail: async (email, options) => {
+      calls.push({ kind: "invite", email, options });
+      return {
+        data: { user: { id: INVITED_ID, email } },
+        error: null,
+      };
+    },
+    upsertProfile: async (row) => {
+      calls.push({ kind: "upsert", row });
+      return { error: null };
+    },
+  });
+  delete dependencies.siteUrl;
+
+  const response = await handleAdminUsersInvitePost(
+    new Request("https://admin.example.com/api/admin/users/invite", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "https://admin.example.com",
+      },
+      body: JSON.stringify({ email: "new-admin@example.com" }),
+    }),
+    dependencies,
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(calls[0], {
+    kind: "invite",
+    email: "new-admin@example.com",
+    options: {
+      redirectTo: "https://admin.example.com/internal/auth/update-password?redirect=%2Fadmin",
+    },
   });
 });
 
@@ -282,6 +384,39 @@ test("admin invite maps Supabase failures to safe generic errors", async () => {
   });
 });
 
+test("admin invite does not promote an existing user when invite fails", async () => {
+  let upsertCalls = 0;
+  const response = await handleAdminUsersInvitePost(
+    createRequest("/api/admin/users/invite", {
+      method: "POST",
+      body: JSON.stringify({ email: "existing@example.com" }),
+    }),
+    createDependencies({
+      inviteUserByEmail: async () => ({
+        data: { user: null },
+        error: { message: "User already registered" },
+      }),
+      listUsers: async () => ({
+        data: {
+          users: [{ id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", email: "existing@example.com" }],
+        },
+        error: null,
+      }),
+      upsertProfile: async () => {
+        upsertCalls += 1;
+        return { error: null };
+      },
+    }),
+  );
+
+  assert.equal(response.status, 500);
+  assert.equal(upsertCalls, 0, "existing auth users must not be promoted by invite fallback");
+  assert.deepEqual(await response.json(), {
+    success: false,
+    error: "Admin invite failed",
+  });
+});
+
 function createRequest(path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
   if (init.method === "POST") {
@@ -314,6 +449,10 @@ function createDependencies(options: {
     data: { user: { id: string; email?: string | null } | null };
     error: { message?: string | null } | null;
   }>;
+  listUsers?: (options: { page: number; perPage: number }) => Promise<{
+    data: { users?: Array<{ id: string; email?: string | null }> } | null;
+    error: { message?: string | null } | null;
+  }>;
   upsertProfile?: (
     row: { id: string; email: string; role: "admin" },
   ) => Promise<{ error: { message?: string | null } | null }>;
@@ -327,6 +466,7 @@ function createDependencies(options: {
             data: { user: { id: INVITED_ID, email: "new-admin@example.com" } },
             error: null,
           })),
+        ...(options.listUsers ? { listUsers: options.listUsers } : {}),
       },
     },
     from: () => ({

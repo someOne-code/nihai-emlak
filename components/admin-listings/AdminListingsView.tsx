@@ -111,11 +111,19 @@ export default function AdminListingsView() {
       setLoading(true);
       setError(null);
       try {
-        const [cachedList, snapshot] = await Promise.all([
+        const results = await Promise.allSettled([
           fetchListFn(filterStateToQuery(nextFilters)),
           selectedListingId ? fetchSnapshotFn(selectedListingId) : Promise.resolve(null),
         ]);
         if (!mountedRef.current) return;
+
+        if (results[0].status === "rejected") {
+          setError(safeErrorMessage((results[0] as PromiseRejectedResult).reason));
+          return;
+        }
+        const cachedList = results[0].value;
+        const snapshot = results[1].status === "fulfilled" ? results[1].value : null;
+
         setList(cachedList);
         setViewModel(
           buildAdminListingsViewModel({
@@ -321,7 +329,7 @@ export default function AdminListingsView() {
         </ListingsList>
 
         <section className="flex flex-col gap-5">
-          {showCreate && (
+          {showCreate ? (
             <CreateListingPanel
               busy={busy}
               onCancel={() => setShowCreate(false)}
@@ -334,9 +342,7 @@ export default function AdminListingsView() {
                 })
               }
             />
-          )}
-
-          {detail ? (
+          ) : detail ? (
             <ListingDetailTabs
               key={`tabs-${detail.listing.id}`}
               initialTab={initialDetailTab}
@@ -439,16 +445,14 @@ export default function AdminListingsView() {
               }
             />
           ) : (
-            !showCreate && (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                  <Building2 className="h-12 w-12 text-muted-foreground/40 mb-3" />
-                  <p className="text-muted-foreground text-sm">
-                    Detayı görüntülemek için soldan bir ilan seçin<br />veya yeni bir ilan oluşturun.
-                  </p>
-                </CardContent>
-              </Card>
-            )
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                <Building2 className="h-12 w-12 text-muted-foreground/40 mb-3" />
+                <p className="text-muted-foreground text-sm">
+                  Detayı görüntülemek için soldan bir ilan seçin<br />veya yeni bir ilan oluşturun.
+                </p>
+              </CardContent>
+            </Card>
           )}
         </section>
       </div>
@@ -473,10 +477,11 @@ function FilterControls({
         onChange={(event) =>
           onChange({ ...filters, status: event.target.value as FilterState["status"] })
         }
+        title="İlanın yayın durumuna göre filtreleyin"
       >
-        <option value="">Tüm durumlar</option>
-        <option value="active">Aktif</option>
-        <option value="passive">Pasif</option>
+        <option value="">Tüm yayın durumları</option>
+        <option value="active">Yayında</option>
+        <option value="passive">Yayın dışı</option>
       </Select>
       <Select
         value={filters.type}
@@ -534,26 +539,53 @@ function ListingItem({
           <ImageIcon className="h-2.5 w-2.5 mr-0.5" />
           {row.imageCount}
         </Badge>
-        <CheckoutReadyBadge ready={row.isCheckoutReady} />
+        {row.typeLabel !== "Satilik" && (
+          <CheckoutReadyBadge ready={row.isCheckoutReady} />
+        )}
       </div>
     </button>
   );
 }
 
 function StatusBadge({ statusLabel }: { statusLabel: string }) {
-  const variant =
-    statusLabel === "Aktif"
-      ? "success" as const
-      : statusLabel === "Pasif"
-        ? "destructive" as const
-        : "secondary" as const;
-  return <Badge variant={variant} className="text-[10px] px-1.5 py-0">{statusLabel}</Badge>;
+  // Yayın durumu: ilanın müşteri tarafına görünür olup olmadığını anlatır.
+  // "Aktif" -> yayında (görünür), "Pasif" -> yayın dışı (görünmez).
+  const isActive = statusLabel === "Aktif";
+  const isPassive = statusLabel === "Pasif";
+  const variant = isActive ? ("success" as const) : isPassive ? ("destructive" as const) : ("secondary" as const);
+  const visibleText = isActive ? "Yayında" : isPassive ? "Yayın dışı" : statusLabel;
+  const tooltip = isActive
+    ? "Yayın durumu: ilan şu anda müşterilere görünür."
+    : isPassive
+      ? "Yayın durumu: ilan müşterilere görünmüyor."
+      : "Yayın durumu";
+  return (
+    <Badge
+      variant={variant}
+      className="text-[10px] px-1.5 py-0"
+      title={tooltip}
+      aria-label={tooltip}
+    >
+      {visibleText}
+    </Badge>
+  );
 }
 
 function CheckoutReadyBadge({ ready }: { ready: boolean }) {
+  // Checkout hazırlığı: yayın durumundan bağımsız bir konfigürasyon kontrolüdür.
+  // Görsel, fiyat ve ödeme kalemleri tamamsa "hazır", aksi halde "eksik" olur.
+  // Aktif (yayında) bir ilanın checkout konfigürasyonu eksik olabilir.
+  const tooltip = ready
+    ? "Checkout konfigürasyonu tamam: görsel, fiyat ve ödeme kalemleri eklenmiş."
+    : "Checkout için bazı yapılandırma kalemleri eksik (ör. görsel, fiyat, ödeme kalemi). Yayın durumundan bağımsızdır.";
   return (
-    <Badge variant={ready ? "success" : "warning"} className="text-[10px] px-1.5 py-0">
-      {ready ? "Hazır" : "Eksik"}
+    <Badge
+      variant={ready ? "success" : "warning"}
+      className="text-[10px] px-1.5 py-0"
+      title={tooltip}
+      aria-label={tooltip}
+    >
+      {ready ? "Checkout hazır" : "Checkout eksik"}
     </Badge>
   );
 }
@@ -581,6 +613,11 @@ function CreateListingPanel({
   const [bathroomCount, setBathroomCount] = useState("");
   const [grossArea, setGrossArea] = useState("");
   const [isFurnished, setIsFurnished] = useState(false);
+  const [showErrors, setShowErrors] = useState(false);
+
+  const titleError = showErrors && !title.trim() ? "Bu alan zorunludur" : null;
+  const districtError = showErrors && !district.trim() ? "Bu alan zorunludur" : null;
+  const descriptionError = showErrors && !description.trim() ? "Bu alan zorunludur" : null;
 
   const computedSlug = slugManual ? slug : slugify(title);
 
@@ -593,6 +630,11 @@ function CreateListingPanel({
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!title.trim() || !district.trim() || !description.trim()) {
+      setShowErrors(true);
+      return;
+    }
+    setShowErrors(false);
     onCreate({
       type,
       title: title.trim(),
@@ -638,12 +680,13 @@ function CreateListingPanel({
                   <option value="sale">Satılık</option>
                 </Select>
               </FormField>
-              <FormField label="İlan Başlığı">
+              <FormField label="İlan Başlığı" required error={titleError}>
                 <Input
                   value={title}
                   onChange={(event) => handleTitleChange(event.target.value)}
                   placeholder="Örn: Kadıköy 2+1 Daire"
                   required
+                  className={titleError ? "border-destructive focus-visible:ring-destructive" : ""}
                 />
               </FormField>
             </div>
@@ -690,11 +733,12 @@ function CreateListingPanel({
                   placeholder="Örn: İstanbul"
                 />
               </FormField>
-              <FormField label="İlçe">
+              <FormField label="İlçe" required error={districtError}>
                 <Input
                   value={district}
                   onChange={(event) => setDistrict(event.target.value)}
                   placeholder="Örn: Kadıköy"
+                  className={districtError ? "border-destructive focus-visible:ring-destructive" : ""}
                 />
               </FormField>
             </div>
@@ -787,12 +831,13 @@ function CreateListingPanel({
                   rows={3}
                 />
               </FormField>
-              <FormField label="Detaylı açıklama">
+              <FormField label="Detaylı açıklama" required error={descriptionError}>
                 <Textarea
                   value={description}
                   onChange={(event) => setDescription(event.target.value)}
                   placeholder="Detaylı ilan metni..."
                   rows={3}
+                  className={descriptionError ? "border-destructive focus-visible:ring-destructive" : ""}
                 />
               </FormField>
             </div>
@@ -819,16 +864,24 @@ function FormField({
   label,
   hint,
   children,
+  required,
+  error,
 }: {
   label: string;
   hint?: string;
   children: React.ReactNode;
+  required?: boolean;
+  error?: string | null;
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <Label className="text-sm font-medium">{label}</Label>
+      <Label className="text-sm font-medium">
+        {label}
+        {required && <span className="text-destructive ml-0.5">*</span>}
+      </Label>
       {children}
-      {hint && (
+      {error && <p className="text-xs text-destructive mt-0.5">{error}</p>}
+      {hint && !error && (
         <p className="text-xs text-muted-foreground">{hint}</p>
       )}
     </div>

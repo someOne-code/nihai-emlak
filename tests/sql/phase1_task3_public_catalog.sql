@@ -234,6 +234,8 @@ values
     true
   );
 
+reset role;
+
 insert into public.service_catalog (
   id,
   code,
@@ -255,7 +257,11 @@ values
     'Havalimani Transferi',
     3000,
     false
-  );
+	  );
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', '33333333-3333-3333-3333-333333333333', false);
+select set_config('request.jwt.claim.role', 'authenticated', false);
 
 insert into public.listing_service_options (
   id,
@@ -285,7 +291,6 @@ declare
   v_consultant_title text;
   v_listing_title text;
   v_image_alt_text text;
-  v_service_price numeric;
   v_option_price numeric;
 begin
   update public.consultants
@@ -324,18 +329,6 @@ begin
     raise exception 'Admin should be able to manage listing image rows';
   end if;
 
-  update public.service_catalog
-  set base_price = 2600
-  where id = 'cccccccc-cccc-cccc-cccc-ccccccccccc1'::uuid;
-
-  select base_price into v_service_price
-  from public.service_catalog
-  where id = 'cccccccc-cccc-cccc-cccc-ccccccccccc1'::uuid;
-
-  if v_service_price <> 2600 then
-    raise exception 'Admin should be able to manage service_catalog rows';
-  end if;
-
   update public.listing_service_options
   set override_price = 2300
   where id = 'dddddddd-dddd-dddd-dddd-ddddddddddd1'::uuid;
@@ -372,6 +365,8 @@ end;
 $$;
 
 -- parser-incompatible service codes must fail at the catalog boundary
+reset role;
+
 do $$
 begin
   begin
@@ -452,6 +447,10 @@ end;
 $$;
 
 -- negative price must fail
+set role authenticated;
+select set_config('request.jwt.claim.sub', '33333333-3333-3333-3333-333333333333', false);
+select set_config('request.jwt.claim.role', 'authenticated', false);
+
 do $$
 begin
   begin
@@ -559,12 +558,11 @@ declare
 begin
   for v_table_name, v_policy_name in
     values
-      ('consultants', 'consultants_admin_manage'),
-      ('listings', 'listings_admin_manage'),
-      ('listing_images', 'listing_images_admin_manage'),
-      ('service_catalog', 'service_catalog_admin_manage'),
-      ('listing_service_options', 'listing_service_options_admin_manage')
-  loop
+	      ('consultants', 'consultants_admin_manage'),
+	      ('listings', 'listings_admin_manage'),
+	      ('listing_images', 'listing_images_admin_manage'),
+	      ('listing_service_options', 'listing_service_options_admin_manage')
+	  loop
     select count(*)
     into v_admin_write_policy_count
     from pg_policies
@@ -590,7 +588,18 @@ begin
     if v_extra_write_policy_count <> 0 then
       raise exception 'Unexpected non-admin write policy found for %', v_table_name;
     end if;
-  end loop;
+	  end loop;
+
+  select count(*)
+  into v_admin_write_policy_count
+  from pg_policies
+  where schemaname = 'public'
+    and tablename = 'service_catalog'
+    and policyname = 'service_catalog_admin_manage';
+
+  if v_admin_write_policy_count <> 0 then
+    raise exception 'service_catalog direct admin write policy should be removed after RPC hardening';
+  end if;
 end;
 $$;
 

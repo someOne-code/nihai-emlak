@@ -4,25 +4,48 @@
 -- so the admin RPC boundary must reject duplicate active labels as the visible
 -- payment item identity.
 
-with ranked_main_item_labels as (
-  select
-    id,
-    row_number() over (
-      partition by lower(regexp_replace(trim(label), '\s+', ' ', 'g'))
-      order by is_active desc, sort_order asc, created_at asc, id asc
-    ) as rn
-  from public.main_item_catalog
-)
-delete from public.main_item_catalog m
-using ranked_main_item_labels r
-where m.id = r.id
-  and r.rn > 1;
+do $$
+declare
+  v_duplicate_label text;
+  v_duplicate_count integer;
+begin
+  select duplicate_label, duplicate_count
+  into v_duplicate_label, v_duplicate_count
+  from (
+    select
+      lower(regexp_replace(trim(label), '\s+', ' ', 'g')) as duplicate_label,
+      count(*) as duplicate_count
+    from public.main_item_catalog
+    where is_active = true
+    group by lower(regexp_replace(trim(label), '\s+', ' ', 'g'))
+    having count(*) > 1
+    order by lower(regexp_replace(trim(label), '\s+', ' ', 'g'))
+    limit 1
+  ) duplicates;
 
-create or replace function public.admin_create_main_item_catalog(p_payload jsonb)
+  if v_duplicate_label is not null then
+    raise exception 'duplicate active main item catalog labels exist: % (% rows)', v_duplicate_label, v_duplicate_count
+      using errcode = '23505',
+            constraint = 'main_item_catalog_active_label_unique';
+  end if;
+end;
+$$;
+
+create unique index if not exists main_item_catalog_active_label_unique
+  on public.main_item_catalog ((lower(regexp_replace(trim(label), '\s+', ' ', 'g'))))
+  where is_active = true;
+
+revoke insert, update, delete on public.main_item_catalog from authenticated;
+revoke insert, update, delete on public.service_catalog from authenticated;
+
+drop policy if exists main_item_catalog_admin_manage on public.main_item_catalog;
+drop policy if exists service_catalog_admin_manage on public.service_catalog;
+
+create or replace function internal.admin_create_main_item_catalog(p_payload jsonb)
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_id        uuid;
@@ -106,11 +129,11 @@ begin
 end;
 $$;
 
-create or replace function public.admin_update_main_item_catalog(p_code text, p_payload jsonb)
+create or replace function internal.admin_update_main_item_catalog(p_code text, p_payload jsonb)
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_id             uuid;
@@ -193,3 +216,10 @@ begin
   );
 end;
 $$;
+
+revoke all on function internal.admin_create_main_item_catalog(jsonb) from public;
+revoke all on function internal.admin_update_main_item_catalog(text, jsonb) from public;
+revoke execute on function internal.admin_create_main_item_catalog(jsonb) from anon;
+revoke execute on function internal.admin_update_main_item_catalog(text, jsonb) from anon;
+grant execute on function internal.admin_create_main_item_catalog(jsonb) to service_role;
+grant execute on function internal.admin_update_main_item_catalog(text, jsonb) to service_role;

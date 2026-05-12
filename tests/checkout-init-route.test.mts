@@ -754,6 +754,64 @@ test("checkout init rejects refreshed pending payment rebound to another order",
   assert.equal(payload.error, "Pending payment no longer belongs to order");
 });
 
+test("checkout init rejects refreshed pending payment rebound to another user", async (t) => {
+  setupCheckoutInitEnv(t);
+
+  const orderId = "abababab-abab-4bab-8bab-abababababab";
+  const userId = "cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdcd";
+  const reboundUserId = "dededede-dede-4ede-8ede-dededededede";
+  const paymentId = "efefefef-efef-4fef-8fef-efefefefefef";
+
+  const dependencies = createDependencies({
+    getOrder: () => ({
+      id: orderId,
+      total_amount: 1250,
+      currency: "TRY",
+      status: "pending",
+    }),
+    getPendingPayment: () => ({
+      id: paymentId,
+      order_id: orderId,
+      user_id: userId,
+      amount: "1250.00",
+      currency: "TRY",
+      status: "pending",
+      provider_ref: paymentId,
+    }),
+    getPaymentById: () => ({
+      id: paymentId,
+      order_id: orderId,
+      user_id: reboundUserId,
+      amount: "1250.00",
+      currency: "TRY",
+      status: "pending",
+      provider_ref: paymentId,
+    }),
+    insertPayment: () => {
+      throw new Error("insert should not be called when pending payment exists");
+    },
+    userId,
+  });
+
+  const response = await handleCheckoutInitPost(
+    new Request("http://localhost:3000/api/checkout/init", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "http://localhost:3000",
+      },
+      body: JSON.stringify({ orderId }),
+    }),
+    dependencies,
+  );
+
+  assert.equal(response.status, 409);
+
+  const payload = await response.json();
+  assert.equal(payload.success, false);
+  assert.equal(payload.error, "Pending payment no longer belongs to user");
+});
+
 test("checkout init fails closed when multiple pending isbank payments exist for an order", async (t) => {
   setupCheckoutInitEnv(t);
 

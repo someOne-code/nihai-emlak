@@ -51,6 +51,12 @@ where id::text like '11111111-2222-4222-8222-222222222%';
 delete from public.reservations
 where id::text like 'eeeeeeee-ffff-4fff-8fff-fffffffff%';
 
+delete from public.listing_main_item_options
+where listing_id in (
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd101'::uuid,
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd102'::uuid
+);
+
 delete from public.listing_service_options
 where listing_id in (
   'cccccccc-dddd-4ddd-8ddd-ddddddddd101'::uuid,
@@ -211,6 +217,17 @@ values
   'https://example.com/phase5-passive.jpg',
   'Phase 5 passive listing',
   0,
+  true
+);
+
+-- Make Phase 5 Active Listing checkout-ready: attach an active main item
+-- so the rent + active invariant is satisfied.
+insert into public.listing_main_item_options (
+  listing_id, main_item_id, is_enabled
+)
+values (
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd101'::uuid,
+  'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeee1'::uuid,
   true
 );
 
@@ -452,6 +469,10 @@ select
   'TRY',
   'pending'::public.order_status
 from unnest(array[102, 103, 104, 105, 106, 107]) as suffix;
+
+update public.orders
+set status = 'conflict'::public.order_status
+where id = '11111111-2222-4222-8222-222222222105'::uuid;
 
 insert into public.order_items (
   id,
@@ -850,6 +871,24 @@ begin
 
   if v_count <> 1 then
     raise exception 'TEST FAILED: payment_issues queue pagination must apply after queue filtering';
+  end if;
+
+  select count(*)
+  into v_count
+  from jsonb_array_elements(public.list_admin_reservations(null::public.reservation_status, 'payment_waiting', 20, 0)->'items') item
+  where item->>'id' = 'eeeeeeee-ffff-4fff-8fff-fffffffff101';
+
+  if v_count <> 1 then
+    raise exception 'TEST FAILED: payment_waiting queue should include pending order/payment fixture';
+  end if;
+
+  select count(*)
+  into v_count
+  from jsonb_array_elements(public.list_admin_reservations(null::public.reservation_status, 'payment_issues', 20, 0)->'items') item
+  where item->>'id' = 'eeeeeeee-ffff-4fff-8fff-fffffffff101';
+
+  if v_count <> 0 then
+    raise exception 'TEST FAILED: payment_issues queue must not include payment waiting fixture';
   end if;
 
   select count(*)

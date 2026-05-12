@@ -29,7 +29,10 @@ import {
   parseCategoryUpdateBodyForTest,
 } from "../lib/admin/content-categories-parsers.ts";
 import { buildCategoryOptionsFindArgsForTest } from "../lib/admin/content-categories-options.ts";
+import { buildCategoriesListFindArgsForTest } from "../lib/admin/content-categories-query.ts";
 import { buildCategoryLinkedPostsFindArgsForTest } from "../lib/admin/content-category-linked-posts.ts";
+
+const OVERSIZED_CONTENT_ADMIN_JSON_BYTES = 256 * 1024 + 1;
 
 // ── Env setup (mirrors phase8-admin-listings-route.test.mts) ────────────────
 
@@ -71,6 +74,47 @@ function makeRequest(
     headers,
     body: method !== "GET" && method !== "DELETE" ? "{}" : undefined,
   });
+}
+
+class JsonSpyRequest extends Request {
+  jsonCalls = 0;
+
+  constructor(url: string, contentLength: number) {
+    super(url, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "content-length": String(contentLength),
+        origin: "http://localhost:3000",
+      },
+      body: "x".repeat(contentLength),
+    });
+  }
+
+  override async json(): Promise<unknown> {
+    this.jsonCalls += 1;
+    return {};
+  }
+}
+
+function createAuthSpyDependencies(authCalls: { count: number }) {
+  return {
+    createServerSupabaseClient: async () => {
+      authCalls.count += 1;
+      return {
+        auth: {
+          getUser: async () => ({ data: { user: null }, error: null }),
+        },
+        from: () => ({
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({ data: null, error: null }),
+            }),
+          }),
+        }),
+      };
+    },
+  };
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -154,6 +198,129 @@ test("content admin envelope accepts content-type with charset parameter", (t) =
 
   const result = validateContentAdminJsonEnvelope(req);
   assert.equal(result.ok, true);
+});
+
+test("posts create rejects oversized JSON before auth and request.json", async (t) => {
+  setupContentAdminEnv(t);
+  const { handlePostsCreatePost } = await import("../lib/admin/content-posts-route.ts");
+
+  const request = new JsonSpyRequest(
+    "http://localhost:3000/api/admin/content/posts",
+    OVERSIZED_CONTENT_ADMIN_JSON_BYTES,
+  );
+  const authCalls = { count: 0 };
+
+  const response = await handlePostsCreatePost(
+    request,
+    createAuthSpyDependencies(authCalls),
+  );
+
+  assert.equal(response.status, 413);
+  assert.equal(authCalls.count, 0, "auth must not run for oversized JSON");
+  assert.equal(request.jsonCalls, 0, "request.json must not be called for oversized JSON");
+});
+
+test("posts update rejects oversized JSON before auth and request.json", async (t) => {
+  setupContentAdminEnv(t);
+  const { handlePostUpdate } = await import("../lib/admin/content-posts-route.ts");
+
+  const request = new JsonSpyRequest(
+    "http://localhost:3000/api/admin/content/posts/post-1",
+    OVERSIZED_CONTENT_ADMIN_JSON_BYTES,
+  );
+  const authCalls = { count: 0 };
+
+  const response = await handlePostUpdate(
+    request,
+    createAuthSpyDependencies(authCalls),
+    "post-1",
+  );
+
+  assert.equal(response.status, 413);
+  assert.equal(authCalls.count, 0, "auth must not run for oversized JSON");
+  assert.equal(request.jsonCalls, 0, "request.json must not be called for oversized JSON");
+});
+
+test("consultants create rejects oversized JSON before auth and request.json", async (t) => {
+  setupContentAdminEnv(t);
+  const { handleConsultantsCreatePost } = await import("../lib/admin/content-consultants-route.ts");
+
+  const request = new JsonSpyRequest(
+    "http://localhost:3000/api/admin/content/consultants",
+    OVERSIZED_CONTENT_ADMIN_JSON_BYTES,
+  );
+  const authCalls = { count: 0 };
+
+  const response = await handleConsultantsCreatePost(
+    request,
+    createAuthSpyDependencies(authCalls),
+  );
+
+  assert.equal(response.status, 413);
+  assert.equal(authCalls.count, 0, "auth must not run for oversized JSON");
+  assert.equal(request.jsonCalls, 0, "request.json must not be called for oversized JSON");
+});
+
+test("consultants update rejects oversized JSON before auth and request.json", async (t) => {
+  setupContentAdminEnv(t);
+  const { handleConsultantUpdate } = await import("../lib/admin/content-consultants-route.ts");
+
+  const request = new JsonSpyRequest(
+    "http://localhost:3000/api/admin/content/consultants/consultant-1",
+    OVERSIZED_CONTENT_ADMIN_JSON_BYTES,
+  );
+  const authCalls = { count: 0 };
+
+  const response = await handleConsultantUpdate(
+    request,
+    createAuthSpyDependencies(authCalls),
+    "consultant-1",
+  );
+
+  assert.equal(response.status, 413);
+  assert.equal(authCalls.count, 0, "auth must not run for oversized JSON");
+  assert.equal(request.jsonCalls, 0, "request.json must not be called for oversized JSON");
+});
+
+test("categories create rejects oversized JSON before auth and request.json", async (t) => {
+  setupContentAdminEnv(t);
+  const { handleCategoriesCreatePost } = await import("../lib/admin/content-categories-route.ts");
+
+  const request = new JsonSpyRequest(
+    "http://localhost:3000/api/admin/content/categories",
+    OVERSIZED_CONTENT_ADMIN_JSON_BYTES,
+  );
+  const authCalls = { count: 0 };
+
+  const response = await handleCategoriesCreatePost(
+    request,
+    createAuthSpyDependencies(authCalls),
+  );
+
+  assert.equal(response.status, 413);
+  assert.equal(authCalls.count, 0, "auth must not run for oversized JSON");
+  assert.equal(request.jsonCalls, 0, "request.json must not be called for oversized JSON");
+});
+
+test("categories update rejects oversized JSON before auth and request.json", async (t) => {
+  setupContentAdminEnv(t);
+  const { handleCategoryUpdate } = await import("../lib/admin/content-categories-route.ts");
+
+  const request = new JsonSpyRequest(
+    "http://localhost:3000/api/admin/content/categories/category-1",
+    OVERSIZED_CONTENT_ADMIN_JSON_BYTES,
+  );
+  const authCalls = { count: 0 };
+
+  const response = await handleCategoryUpdate(
+    request,
+    createAuthSpyDependencies(authCalls),
+    "category-1",
+  );
+
+  assert.equal(response.status, 413);
+  assert.equal(authCalls.count, 0, "auth must not run for oversized JSON");
+  assert.equal(request.jsonCalls, 0, "request.json must not be called for oversized JSON");
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -538,6 +705,17 @@ test("category options query includes inactive categories for admin post forms",
   assert.equal(args.limit, 500);
   assert.equal(args.sort, "sortOrder");
   assert.equal("where" in args, false);
+});
+
+test("buildCategoriesListFindArgs selects only fields needed for instant category editing", () => {
+  const args = buildCategoriesListFindArgsForTest(1, 20);
+
+  assert.equal(args.collection, "blog_categories");
+  assert.equal(args.depth, 0);
+  assert.equal(args.sort, "sortOrder");
+  assert.equal(args.select.title, true);
+  assert.equal(args.select.description, true);
+  assert.equal(args.select.updatedAt, true);
 });
 
 test("category detail linked posts query uses relationship id and lightweight result bounds", () => {

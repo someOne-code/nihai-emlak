@@ -1,0 +1,65 @@
+
+.property-pro .imageContainer {
+  position: relative;
+  overflow: hidden;
+}
+
+.property-pro .shadow-property {
+  box-shadow: 0 0 30px #1817171a;
+}
+
+.property-pro .shadow-deatail {
+  box-shadow: 0 20px 80px 0 #68758d26;
+}
+
+.property-pro .bg-property-hero {
+  background: linear-gradient(to bottom, #fff 10%, #d1f2ff 90%);
+}
+
+.dark .property-pro .bg-property-hero {
+  background: linear-gradient(to bottom, #0c121e 10%, #1f2a37 90%);
+}
+
+.property-pro .text-property-primary {
+  color: #2f73f2;
+}
+
+.property-pro .bg-property-primary {
+  background: #2f73f2;
+}
+
+.property-pro .bg-property-light {
+  background: #f0f6fa;
+}
+
+.dark .property-pro .bg-property-light {
+  background: #0e1624;
+}
+
+.property-pro .bg-property-surface {
+  background: #fff;
+}
+
+.dark .property-pro .bg-property-surface {
+  background: #0c121e;
+}
+
+.property-pro .text-property-midnight {
+  color: #102d47;
+}
+
+.dark .property-pro .text-property-midnight {
+  color: #f1f5f9;
+}
+
+.property-pro .text-property-gray {
+  color: #668199;
+}
+
+.dark .property-pro .text-property-gray {
+  color: #94a3b8;
+}
+
+.property-pro .border-property {
+  border-color: #6bc5f94d;
+}

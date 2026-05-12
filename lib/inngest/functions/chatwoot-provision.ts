@@ -110,6 +110,10 @@ export async function provisionRetriedChatwootConversation(
   );
   const providerResult = await createProviderConversation(chatwoot, mappingResult.mapping);
   if (!providerResult.ok) {
+    if (providerResult.retriable) {
+      throw new Error(PROVIDER_FAILURE_MESSAGE);
+    }
+
     await markFailed(adminClient, conversationId);
     return { ok: false, conversationId };
   }
@@ -157,7 +161,10 @@ async function loadProvisioningMapping(
 async function createProviderConversation(
   chatwoot: ChatwootProvisionClient,
   mapping: ChatwootProvisionMappingRow,
-): Promise<{ ok: true; conversationId: string; sourceId: string } | { ok: false }> {
+): Promise<
+  | { ok: true; conversationId: string; sourceId: string }
+  | { ok: false; retriable: boolean }
+> {
   const identifier = buildChatwootContactIdentifier(mapping.user_id);
   const contactResult = await chatwoot.createContact({
     identifier,
@@ -168,7 +175,7 @@ async function createProviderConversation(
     },
   });
   if (!contactResult.ok) {
-    return { ok: false };
+    return { ok: false, retriable: isRetriableProviderStatus(contactResult.status) };
   }
 
   const conversationResult = await chatwoot.createConversation({
@@ -180,7 +187,7 @@ async function createProviderConversation(
     },
   });
   if (!conversationResult.ok) {
-    return { ok: false };
+    return { ok: false, retriable: isRetriableProviderStatus(conversationResult.status) };
   }
 
   return {
@@ -188,6 +195,10 @@ async function createProviderConversation(
     conversationId: conversationResult.value.conversationId,
     sourceId: contactResult.value.sourceId,
   };
+}
+
+function isRetriableProviderStatus(status: number): boolean {
+  return status === 408 || status === 429 || status >= 500;
 }
 
 async function markFailed(adminClient: AdminClient, conversationId: string): Promise<void> {

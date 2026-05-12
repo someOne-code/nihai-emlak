@@ -27,5 +27,5 @@ export function shouldRefreshContentOnResume(
 export async function refreshContentViews(
   tasks: Array<() => Promise<unknown>>,
 ): Promise<void> {
-  await Promise.all(tasks.map((task) => task()));
+  await Promise.allSettled(tasks.map((task) => task()));
 }

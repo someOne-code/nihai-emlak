@@ -105,7 +105,10 @@ function isActionableConsoleError(entry: string): boolean {
 }
 
 function isActionableFailedRequest(entry: string): boolean {
-  return !["net::ERR_ABORTED"].some((ignored) => entry.includes(ignored));
+  return ![
+    "net::ERR_ABORTED",
+    "net::ERR_NETWORK_CHANGED",
+  ].some((ignored) => entry.includes(ignored));
 }
 
 function escapeRegExp(value: string): string {

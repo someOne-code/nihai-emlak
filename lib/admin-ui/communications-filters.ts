@@ -16,6 +16,10 @@ export type CommunicationsFilterState = {
   status: CommunicationsStatusFilter;
 };
 
+export type CommunicationsBackendFilters = {
+  status?: CommunicationsStatusFilter;
+};
+
 export const COMMUNICATIONS_INITIAL_FILTER_STATE: CommunicationsFilterState = {
   search: "",
   status: "issues",
@@ -41,6 +45,19 @@ export function applyCommunicationsFilters(
   }
 
   return filtered;
+}
+
+export function buildCommunicationsBackendFilters(
+  filters: CommunicationsFilterState,
+): CommunicationsBackendFilters {
+  return filters.status === "all" ? {} : { status: filters.status };
+}
+
+export function hasCommunicationsBackendFilterChange(
+  previous: CommunicationsFilterState,
+  next: CommunicationsFilterState,
+): boolean {
+  return previous.status !== next.status;
 }
 
 function matchesSearch(row: CommunicationsOverviewRow, query: string): boolean {

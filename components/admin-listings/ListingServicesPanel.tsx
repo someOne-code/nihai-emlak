@@ -58,6 +58,21 @@ export default function ListingServicesPanel({
     );
   }
 
+  const hasEnabledMainItem = detail.mainItems.some((m) => m.isEnabled);
+
+  if (!hasEnabledMainItem) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Ek Hizmetler</CardTitle>
+          <CardDescription>
+            Ek hizmet eklemek için önce &quot;Ana Ödeme Kalemleri&quot; sekmesinden en az bir ana ödeme kalemi ekleyin.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
+
   const candidates = getAvailableServiceAddCandidates(detail);
 
   return (

@@ -31,8 +31,10 @@ import type { CommunicationsOverviewRow } from "@/lib/admin-ui/communications-vi
 
 import {
   applyCommunicationsFilters,
+  buildCommunicationsBackendFilters,
   COMMUNICATIONS_INITIAL_FILTER_STATE,
   CommunicationsFilters,
+  hasCommunicationsBackendFilterChange,
   type CommunicationsFilterState,
 } from "./CommunicationsFilters";
 import { ConversationStatusBadge } from "./ConversationStatusBadge";
@@ -61,7 +63,9 @@ export default function CommunicationsView() {
     setLoading(true);
     setError(null);
     try {
-      const result = await loadCommunicationsModel({ filters: nextFilters });
+      const result = await loadCommunicationsModel({
+        filters: buildCommunicationsBackendFilters(nextFilters),
+      });
       if (!mountedRef.current) return;
       if (!result.ok) {
         setError(result.error);
@@ -78,10 +82,13 @@ export default function CommunicationsView() {
 
   const handleFiltersChange = useCallback(
     (nextFilters: CommunicationsFilterState) => {
+      const shouldReload = hasCommunicationsBackendFilterChange(filters, nextFilters);
       setFilters(nextFilters);
-      void loadData(nextFilters);
+      if (shouldReload) {
+        void loadData(nextFilters);
+      }
     },
-    [loadData],
+    [filters, loadData],
   );
 
   useEffect(() => {

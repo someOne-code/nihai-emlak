@@ -210,7 +210,7 @@ test("admin listings list maps RPC 22023 to 400", async (t) => {
   );
 
   assert.equal(response.status, 400);
-  assert.equal((await response.json()).error, "Invalid admin listing request");
+  assert.equal((await response.json()).error, "Geçersiz ilan isteği");
 });
 
 // ----------------------------------------------------------------------------
@@ -416,7 +416,7 @@ test("admin listings create maps 23505 to 409 slug conflict", async (t) => {
   );
 
   assert.equal(response.status, 409);
-  assert.equal((await response.json()).error, "Listing slug is already used");
+  assert.equal((await response.json()).error, "Bu URL adresi (slug) zaten kullanılıyor");
 });
 
 test("admin listings create maps P0004 to 422 rent invariant", async (t) => {
@@ -425,12 +425,12 @@ test("admin listings create maps P0004 to 422 rent invariant", async (t) => {
   const response = await handleAdminListingsCreatePost(
     createJsonRequest({ method: "POST", body: { ...validCreateBody(), type: "rent", status: "active" } }),
     createDependencies({
-      rpc: () => ({ data: null, error: { code: "P0004", message: "rent invariant" } }),
+      rpc: () => ({ data: null, error: { code: "P0004", message: "checkout-not-ready" } }),
     }),
   );
 
   assert.equal(response.status, 422);
-  assert.equal((await response.json()).error, "Rent listing is not checkout-ready");
+  assert.equal((await response.json()).error, "Kiral\u0131k ilan i\u00e7in ana \u00f6deme kalemi gerekli");
 });
 
 test("admin listings create returns 201 with snapshot payload on success", async (t) => {
@@ -627,7 +627,7 @@ test("admin listings update maps 23505 to 409", async (t) => {
   );
 
   assert.equal(response.status, 409);
-  assert.equal((await response.json()).error, "Listing slug is already used");
+  assert.equal((await response.json()).error, "Bu URL adresi (slug) zaten kullanılıyor");
 });
 
 test("admin listings status transition maps P0004 to 422 rent invariant", async (t) => {
@@ -636,13 +636,13 @@ test("admin listings status transition maps P0004 to 422 rent invariant", async 
   const response = await handleAdminListingsUpdatePatch(
     createJsonRequest({ method: "PATCH", body: { status: "active" } }),
     createDependencies({
-      rpc: () => ({ data: null, error: { code: "P0004", message: "rent invariant" } }),
+      rpc: () => ({ data: null, error: { code: "P0004", message: "checkout-not-ready" } }),
     }),
     { listingId: LISTING_ID },
   );
 
   assert.equal(response.status, 422);
-  assert.equal((await response.json()).error, "Rent listing is not checkout-ready");
+  assert.equal((await response.json()).error, "Kiral\u0131k ilan i\u00e7in ana \u00f6deme kalemi gerekli");
 });
 
 // ----------------------------------------------------------------------------

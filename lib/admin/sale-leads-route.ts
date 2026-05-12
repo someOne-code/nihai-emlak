@@ -117,7 +117,10 @@ export async function handleAdminSaleLeadsGet(
     ].join(","));
   }
 
-  const ordered = orderByUpdatedAt("updated_at", { ascending: false });
+  if (!select.order) {
+    return jsonError("Admin sale leads query is unavailable", 500);
+  }
+  const ordered = select.order("updated_at", { ascending: false });
   if (!ordered.range) {
     return jsonError("Admin sale leads query is unavailable", 500);
   }
@@ -169,6 +172,11 @@ export async function handleAdminSaleLeadsPost(
   const envelopeResult = validateStateChangingJsonRequestEnvelope(
     request,
     POST_ROUTE_CONFIG,
+    {
+      invalidConfigError: "Admin sale leads trusted origin configuration is invalid",
+      missingConfigError: "Admin sale leads private SITE_URL must be configured outside development/test",
+      strategy: "site-url-only",
+    },
   );
   if (!envelopeResult.ok) {
     return jsonError(envelopeResult.error, envelopeResult.status);

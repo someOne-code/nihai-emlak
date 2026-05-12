@@ -50,7 +50,7 @@ test("provisionRetriedChatwootConversation creates provider conversation and com
   ]);
 });
 
-test("provisionRetriedChatwootConversation marks mapping failed when provider fails", async () => {
+test("provisionRetriedChatwootConversation marks mapping failed for non-retriable provider failures", async () => {
   const rpcCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
 
   const result = await provisionRetriedChatwootConversation(
@@ -59,7 +59,7 @@ test("provisionRetriedChatwootConversation marks mapping failed when provider fa
     },
     createDeps({
       chatwoot: {
-        createContact: async () => ({ ok: false, status: 502, error: "provider down" }),
+        createContact: async () => ({ ok: false, status: 400, error: "bad request" }),
         createConversation: async () => {
           throw new Error("should not create conversation after contact failure");
         },
@@ -78,6 +78,31 @@ test("provisionRetriedChatwootConversation marks mapping failed when provider fa
       },
     },
   ]);
+});
+
+test("provisionRetriedChatwootConversation throws transient provider failures for retry", async () => {
+  const rpcCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
+
+  await assert.rejects(
+    () =>
+      provisionRetriedChatwootConversation(
+        {
+          conversationId: CONVERSATION_ID,
+        },
+        createDeps({
+          chatwoot: {
+            createContact: async () => ({ ok: false, status: 502, error: "provider down" }),
+            createConversation: async () => {
+              throw new Error("should not create conversation after contact failure");
+            },
+          },
+          rpcCalls,
+        }),
+      ),
+    /Communication provider request failed/,
+  );
+
+  assert.deepEqual(rpcCalls, []);
 });
 
 function createDeps(options: {

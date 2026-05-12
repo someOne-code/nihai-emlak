@@ -152,6 +152,8 @@ values (
   'TRY'
 );
 
+reset role;
+
 insert into public.main_item_catalog (
   id,
   code,
@@ -166,7 +168,7 @@ values
 (
   '88888888-6666-4666-8666-666666666661'::uuid,
   'deposit_q3',
-  'Kapora',
+  'Kapora Q3',
   'fixed',
   15000,
   null,
@@ -176,7 +178,7 @@ values
 (
   '88888888-6666-4666-8666-666666666662'::uuid,
   'first_rent_q3',
-  'Bir Aylik Kira',
+  'Bir Aylik Kira Q3',
   'listing_price_multiplier',
   null,
   1.0,
@@ -186,7 +188,7 @@ values
 (
   '88888888-6666-4666-8666-666666666663'::uuid,
   'monthly_fee_q3',
-  'Aylik Hizmet Bedeli',
+  'Aylik Hizmet Bedeli Q3',
   'stay_months_multiplier',
   null,
   1000,
@@ -196,13 +198,17 @@ values
 (
   '88888888-6666-4666-8666-666666666664'::uuid,
   'inactive_q3',
-  'Pasif Kalem',
+  'Pasif Kalem Q3',
   'fixed',
   999,
   null,
-  false,
-  4
-);
+	  false,
+	  4
+	);
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', '66666666-6666-4666-8666-666666666661', false);
+select set_config('request.jwt.claim.role', 'authenticated', false);
 
 insert into public.listing_main_item_options (
   id,
@@ -256,6 +262,8 @@ values
   4
 );
 
+reset role;
+
 insert into public.service_catalog (
   id,
   code,
@@ -276,8 +284,12 @@ values
   'transfer_q3',
   'Transfer',
   3000,
-  true
-);
+	  true
+	);
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', '66666666-6666-4666-8666-666666666661', false);
+select set_config('request.jwt.claim.role', 'authenticated', false);
 
 insert into public.listing_service_options (
   id,

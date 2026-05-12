@@ -35,7 +35,7 @@ type SupabaseClient = {
     select: (columns: string) => SupabaseSelectQuery;
   };
   rpc: (
-    name: "admin_retry_chatwoot_conversation",
+    name: "admin_retry_chatwoot_conversation" | "admin_mark_chatwoot_retry_dispatch_failed",
     args: Record<string, unknown>,
   ) => Promise<SupabaseRpcResponse>;
 };
@@ -123,7 +123,10 @@ export async function handleAdminCommunicationsGet(
     ].join(","));
   }
 
-  const ordered = orderByUpdatedAt("updated_at", { ascending: false });
+  if (!select.order) {
+    return jsonError("Ä°letiÅŸim sorgusu kullanÄ±lamÄ±yor", 500);
+  }
+  const ordered = select.order("updated_at", { ascending: false });
   if (!ordered.range) {
     return jsonError("İletişim sorgusu kullanılamıyor", 500);
   }
@@ -146,6 +149,11 @@ export async function handleAdminCommunicationsPost(
   const envelopeResult = validateStateChangingJsonRequestEnvelope(
     request,
     POST_ROUTE_CONFIG,
+    {
+      invalidConfigError: "Admin communications trusted origin configuration is invalid",
+      missingConfigError: "Admin communications private SITE_URL must be configured outside development/test",
+      strategy: "site-url-only",
+    },
   );
   if (!envelopeResult.ok) {
     return jsonError(envelopeResult.error, envelopeResult.status);
@@ -183,14 +191,31 @@ export async function handleAdminCommunicationsPost(
     return jsonError("Geçersiz iletişim yeniden deneme yanıtı", 500);
   }
 
-  await (dependencies.sendInngestEvent ?? sendInngestEvent)({
-    name: "chatwoot/conversation.retry_requested",
-    data: {
-      conversation_id: retryResult.conversationId,
-      listing_id: retryResult.listingId,
-      user_id: retryResult.userId,
-    },
-  });
+  try {
+    await (dependencies.sendInngestEvent ?? sendInngestEvent)({
+      name: "chatwoot/conversation.retry_requested",
+      data: {
+        conversation_id: retryResult.conversationId,
+        listing_id: retryResult.listingId,
+        user_id: retryResult.userId,
+      },
+    });
+  } catch (error) {
+    try {
+      const restoreResult = await guard.supabase.rpc("admin_mark_chatwoot_retry_dispatch_failed", {
+        p_conversation_id: retryResult.conversationId,
+        p_failure_reason: describeDispatchFailure(error),
+      });
+
+      if (restoreResult.error) {
+        return jsonError("İletişim yeniden deneme geri alınamadı", 500);
+      }
+    } catch {
+      return jsonError("İletişim yeniden deneme geri alınamadı", 500);
+    }
+
+    return jsonError("İletişim yeniden deneme kuyruğa alınamadı", 502);
+  }
 
   return jsonSuccess({
     conversation_id: conversationId,
@@ -372,6 +397,13 @@ function parseRetryRpcResult(
 
 async function sendInngestEvent(event: AdminCommunicationsRetryEvent): Promise<void> {
   await inngest.send(event);
+}
+
+function describeDispatchFailure(error: unknown): string {
+  const message = error instanceof Error
+    ? error.message
+    : asNonEmptyString(error);
+  return message ?? "Chatwoot retry dispatch failed";
 }
 
 function normalizeOptionalText(value: unknown, max: number): string | null {

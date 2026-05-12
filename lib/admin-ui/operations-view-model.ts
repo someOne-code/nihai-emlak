@@ -38,6 +38,7 @@ export type OperationsOverviewRow = {
   priority: number;
   updatedAt: string | null;
   reservationStatus: string;
+  orderRecordLabel: string;
   orderId: string | null;
   orderStatus: string;
   paymentId: string | null;
@@ -49,6 +50,7 @@ export type OperationsOverviewRow = {
 
 export type OperationsQueueId =
   | "payment_issues"
+  | "payment_waiting"
   | "refund_requests"
   | "manual_refunds"
   | "document_waiting"
@@ -116,13 +118,18 @@ const ACTION_LABELS: Record<OperationsActionId, string> = {
 export function buildOperationsViewModel(input: OperationsViewModelInput): OperationsViewModel {
   const orders = input.overview.orders.items.filter(isRecord);
   const payments = input.overview.payments.items.filter(isRecord);
+  const orderReservationIds = new Set(
+    orders.map((o) => asString(o.reservation_id)).filter(Boolean),
+  );
   const rows = input.overview.reservations.items
     .filter(isRecord)
+    .filter((reservation) => orderReservationIds.has(asString(reservation.id) ?? ""))
     .map((reservation) => buildOverviewRow(reservation, orders, payments))
     .sort(compareOverviewRows);
 
-  const selectedRow =
-    rows.find((row) => row.reservationId === input.selectedReservationId) ?? rows[0] ?? null;
+  const selectedRow = input.selectedReservationId
+    ? rows.find((row) => row.reservationId === input.selectedReservationId) ?? null
+    : null;
   const reservationSnapshot = sanitizeReservationSnapshot(input.reservationSnapshot);
   const financeOps = sanitizeFinanceOps(input.financeOps);
   const eventHistory = sanitizeEventHistory(input.eventHistory);
@@ -420,6 +427,7 @@ function buildOverviewRow(
     priority: queuePriority(queue),
     updatedAt,
     reservationStatus: formatStatusLabel(asString(reservation.status)),
+    orderRecordLabel: formatOrderRecordLabel(asString(order?.status), asString(payment?.status)),
     orderId,
     orderStatus: formatStatusLabel(asString(order?.status), "Yok"),
     paymentId: asString(payment?.id),
@@ -441,16 +449,12 @@ function deriveQueue(
   const paymentStatus = asString(payment?.status)?.toLowerCase() ?? "";
   const financeStatus = asString(financeOps?.status)?.toLowerCase() ?? "";
 
-  if (financeStatus === "refund_required") {
+  if (financeStatus === "refund_required" && paymentStatus === "succeeded") {
     return "refund_requests";
   }
 
-  if (financeStatus === "refund_requested") {
+  if (financeStatus === "refund_requested" && paymentStatus === "succeeded") {
     return "manual_refunds";
-  }
-
-  if (financeStatus === "manual_resolution_required" || financeStatus === "conflict_payment") {
-    return "payment_issues";
   }
 
   if (financeStatus === "payment_not_received") {
@@ -464,12 +468,32 @@ function deriveQueue(
     return "payment_issues";
   }
 
+  if (paymentStatus === "pending" || orderStatus === "pending") {
+    return "payment_waiting";
+  }
+
+  if (financeStatus === "manual_resolution_required" || financeStatus === "conflict_payment") {
+    return "payment_issues";
+  }
+
   if (reservationStatus === "cancelled" && paymentStatus === "succeeded") {
     return "manual_refunds";
   }
 
-  if (reservationStatus === "confirmed") {
+  if (reservationStatus === "expired" && paymentStatus === "succeeded") {
+    return "manual_refunds";
+  }
+
+  if (paymentStatus === "refunded") {
     return "completed";
+  }
+
+  if (reservationStatus === "confirmed" && paymentStatus === "succeeded") {
+    return "completed";
+  }
+
+  if (reservationStatus === "confirmed" && !paymentStatus) {
+    return "payment_issues";
   }
 
   if (paymentStatus === "succeeded") {
@@ -493,8 +517,20 @@ function formatPrimaryStatus(
     return "Ödeme alınmadı / süreç kapandı";
   }
 
+  if (paymentStatus === "refunded") {
+    return "İade tamamlandı";
+  }
+
+  if (paymentStatus === "failed" || orderStatus === "failed") {
+    return "Ödeme başarısız";
+  }
+
+  if (paymentStatus === "cancelled") {
+    return "Ödeme iptal edildi";
+  }
+
   if (paymentStatus === "pending" || orderStatus === "pending") {
-    return "Ödeme bekliyor";
+    return "Ödeme bekleniyor";
   }
 
   if (!paymentStatus) {
@@ -508,6 +544,7 @@ function formatQueueLabel(queue: OperationsQueueId): string {
   const map: Record<OperationsQueueId, string> = {
     all: "Operasyon",
     payment_issues: "Ödeme sorunu",
+    payment_waiting: "Ödeme bekleniyor",
     refund_requests: "İptal / iade talebi",
     manual_refunds: "Manuel iade bekliyor",
     document_waiting: "Belge bekliyor",
@@ -523,9 +560,21 @@ function queuePriority(queue: OperationsQueueId): number {
     manual_refunds: 2,
     document_waiting: 3,
     completed: 4,
-    all: 5,
+    payment_waiting: 5,
+    all: 6,
   };
   return map[queue];
+}
+
+function formatOrderRecordLabel(orderStatus: string | null, paymentStatus: string | null): string {
+  const normalizedOrder = orderStatus?.toLowerCase() ?? "";
+  const normalizedPayment = paymentStatus?.toLowerCase() ?? "";
+
+  if (normalizedOrder === "completed" && normalizedPayment === "succeeded") {
+    return "Sipariş kaydı";
+  }
+
+  return "Ödeme işlemi";
 }
 
 function compareOverviewRows(a: OperationsOverviewRow, b: OperationsOverviewRow): number {

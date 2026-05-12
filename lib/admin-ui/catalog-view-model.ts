@@ -25,41 +25,41 @@ export type AdminCatalogMainItemRow = {
 // Admin-friendly labels for pricing strategy DB codes. Unknown codes fall back
 // to the raw code so admins can still identify configuration drift.
 export const PRICING_STRATEGY_LABELS: Record<string, string> = {
-  fixed: "Sabit Tutar",
-  listing_price_multiplier: "İlan Fiyatı Çarpanı",
-  stay_months_multiplier: "Konaklama Ayı Çarpanı",
+  fixed: "Sabit tutar",
+  listing_price_multiplier: "İlan fiyatına oranlı",
+  stay_months_multiplier: "Aylık (süreye bağlı)",
 };
 
 // Short human explanations shown in the form help text.
 export const PRICING_STRATEGY_DESCRIPTIONS: Record<string, string> = {
-  fixed: "İlan fiyatından bağımsız, katalogda girilen sabit TRY tutarı tahsil edilir.",
+  fixed: "Depozito, kapora gibi sabit kalemler için. Her müşteriden aynı tutar alınır.",
   listing_price_multiplier:
-    "İlan fiyatı × çarpan. Örn. çarpan 1.0 → kira bedeli, 0.5 → yarı tutar.",
+    "İlan fiyatı × oran. Örn: oran 1.0 → tam kira, oran 0.5 → yarısı.",
   stay_months_multiplier:
-    "Konaklama ay sayısı × çarpan. Örn. çarpan 1000 TRY, 3 ay konaklama = 3.000 TRY.",
+    "Aylık tekrarlayan ödeme. Toplam = aylık tutar × kalma süresi (ay).",
 };
 
 // Longer human explanations used for the (i) tooltip/popover on each strategy.
 export const PRICING_STRATEGY_LONG_DESCRIPTIONS: Record<string, string> = {
   fixed:
-    "Sabit Tutar: Müşteriden her zaman tam olarak girdiğin TRY tutarı tahsil edilir. " +
-    "İlan fiyatı, konaklama süresi ya da başka bir şey bu tutarı değiştirmez. " +
-    "Örnek: 5.000 TRY depozito — müşteri 10.000 TL de 50.000 TL de ilanda konaklasa 5.000 TL öder.",
+    "Sabit tutar: Müşteriden her zaman tam olarak girdiğin tutarı tahsil edilir. " +
+    "İlan fiyatı veya kalma süresi bu tutarı etkilemez. " +
+    "Örnek: 5.000 ₺ depozito — 10.000 ₺'lık ilanda da 50.000 ₺'lık ilanda da 5.000 ₺ ödenir.",
   listing_price_multiplier:
-    "İlan Fiyatı Çarpanı: Müşteriden tahsil edilen tutar, ilanın kendi fiyatıyla orantılıdır. " +
-    "Formül: ilan fiyatı × çarpan. " +
-    "Örnek: Kira kalemi için çarpan 1.0 girersen 15.000 TL'lik ilan 15.000 TL, 25.000 TL'lik ilan 25.000 TL tahsil edilir. " +
-    "Komisyon için çarpan 0.10 girersen her ilanda fiyatın %10'u alınır.",
+    "İlan fiyatına oranlı: Tahsil edilen tutar, ilanın kendi fiyatıyla orantılıdır. " +
+    "Formül: ilan fiyatı × oran. " +
+    "Örnek: Oran 1.0 ise 15.000 ₺'lık ilanda 15.000 ₺ alınır. " +
+    "Komisyon için oran 0.10 girerseniz fiyatın %10'u alınır.",
   stay_months_multiplier:
-    "Konaklama Ayı Çarpanı: Müşteriden tahsil edilen tutar, checkout'ta seçtiği ay sayısıyla orantılıdır. " +
-    "Formül: kalacak ay sayısı × çarpan. " +
-    "Örnek: Aylık aidat için çarpan 500 girersen 3 ay kalan 1.500 TL, 6 ay kalan 3.000 TL öder.",
+    "Aylık (süreye bağlı): Toplam tutar, müşterinin kalma süresiyle orantılıdır. " +
+    "Formül: aylık tutar × ay sayısı. " +
+    "Örnek: Aylık 500 ₺ aidat girerseniz, 3 ay kalan 1.500 ₺, 6 ay kalan 3.000 ₺ öder.",
 };
 
 // Generic tooltip for the "Fiyat Stratejisi" field label itself.
 export const PRICING_STRATEGY_FIELD_HELP =
-  "Bu kalemden müşteriye kesilecek tutarın nasıl hesaplanacağını belirler. " +
-  "Her stratejinin yanındaki (i) ikonuna gelerek ayrıntıyı görebilirsin.";
+  "Bu ödeme kaleminin tutarının nasıl hesaplanacağını belirler. " +
+  "Her seçeneğin açıklamasını okuyarak kendinize uygun olanı seçin.";
 
 // Which pricing strategy requires which input field. UI hides/disables the
 // irrelevant field so the DB check constraint can never fail from the admin UI.

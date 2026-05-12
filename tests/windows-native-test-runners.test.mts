@@ -20,13 +20,13 @@ test("db security runner prefers the exact Supabase DB container name", () => {
   assert.equal(container, "supabase_db_nihaiEmlak_windows_canonical");
 });
 
-test("db security runner falls back to the first Supabase DB container", () => {
+test("db security runner fails closed when the exact Supabase DB container is missing", () => {
   const container = resolveSupabaseDbContainerName({
     repoRoot: "C:\\repo\\missing_exact",
     names: ["redis", "supabase_db_available"],
   });
 
-  assert.equal(container, "supabase_db_available");
+  assert.equal(container, null);
 });
 
 test("db security runner writes SQL logs under repo-local .codex/logs", () => {

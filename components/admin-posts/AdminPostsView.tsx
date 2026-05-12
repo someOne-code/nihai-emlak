@@ -37,6 +37,7 @@ import {
 } from "@/lib/admin-ui/content-view-model";
 import {
   type PostsListFilters,
+  type PostsUiFilterState,
   type PostStatusFilter,
   type PostFormSlugState,
   POST_STATUS_OPTIONS,
@@ -56,6 +57,9 @@ import {
   computeSlugFromManualEdit,
   buildPostCreatePayload,
   buildPostUpdatePayload,
+  buildPostsBackendFilters,
+  applyPostSearchFilter,
+  hasPostBackendFilterChange,
 } from "@/lib/admin-ui/content-posts-ui-helpers";
 
 import { Badge } from "@/components/ui/badge";
@@ -82,11 +86,7 @@ import PostsList from "./PostsList";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-type FilterState = {
-  search: string;
-  status: PostStatusFilter;
-  category: string;
-};
+type FilterState = PostsUiFilterState;
 
 type CategoryOption = { id: string; title: string };
 
@@ -162,10 +162,7 @@ export default function AdminPostsView() {
     setLoading(true);
     setError(null);
     try {
-      const apiFilters: PostsListFilters = {};
-      if (nextFilters.search) apiFilters.search = nextFilters.search;
-      if (nextFilters.status) apiFilters.status = nextFilters.status;
-      if (nextFilters.category) apiFilters.category = nextFilters.category;
+      const apiFilters: PostsListFilters = buildPostsBackendFilters(nextFilters);
       const vm = await loadPostsModel(undefined, apiFilters);
       if (!mountedRef.current) return;
       setViewModel(vm);
@@ -214,28 +211,24 @@ export default function AdminPostsView() {
     setDetail(result?.type === "post" ? result.detail : null);
   }, []);
 
-  const handleSelectPost = useCallback(async (postId: string) => {
+  const handleSelectPost = useCallback((row: PostRowType) => {
     setActionError(null);
     setActionSuccess(null);
-    setSelectedId(postId);
+    setSelectedId(row.id);
     setShowCreate(false);
-    setDetailLoading(true);
-    try {
-      await loadPostDetail(postId);
-    } catch (err) {
-      if (!mountedRef.current) return;
-      setActionError(safeErrorMessage(err));
-    } finally {
-      if (mountedRef.current) setDetailLoading(false);
-    }
-  }, [loadPostDetail]);
+    setDetail(row.detail);
+    setDetailLoading(false);
+  }, []);
 
   const handleApplyFilters = useCallback(
     (nextFilters: FilterState) => {
+      const shouldReload = hasPostBackendFilterChange(filters, nextFilters);
       setFilters(nextFilters);
-      loadList(nextFilters);
+      if (shouldReload) {
+        loadList(nextFilters);
+      }
     },
-    [loadList],
+    [filters, loadList],
   );
 
   const openCreatePostPanel = useCallback(() => {
@@ -312,8 +305,9 @@ export default function AdminPostsView() {
 
   const hasActiveFilter =
     !!filters.search || !!filters.status || !!filters.category;
+  const filteredRows = applyPostSearchFilter(viewModel.rows, filters.search);
   const shouldRenderDetailPanel =
-    showCreate || detail || detailLoading || viewModel.rows.length > 0;
+    showCreate || detail || detailLoading || filteredRows.length > 0;
 
   return (
     <div className={adminLayout.container}>
@@ -331,7 +325,7 @@ export default function AdminPostsView() {
 
       <div className={adminLayout.workspace}>
         <PostsList
-          rowsCount={viewModel.rows.length}
+          rowsCount={filteredRows.length}
           loading={loading}
           emptyTitle={hasActiveFilter ? "Sonuç yok" : "Henüz yazı yok"}
           emptyText={
@@ -346,7 +340,7 @@ export default function AdminPostsView() {
             />
           }
         >
-          {viewModel.rows.map((row) => (
+          {filteredRows.map((row) => (
             <PostRowItem
               key={row.id}
               row={row}
@@ -488,12 +482,12 @@ function PostRowItem({
 }: {
   row: PostRowType;
   selected: boolean;
-  onSelect: (id: string) => void;
+  onSelect: (row: PostRowType) => void;
 }) {
   return (
     <button
       type="button"
-      onClick={() => onSelect(row.id)}
+      onClick={() => onSelect(row)}
       className={selected ? adminLayout.listItemSelected : adminLayout.listItem}
     >
       <div className={adminLayout.listItemHeader}>

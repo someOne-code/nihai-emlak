@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Save } from "lucide-react";
+import { Info, Plus, Save, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -156,6 +156,25 @@ function MainItemAddControl({
   );
 }
 
+const STRATEGY_LABELS: Record<string, string> = {
+  fixed: "Sabit fiyat",
+  per_month: "Aylık",
+  multiplied: "Çarpanlı",
+  one_time: "Tek seferlik",
+};
+
+const STRATEGY_TOOLTIPS: Record<string, string> = {
+  fixed: "Sabit tutar, ay sayısına bağlı değildir.",
+  per_month: "Her ay tekrarlanan ödeme. Toplam = tutar × ay sayısı.",
+  multiplied: "Tutar, çarpan katsayısı ile hesaplanır.",
+  one_time: "Tek seferlik yapılan ödeme.",
+};
+
+function formatAmount(value: number | null): string {
+  if (value === null || !Number.isFinite(value)) return "—";
+  return value.toLocaleString("tr-TR");
+}
+
 function MainItemRow({
   item,
   busy,
@@ -174,6 +193,13 @@ function MainItemRow({
     numericFieldValue(item.overrideMultiplier),
   );
 
+  const strategyLabel = STRATEGY_LABELS[item.pricingStrategy] ?? item.pricingStrategy;
+  const strategyTooltip = STRATEGY_TOOLTIPS[item.pricingStrategy] ?? "Fiyatlandırma stratejisi.";
+
+  const effectiveAmount = item.overrideAmount ?? item.defaultAmount;
+  const effectiveMultiplier = item.overrideMultiplier ?? item.defaultMultiplier;
+  const showMultiplier = item.pricingStrategy !== "fixed" && item.pricingStrategy !== "one_time";
+
   const handleSave = () => {
     onConfigure(item.code, {
       override_label:
@@ -186,63 +212,128 @@ function MainItemRow({
   };
 
   return (
-    <div className="rounded-lg border p-4 space-y-3">
+    <div className="rounded-lg border p-4 space-y-4">
+      {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-col gap-0.5">
-          <strong className="text-sm">{display.primaryLabel}</strong>
+          <strong className="text-sm text-balance">{display.primaryLabel}</strong>
           <code className="font-mono text-xs text-muted-foreground">{display.codeLabel}</code>
         </div>
-        <div className="flex flex-wrap gap-1">
-          <Badge variant={item.isEnabled ? "success" : "warning"} className="text-[10px]">
+        <div className="flex flex-wrap gap-1.5">
+          <Badge
+            variant={item.isEnabled ? "success" : "warning"}
+            className="text-[10px]"
+            title={item.isEnabled ? "Bu kalem bu ilana bağlı ve aktif." : "Bu kalem pasif durumda."}
+          >
             {display.enabledLabel}
           </Badge>
-          <Badge variant={item.catalogIsActive ? "secondary" : "destructive"} className="text-[10px]">
+          <Badge
+            variant={item.catalogIsActive ? "secondary" : "destructive"}
+            className="text-[10px]"
+            title={item.catalogIsActive ? "Fiyat kataloğunda aktif." : "Fiyat kataloğunda pasif — müşteriye gösterilmeyebilir."}
+          >
             {display.catalogStatusLabel}
+          </Badge>
+          <Badge
+            variant="outline"
+            className="text-[10px]"
+            title={strategyTooltip}
+          >
+            {strategyLabel}
           </Badge>
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-        <span>{display.defaultAmountLabel}</span>
-        <span>{display.customAmountLabel}</span>
-        <span>{display.defaultMultiplierLabel}</span>
-        <span>{display.customMultiplierLabel}</span>
-        <span>Strateji: {item.pricingStrategy}</span>
+      {/* Summary: effective values */}
+      <div className={`grid ${showMultiplier ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-2"} gap-x-4 gap-y-2 rounded-md bg-muted/40 px-3 py-2.5`}>
+        <div className="flex flex-col gap-0.5">
+          <span className="text-[11px] text-muted-foreground">Geçerli tutar</span>
+          <span className="text-sm font-medium tabular-nums">
+            {formatAmount(effectiveAmount)} ₺
+            {item.overrideAmount != null && (
+              <span className="ml-1 text-[10px] text-muted-foreground">(özel)</span>
+            )}
+          </span>
+        </div>
+        {showMultiplier && (
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[11px] text-muted-foreground" title="Toplam hesabında kullanılan süre veya adet. Örn: aylık 1.000 ₺ × 12 ay = 12.000 ₺ toplam.">
+              Süre / adet
+              <Info className="inline-block ml-0.5 size-3 text-muted-foreground/60" />
+            </span>
+            <span className="text-sm font-medium tabular-nums">
+              {effectiveMultiplier != null ? `×${effectiveMultiplier}` : "—"}
+              {item.overrideMultiplier != null && (
+                <span className="ml-1 text-[10px] text-muted-foreground">(özel)</span>
+              )}
+            </span>
+          </div>
+        )}
+        <div className="flex flex-col gap-0.5">
+          <span className="text-[11px] text-muted-foreground">Katalog varsayılanı</span>
+          <span className="text-xs tabular-nums text-muted-foreground">
+            {formatAmount(item.defaultAmount)} ₺{showMultiplier ? ` · ×${item.defaultMultiplier ?? "—"}` : ""}
+          </span>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+      {/* Override form */}
+      <div className={`grid grid-cols-1 ${showMultiplier ? "sm:grid-cols-3" : "sm:grid-cols-2"} gap-3`}>
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Özel etiket</Label>
+          <Label
+            className="text-xs"
+            title="Müşterinin göreceği isim. Boş bırakırsanız katalog varsayılanı kullanılır."
+          >
+            Özel etiket
+          </Label>
           <Input
             value={overrideLabel}
             onChange={(event) => setOverrideLabel(event.target.value)}
-            placeholder="Varsayılan"
+            placeholder={display.catalogLabel || "Varsayılan"}
+            title="Bu ilana özel görünen isim"
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Özel tutar</Label>
+          <Label
+            className="text-xs"
+            title={`Bu ilana özel tutar (₺). Boş bırakırsanız katalog varsayılanı (${formatAmount(item.defaultAmount)} ₺) kullanılır.`}
+          >
+            Özel tutar (₺)
+          </Label>
           <Input
             type="number"
             min={0}
+            className="tabular-nums"
             value={overrideAmount}
             onChange={(event) => setOverrideAmount(event.target.value)}
-            placeholder="Varsayılan"
+            placeholder={formatAmount(item.defaultAmount)}
+            title="Bu ilana özel tutar"
           />
         </div>
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Özel çarpan</Label>
-          <Input
-            type="number"
-            min={0}
-            step="0.01"
-            value={overrideMultiplier}
-            onChange={(event) => setOverrideMultiplier(event.target.value)}
-            placeholder="Varsayılan"
-          />
-        </div>
+        {showMultiplier && (
+          <div className="flex flex-col gap-1.5">
+            <Label
+              className="text-xs"
+              title={`Kaç ay veya kaç adet ile çarpılacağını belirler. Örn: 12 ay kira. Boş bırakırsanız katalog varsayılanı (${item.defaultMultiplier ?? "yok"}) kullanılır.`}
+            >
+              Süre / adet
+              <Info className="inline-block ml-0.5 size-3 text-muted-foreground/60" />
+            </Label>
+            <Input
+              type="number"
+              min={0}
+              step="0.01"
+              className="tabular-nums"
+              value={overrideMultiplier}
+              onChange={(event) => setOverrideMultiplier(event.target.value)}
+              placeholder={item.defaultMultiplier != null ? String(item.defaultMultiplier) : "—"}
+              title="Kaç ay veya kaç adet ile çarpılacak (ör. 12 ay kira)"
+            />
+          </div>
+        )}
       </div>
-      <p className="text-xs text-muted-foreground">
-        Boş bırakırsanız katalog varsayılanı kullanılır.
+      <p className="text-xs text-muted-foreground text-pretty">
+        Boş bırakılan alanlarda katalog varsayılanı kullanılır.
       </p>
 
       <div className="flex gap-2 justify-end">
@@ -252,7 +343,9 @@ function MainItemRow({
           size="sm"
           disabled={busy}
           onClick={() => onConfigure(item.code, { is_enabled: false })}
+          title="Bu ödeme kalemini ilandan kaldırır"
         >
+          <Trash2 className="size-3" />
           Kaldır
         </Button>
         <Button
@@ -260,8 +353,9 @@ function MainItemRow({
           size="sm"
           disabled={busy}
           onClick={handleSave}
+          title="Özel değerleri kaydet"
         >
-          <Save className="h-3 w-3" />
+          <Save className="size-3" />
           Kaydet
         </Button>
       </div>

@@ -11,22 +11,24 @@
 //   non-null assertion or explicit fallback; will be resolved in Task 7 handler cleanup.
 
 import { getPayload } from "payload";
-import configPromise from "@payload-config";
+import configPromise from "../../payload.config.ts";
 
 import {
   guardContentAdminRequest,
   jsonError,
   jsonResponse,
+  readContentAdminJsonPayload,
   validateContentAdminJsonEnvelope,
   validateContentAdminOrigin,
-} from "./content-shared";
-import type { ContentAdminRouteDependencies } from "./content-shared";
+} from "./content-shared.ts";
+import type { ContentAdminRouteDependencies } from "./content-shared.ts";
 import {
   parseConsultantCreateBodyForTest as parseConsultantCreateBody,
   parseConsultantUpdateBodyForTest as parseConsultantUpdateBody,
   type ConsultantCreateInput,
   type ConsultantUpdateInput,
-} from "./content-consultants-parsers";
+} from "./content-consultants-parsers.ts";
+import { buildConsultantsListFindArgs } from "./content-consultants-query.ts";
 
 // ── DTO types ──────────────────────────────────────────────────────────────
 
@@ -131,12 +133,7 @@ export async function handleConsultantsListGet(
 
   const payload = await getPayload({ config: configPromise });
 
-  const result = await payload.find({
-    collection: "consultants",
-    page,
-    limit,
-    sort: "sortOrder",
-  });
+  const result = await payload.find(buildConsultantsListFindArgs(page, limit));
 
   const items = result.docs.map((doc) => toConsultantDTO(doc as unknown as PayloadConsultantDoc));
 
@@ -162,15 +159,13 @@ export async function handleConsultantsCreatePost(
   const envelope = validateContentAdminJsonEnvelope(request);
   if (!envelope.ok) return jsonError(envelope.error, envelope.status);
 
+  const bodyResult = await readContentAdminJsonPayload(request);
+  if (!bodyResult.ok) return jsonError(bodyResult.error, bodyResult.status);
+
   const guard = await guardContentAdminRequest(deps);
   if (!guard.ok) return guard.response;
 
-  let body: unknown;
-  try { body = await request.json(); } catch {
-    return jsonError("Invalid JSON request body", 400);
-  }
-
-  const parsed = parseConsultantCreateBody(body);
+  const parsed = parseConsultantCreateBody(bodyResult.value);
   if (!parsed.ok) return jsonError(parsed.error, parsed.status);
 
   const payload = await getPayload({ config: configPromise });
@@ -222,15 +217,13 @@ export async function handleConsultantUpdate(
   const envelope = validateContentAdminJsonEnvelope(request);
   if (!envelope.ok) return jsonError(envelope.error, envelope.status);
 
+  const bodyResult = await readContentAdminJsonPayload(request);
+  if (!bodyResult.ok) return jsonError(bodyResult.error, bodyResult.status);
+
   const guard = await guardContentAdminRequest(deps);
   if (!guard.ok) return guard.response;
 
-  let body: unknown;
-  try { body = await request.json(); } catch {
-    return jsonError("Invalid JSON request body", 400);
-  }
-
-  const parsed = parseConsultantUpdateBody(body);
+  const parsed = parseConsultantUpdateBody(bodyResult.value);
   if (!parsed.ok) return jsonError(parsed.error, parsed.status);
 
   const payload = await getPayload({ config: configPromise });

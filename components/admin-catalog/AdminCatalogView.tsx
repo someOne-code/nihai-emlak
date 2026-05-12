@@ -1,6 +1,24 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef, type FormEvent } from "react";
+import {
+  CreditCard, Info, Pencil, Plus, RefreshCw, Save,
+  Settings, ToggleLeft, ToggleRight,
+} from "lucide-react";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 
 import {
   fetchAdminCatalogMainItems,
@@ -53,8 +71,6 @@ type ServiceDialogState =
   | { mode: "edit"; row: AdminCatalogServiceRow }
   | null;
 
-// DB constraint: main_item_catalog.pricing_strategy IN
-//   ('fixed', 'listing_price_multiplier', 'stay_months_multiplier').
 const PRICING_STRATEGIES = [
   { value: "fixed", label: PRICING_STRATEGY_LABELS.fixed },
   {
@@ -94,16 +110,31 @@ export default function AdminCatalogView() {
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const [rawItems, rawServices] = await Promise.all([
+      const results = await Promise.allSettled([
         fetchAdminCatalogMainItems(),
         fetchAdminCatalogServices(),
       ]);
-      setMainItems(
-        (rawItems as Record<string, unknown>[]).map(buildAdminCatalogMainItemRow),
-      );
-      setServices(
-        (rawServices as Record<string, unknown>[]).map(buildAdminCatalogServiceRow),
-      );
+
+      if (results[0].status === "fulfilled") {
+        setMainItems(
+          (results[0].value as Record<string, unknown>[]).map(buildAdminCatalogMainItemRow),
+        );
+      }
+      if (results[1].status === "fulfilled") {
+        setServices(
+          (results[1].value as Record<string, unknown>[]).map(buildAdminCatalogServiceRow),
+        );
+      }
+
+      const failures = results.filter((r) => r.status === "rejected");
+      if (failures.length > 0) {
+        const firstReason = (failures[0] as PromiseRejectedResult).reason;
+        const message =
+          firstReason instanceof AdminCatalogClientError
+            ? firstReason.message
+            : "Katalog kısmen yüklenemedi";
+        showAlert("error", message);
+      }
     } catch (err) {
       const message =
         err instanceof AdminCatalogClientError
@@ -254,121 +285,102 @@ export default function AdminCatalogView() {
   );
 
   return (
-    <div className="ctg-root">
+    <div className="flex flex-col gap-5">
+      {/* Alert */}
       {alert && (
         <div
           role="status"
           aria-live="polite"
-          className={`ctg-alert ${alert.kind === "error" ? "ctg-alert-error" : "ctg-alert-success"}`}
+          className={`rounded-lg border px-4 py-3 text-sm font-medium ${
+            alert.kind === "error"
+              ? "border-destructive/30 bg-destructive/10 text-destructive"
+              : "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+          }`}
         >
           {alert.message}
         </div>
       )}
 
-      <div className="ctg-header">
-        <div className="ctg-header-text">
-          <h1 className="ctg-heading">Fiyat Kataloğu</h1>
-          <p className="ctg-subtitle">
+      {/* Header */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl font-bold text-balance">Fiyat Kataloğu</h1>
+          <p className="text-sm text-muted-foreground text-pretty max-w-2xl">
             Tüm ilanlarda kullanılan varsayılan ödeme kalemleri ve ek hizmetleri tek bir
-            yerden yönetin. Burada tanımladığınız kalemler her ilan oluşturulduğunda
-            otomatik olarak katalog varsayılanı şeklinde sunulur; ilan bazlı özel tutarlar
-            ilan detay sayfasından ayarlanır.
+            yerden yönetin. İlan bazlı özel tutarlar ilan detay sayfasından ayarlanır.
           </p>
         </div>
-        <button
+        <Button
           id="ctg-reload-btn"
-          type="button"
-          className="ctg-action-btn"
+          variant="outline"
+          size="sm"
           disabled={loading || busy}
           onClick={() => void reload()}
         >
-          <svg
-            aria-hidden="true"
-            className="ctg-btn-icon"
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
-            <path d="M21 3v5h-5" />
-            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
-            <path d="M8 16H3v5" />
-          </svg>
+          <RefreshCw className="size-4" />
           Yenile
-        </button>
+        </Button>
       </div>
 
       {/* Tabs */}
-      <div className="ctg-tabs" role="tablist" aria-label="Katalog bölümleri">
+      <div className="flex gap-1 border-b" role="tablist" aria-label="Katalog bölümleri">
         <button
           id="tab-main-items"
           type="button"
           role="tab"
           aria-selected={tab === "main-items"}
-          className={`ctg-tab ${tab === "main-items" ? "ctg-tab-active" : ""}`}
+          className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            tab === "main-items"
+              ? "border-primary text-foreground"
+              : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50"
+          }`}
           onClick={() => setTab("main-items")}
         >
-          <svg
-            aria-hidden="true"
-            className="ctg-tab-icon"
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <rect x="2" y="5" width="20" height="14" rx="2" />
-            <path d="M2 10h20" />
-          </svg>
+          <CreditCard className="size-4" />
           Ana Ödeme Kalemleri
-          <span className="ctg-tab-badge">{mainItems.length}</span>
+          <Badge variant="secondary" className="text-[10px] tabular-nums">
+            {mainItems.length}
+          </Badge>
         </button>
-
         <button
           id="tab-services"
           type="button"
           role="tab"
           aria-selected={tab === "services"}
-          className={`ctg-tab ${tab === "services" ? "ctg-tab-active" : ""}`}
+          className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            tab === "services"
+              ? "border-primary text-foreground"
+              : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50"
+          }`}
           onClick={() => setTab("services")}
         >
-          <svg
-            aria-hidden="true"
-            className="ctg-tab-icon"
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="M12 20h9" />
-            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
-          </svg>
+          <Settings className="size-4" />
           Ek Hizmetler
-          <span className="ctg-tab-badge">{services.length}</span>
+          <Badge variant="secondary" className="text-[10px] tabular-nums">
+            {services.length}
+          </Badge>
         </button>
       </div>
 
       {/* Content */}
       {loading ? (
-        <div className="ctg-loading" role="status" aria-label="Yükleniyor">
-          <div className="ctg-spinner" aria-hidden="true" />
-          <span>Katalog yükleniyor…</span>
+        <div className="flex flex-col gap-3">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
         </div>
       ) : tab === "main-items" ? (
         <>
-          <div className="ctg-toolbar">
-            <button
+          <div className="flex justify-end">
+            <Button
               id="ctg-new-main-item-btn"
-              type="button"
-              className="ctg-action-btn ctg-action-primary"
+              size="sm"
               disabled={busy}
               onClick={() => setMainDialog({ mode: "create" })}
             >
-              + Yeni Ana Kalem
-            </button>
+              <Plus className="size-4" />
+              Yeni Ana Kalem
+            </Button>
           </div>
           <MainItemsTable
             items={mainItems}
@@ -379,16 +391,16 @@ export default function AdminCatalogView() {
         </>
       ) : (
         <>
-          <div className="ctg-toolbar">
-            <button
+          <div className="flex justify-end">
+            <Button
               id="ctg-new-service-btn"
-              type="button"
-              className="ctg-action-btn ctg-action-primary"
+              size="sm"
               disabled={busy}
               onClick={() => setServiceDialog({ mode: "create" })}
             >
-              + Yeni Hizmet
-            </button>
+              <Plus className="size-4" />
+              Yeni Hizmet
+            </Button>
           </div>
           <ServicesTable
             services={services}
@@ -399,25 +411,22 @@ export default function AdminCatalogView() {
         </>
       )}
 
-      {mainDialog && (
-        <MainItemDialog
-          state={mainDialog}
-          busy={busy}
-          existingCodes={mainItems.map((i) => i.code)}
-          onCancel={() => setMainDialog(null)}
-          onSave={handleSaveMainItem}
-        />
-      )}
+      {/* Dialogs */}
+      <MainItemDialog
+        state={mainDialog}
+        busy={busy}
+        existingCodes={mainItems.map((i) => i.code)}
+        onCancel={() => setMainDialog(null)}
+        onSave={handleSaveMainItem}
+      />
 
-      {serviceDialog && (
-        <ServiceDialog
-          state={serviceDialog}
-          busy={busy}
-          existingCodes={services.map((s) => s.code)}
-          onCancel={() => setServiceDialog(null)}
-          onSave={handleSaveService}
-        />
-      )}
+      <ServiceDialog
+        state={serviceDialog}
+        busy={busy}
+        existingCodes={services.map((s) => s.code)}
+        onCancel={() => setServiceDialog(null)}
+        onSave={handleSaveService}
+      />
     </div>
   );
 }
@@ -439,42 +448,30 @@ function MainItemsTable({
 }) {
   if (items.length === 0) {
     return (
-      <div className="ctg-empty">
-        <svg
-          aria-hidden="true"
-          className="ctg-empty-icon"
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-        >
-          <circle cx="12" cy="12" r="10" />
-          <path d="M9 9h.01M15 9h.01" />
-          <path d="M9 15a5 5 0 0 0 6 0" />
-        </svg>
-        <p>Henüz ana ödeme kalemi yok.</p>
-      </div>
+      <Card>
+        <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+          <CreditCard className="size-10 text-muted-foreground/40" />
+          <p className="text-sm text-muted-foreground">Henüz ana ödeme kalemi yok.</p>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <div className="ctg-table-wrapper">
-      <table className="ctg-table" id="main-items-table">
-        <thead>
-          <tr>
-            <th>Kod</th>
-            <th>Etiket</th>
-            <th>Strateji</th>
-            <th>Varsayılan Tutar</th>
-            <th>Sıra</th>
-            <th>Durum</th>
-            <th>İşlem</th>
-          </tr>
-        </thead>
-        <tbody>
+    <Card>
+      <Table id="main-items-table">
+        <TableHeader>
+          <TableRow>
+            <TableHead>Etiket</TableHead>
+            <TableHead>Hesaplama</TableHead>
+            <TableHead className="tabular-nums">Varsayılan</TableHead>
+            <TableHead>Durum</TableHead>
+            <TableHead className="text-right">İşlem</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {items.map((item) => (
-            <MainItemRow
+            <CatalogMainItemRow
               key={item.code}
               item={item}
               busy={busy}
@@ -482,13 +479,13 @@ function MainItemsTable({
               onEdit={onEdit}
             />
           ))}
-        </tbody>
-      </table>
-    </div>
+        </TableBody>
+      </Table>
+    </Card>
   );
 }
 
-function MainItemRow({
+function CatalogMainItemRow({
   item,
   busy,
   onToggle,
@@ -500,62 +497,58 @@ function MainItemRow({
   onEdit: (row: AdminCatalogMainItemRow) => void;
 }) {
   return (
-    <tr className={`ctg-row ${item.isActive ? "" : "ctg-row-passive"}`}>
-      <td>
-        <code className="ctg-code">{item.code}</code>
-      </td>
-      <td className="ctg-label-cell">
-        <span className="ctg-label">{item.label}</span>
-        {item.description && (
-          <span className="ctg-description">{item.description}</span>
-        )}
-      </td>
-      <td>
-        <span
-          className="ctg-strategy"
+    <TableRow className={item.isActive ? "" : "opacity-60"}>
+      <TableCell>
+        <div className="flex flex-col gap-0.5">
+          <span className="font-medium text-sm">{item.label}</span>
+          <code className="font-mono text-xs text-muted-foreground">{item.code}</code>
+        </div>
+      </TableCell>
+      <TableCell>
+        <Badge
+          variant="outline"
+          className="text-[10px]"
           title={PRICING_STRATEGY_DESCRIPTIONS[item.pricingStrategy] ?? item.pricingStrategy}
         >
           {item.pricingStrategyLabel}
-        </span>
-      </td>
-      <td>
-        <span className="ctg-amount">
-          {item.defaultAmount !== null
-            ? `${item.defaultAmount.toLocaleString("tr-TR")} TRY`
-            : "—"}
-        </span>
-      </td>
-      <td>
-        <span className="ctg-sort">{item.sortOrder}</span>
-      </td>
-      <td>
-        <span className={`ctg-badge ${item.isActive ? "ctg-badge-active" : "ctg-badge-passive"}`}>
+        </Badge>
+      </TableCell>
+      <TableCell className="tabular-nums text-sm">
+        {item.defaultAmount !== null
+          ? `${item.defaultAmount.toLocaleString("tr-TR")} ₺`
+          : "—"}
+      </TableCell>
+      <TableCell>
+        <Badge variant={item.isActive ? "success" : "secondary"} className="text-[10px]">
           {item.statusLabel}
-        </span>
-      </td>
-      <td>
-        <div className="ctg-row-actions">
-          <button
-            type="button"
+        </Badge>
+      </TableCell>
+      <TableCell className="text-right">
+        <div className="flex gap-1.5 justify-end">
+          <Button
+            variant="outline"
+            size="sm"
             id={`edit-main-${item.code}`}
             disabled={busy}
-            className="ctg-toggle-btn ctg-toggle-edit"
             onClick={() => onEdit(item)}
           >
+            <Pencil className="size-3" />
             Düzenle
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
             id={`toggle-main-${item.code}`}
             disabled={busy}
-            className={`ctg-toggle-btn ${item.isActive ? "ctg-toggle-deactivate" : "ctg-toggle-activate"}`}
             onClick={() => onToggle(item.code, item.isActive)}
+            title={item.isActive ? "Kalemi pasife al" : "Kalemi aktifleştir"}
           >
+            {item.isActive ? <ToggleRight className="size-4" /> : <ToggleLeft className="size-4" />}
             {item.isActive ? "Pasife al" : "Aktifleştir"}
-          </button>
+          </Button>
         </div>
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   );
 }
 
@@ -576,40 +569,29 @@ function ServicesTable({
 }) {
   if (services.length === 0) {
     return (
-      <div className="ctg-empty">
-        <svg
-          aria-hidden="true"
-          className="ctg-empty-icon"
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-        >
-          <circle cx="12" cy="12" r="10" />
-          <path d="M9 9h.01M15 9h.01" />
-          <path d="M9 15a5 5 0 0 0 6 0" />
-        </svg>
-        <p>Henüz ek hizmet yok.</p>
-      </div>
+      <Card>
+        <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+          <Settings className="size-10 text-muted-foreground/40" />
+          <p className="text-sm text-muted-foreground">Henüz ek hizmet yok.</p>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <div className="ctg-table-wrapper">
-      <table className="ctg-table" id="services-table">
-        <thead>
-          <tr>
-            <th>Kod</th>
-            <th>Ad</th>
-            <th>Katalog Fiyatı</th>
-            <th>Durum</th>
-            <th>İşlem</th>
-          </tr>
-        </thead>
-        <tbody>
+    <Card>
+      <Table id="services-table">
+        <TableHeader>
+          <TableRow>
+            <TableHead>Ad</TableHead>
+            <TableHead className="tabular-nums">Katalog Fiyatı</TableHead>
+            <TableHead>Durum</TableHead>
+            <TableHead className="text-right">İşlem</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {services.map((service) => (
-            <ServiceRow
+            <CatalogServiceRow
               key={service.code}
               service={service}
               busy={busy}
@@ -617,13 +599,13 @@ function ServicesTable({
               onEdit={onEdit}
             />
           ))}
-        </tbody>
-      </table>
-    </div>
+        </TableBody>
+      </Table>
+    </Card>
   );
 }
 
-function ServiceRow({
+function CatalogServiceRow({
   service,
   busy,
   onToggle,
@@ -635,61 +617,56 @@ function ServiceRow({
   onEdit: (row: AdminCatalogServiceRow) => void;
 }) {
   return (
-    <tr className={`ctg-row ${service.isActive ? "" : "ctg-row-passive"}`}>
-      <td>
-        <code className="ctg-code">{service.code}</code>
-      </td>
-      <td className="ctg-label-cell">
-        <span className="ctg-label">{service.name}</span>
-        {service.description && (
-          <span className="ctg-description">{service.description}</span>
-        )}
-      </td>
-      <td>
-        <span className="ctg-amount">
-          {service.basePrice !== null
-            ? `${service.basePrice.toLocaleString("tr-TR")} TRY`
-            : "—"}
-        </span>
-      </td>
-      <td>
-        <span className={`ctg-badge ${service.isActive ? "ctg-badge-active" : "ctg-badge-passive"}`}>
+    <TableRow className={service.isActive ? "" : "opacity-60"}>
+      <TableCell>
+        <div className="flex flex-col gap-0.5">
+          <span className="font-medium text-sm">{service.name}</span>
+          <code className="font-mono text-xs text-muted-foreground">{service.code}</code>
+        </div>
+      </TableCell>
+      <TableCell className="tabular-nums text-sm">
+        {service.basePrice !== null
+          ? `${service.basePrice.toLocaleString("tr-TR")} ₺`
+          : "—"}
+      </TableCell>
+      <TableCell>
+        <Badge variant={service.isActive ? "success" : "secondary"} className="text-[10px]">
           {service.statusLabel}
-        </span>
-      </td>
-      <td>
-        <div className="ctg-row-actions">
-          <button
-            type="button"
+        </Badge>
+      </TableCell>
+      <TableCell className="text-right">
+        <div className="flex gap-1.5 justify-end">
+          <Button
+            variant="outline"
+            size="sm"
             id={`edit-service-${service.code}`}
             disabled={busy}
-            className="ctg-toggle-btn ctg-toggle-edit"
             onClick={() => onEdit(service)}
           >
+            <Pencil className="size-3" />
             Düzenle
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
             id={`toggle-service-${service.code}`}
             disabled={busy}
-            className={`ctg-toggle-btn ${service.isActive ? "ctg-toggle-deactivate" : "ctg-toggle-activate"}`}
             onClick={() => onToggle(service.code, service.isActive)}
+            title={service.isActive ? "Hizmeti pasife al" : "Hizmeti aktifleştir"}
           >
+            {service.isActive ? <ToggleRight className="size-4" /> : <ToggleLeft className="size-4" />}
             {service.isActive ? "Pasife al" : "Aktifleştir"}
-          </button>
+          </Button>
         </div>
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Info icon helper (reused by dialogs for (i) hover tooltips)
+// Helpers
 // ---------------------------------------------------------------------------
 
-// Build a human-readable checkout preview for the admin. Uses illustrative
-// fixed numbers (15.000 TRY listing, 3 months stay) so admin can sanity check
-// the formula without entering real listing data.
 function buildMainItemLivePreview(
   strategy: string,
   amountRaw: string,
@@ -698,36 +675,47 @@ function buildMainItemLivePreview(
   if (strategy === "fixed") {
     const n = Number(amountRaw);
     if (!Number.isFinite(n) || n <= 0) return null;
-    return `Her müşteri sabit ${n.toLocaleString("tr-TR")} TRY öder — ilan fiyatı ya da süresinden etkilenmez.`;
+    return `Her müşteri sabit ${n.toLocaleString("tr-TR")} ₺ öder — ilan fiyatı veya süresinden etkilenmez.`;
   }
   if (strategy === "listing_price_multiplier") {
     const m = Number(multiplierRaw);
     if (!Number.isFinite(m) || m <= 0) return null;
-    const example = 15000 * m;
-    return `15.000 TRY ilan fiyatı × ${m} çarpan = ${example.toLocaleString("tr-TR")} TRY tahsil edilir.`;
+    const example = 15_000 * m;
+    return `Örnek: 15.000 ₺ ilan fiyatı × ${m} oran = ${example.toLocaleString("tr-TR")} ₺ tahsil edilir.`;
   }
   if (strategy === "stay_months_multiplier") {
     const m = Number(multiplierRaw);
     if (!Number.isFinite(m) || m <= 0) return null;
     const example = 3 * m;
-    return `3 ay konaklama × ${m.toLocaleString("tr-TR")} TRY/ay = ${example.toLocaleString("tr-TR")} TRY tahsil edilir.`;
+    return `Örnek: 3 ay kalma × aylık ${m.toLocaleString("tr-TR")} ₺ = ${example.toLocaleString("tr-TR")} ₺ tahsil edilir.`;
   }
   return null;
 }
 
-function InfoIcon({ title }: { title: string }) {
-  return (
-    <span
-      className="ctg-info-icon"
-      role="img"
-      aria-label={title}
-      title={title}
-      tabIndex={0}
-    >
-      i
-    </span>
-  );
+// Generates a URL/DB-safe slug from a Turkish label.
+// "Aylık Kira" → "aylik_kira", "İlk Ay Komisyonu" → "ilk_ay_komisyonu"
+const TR_CHAR_MAP: Record<string, string> = {
+  ş: "s", Ş: "s", ç: "c", Ç: "c", ğ: "g", Ğ: "g",
+  ı: "i", İ: "i", ö: "o", Ö: "o", ü: "u", Ü: "u",
+};
+function slugify(text: string): string {
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/[şŞçÇğĞıİöÖüÜ]/g, (ch) => TR_CHAR_MAP[ch] ?? ch)
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
 }
+
+const MULTIPLIER_FIELD_LABELS: Record<string, string> = {
+  listing_price_multiplier: "Oran",
+  stay_months_multiplier: "Aylık tutar (₺)",
+};
+
+const MULTIPLIER_FIELD_HINTS: Record<string, string> = {
+  listing_price_multiplier: "İlan fiyatı ile çarpılacak oran. Örn: 1.0 = tam fiyat, 0.5 = yarısı.",
+  stay_months_multiplier: "Her ay için alınacak tutar. Toplam = bu tutar × kalma süresi.",
+};
 
 // ---------------------------------------------------------------------------
 // Dialogs (create + edit)
@@ -740,7 +728,7 @@ function MainItemDialog({
   onCancel,
   onSave,
 }: {
-  state: { mode: "create" } | { mode: "edit"; row: AdminCatalogMainItemRow };
+  state: MainItemDialogState;
   busy: boolean;
   existingCodes: string[];
   onCancel: () => void;
@@ -752,10 +740,9 @@ function MainItemDialog({
       | AdminCatalogMainItemUpdatePayload,
   ) => void;
 }) {
-  const editing = state.mode === "edit";
+  const editing = state?.mode === "edit";
   const row = editing ? state.row : null;
 
-  const [code, setCode] = useState(row?.code ?? "");
   const [label, setLabel] = useState(row?.label ?? "");
   const [description, setDescription] = useState(row?.description ?? "");
   const [pricingStrategy, setPricingStrategy] = useState(
@@ -776,33 +763,32 @@ function MainItemDialog({
 
   const required = pricingStrategyRequires(pricingStrategy);
 
-  // Live preview of the checkout formula, computed from the form values the
-  // admin has entered so far. Purely cosmetic — backend stays source of truth.
   const livePreview = buildMainItemLivePreview(
     pricingStrategy,
     defaultAmount,
     defaultMultiplier,
   );
 
-  const normalizedCode = code.trim().toLowerCase();
+  // Auto-generate code from label for create mode
+  const autoCode = editing ? row!.code : slugify(label);
   const duplicate =
     !editing &&
-    normalizedCode.length > 0 &&
-    existingCodes.some((c) => c.toLowerCase() === normalizedCode);
+    autoCode.length > 0 &&
+    existingCodes.some((c) => c.toLowerCase() === autoCode);
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
     setLocalError(null);
 
-    const trimmedCode = code.trim();
     const trimmedLabel = label.trim();
+    const trimmedCode = editing ? row!.code : slugify(trimmedLabel);
 
     if (!editing && trimmedCode.length === 0) {
-      setLocalError("Kod zorunludur.");
+      setLocalError("İsim girildiğinde sistem kodu otomatik oluşturulur.");
       return;
     }
     if (duplicate) {
-      setLocalError(`"${trimmedCode}" kodu zaten kullanılıyor. Farklı bir kod seç.`);
+      setLocalError(`Bu isimden üretilen kod ("${trimmedCode}") zaten kullanılıyor. Farklı bir isim girin.`);
       return;
     }
     if (trimmedLabel.length === 0) {
@@ -815,11 +801,11 @@ function MainItemDialog({
         ? null
         : Number(defaultAmount);
     if (amountParsed !== null && (!Number.isFinite(amountParsed) || amountParsed < 0)) {
-      setLocalError("Varsayılan tutar 0 veya pozitif sayı olmalı.");
+      setLocalError("Tutar 0 veya pozitif sayı olmalı.");
       return;
     }
     if (required.amount && amountParsed === null) {
-      setLocalError("Seçili strateji için varsayılan tutar zorunludur.");
+      setLocalError("Bu hesaplama yöntemi için tutar zorunludur.");
       return;
     }
 
@@ -831,11 +817,11 @@ function MainItemDialog({
       multiplierParsed !== null &&
       (!Number.isFinite(multiplierParsed) || multiplierParsed < 0)
     ) {
-      setLocalError("Varsayılan çarpan 0 veya pozitif sayı olmalı.");
+      setLocalError("Değer 0 veya pozitif sayı olmalı.");
       return;
     }
     if (required.multiplier && multiplierParsed === null) {
-      setLocalError("Seçili strateji için varsayılan çarpan zorunludur.");
+      setLocalError("Bu hesaplama yöntemi için değer zorunludur.");
       return;
     }
 
@@ -872,189 +858,175 @@ function MainItemDialog({
     }
   };
 
+  const multiplierLabel = MULTIPLIER_FIELD_LABELS[pricingStrategy] ?? "Oran";
+  const multiplierHint = MULTIPLIER_FIELD_HINTS[pricingStrategy] ?? "";
+
   return (
-    <div
-      className="ctg-dialog-backdrop"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="main-item-dialog-title"
-      onClick={onCancel}
-    >
-      <div className="ctg-dialog" onClick={(e) => e.stopPropagation()}>
-        <h2 id="main-item-dialog-title" className="ctg-dialog-title">
+    <Dialog open={state !== null} onOpenChange={(open) => { if (!open) onCancel(); }}>
+      <DialogHeader>
+        <DialogTitle>
           {editing ? "Ana Kalemi Düzenle" : "Yeni Ana Kalem"}
-        </h2>
+        </DialogTitle>
+        <DialogDescription>
+          {editing
+            ? "Bu ödeme kaleminin ayarlarını güncelleyin."
+            : "Tüm ilanlarda kullanılacak yeni bir ödeme kalemi tanımlayın."}
+        </DialogDescription>
+      </DialogHeader>
 
-        <form className="ctg-form" onSubmit={submit}>
-          <label className="ctg-field">
-            <span className="ctg-field-label">
-              Kod
-              <InfoIcon title="İç sistem tanıtıcısı — harfler ve alt çizgi, ör. kira, depozito, komisyon. Oluşturulduktan sonra değiştirilemez." />
-            </span>
-            <input
-              id="main-item-code-input"
-              type="text"
-              className={`ctg-input ${duplicate ? "ctg-input-error" : ""}`}
-              value={code}
-              disabled={editing || busy}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="ornek: kira"
-              required={!editing}
-            />
-            {duplicate && (
-              <span className="ctg-field-hint ctg-field-hint-error">
-                Bu kod zaten kullanılıyor.
-              </span>
-            )}
-          </label>
-
-          <label className="ctg-field">
-            <span className="ctg-field-label">Etiket</span>
-            <input
-              id="main-item-label-input"
-              type="text"
-              className="ctg-input"
-              value={label}
-              disabled={busy}
-              onChange={(e) => setLabel(e.target.value)}
-              placeholder="Örn: Aylık Kira"
-              required
-            />
-          </label>
-
-          <label className="ctg-field">
-            <span className="ctg-field-label">Açıklama</span>
-            <textarea
-              id="main-item-description-input"
-              className="ctg-input ctg-textarea"
-              value={description}
-              disabled={busy}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={2}
-            />
-          </label>
-
-          <fieldset className="ctg-strategy-fieldset">
-            <legend className="ctg-field-label ctg-field-label-inline">
-              Fiyat Stratejisi
-              <InfoIcon title={PRICING_STRATEGY_FIELD_HELP} />
-            </legend>
-            <div className="ctg-strategy-cards" role="radiogroup">
-              {PRICING_STRATEGIES.map((s) => {
-                const selected = pricingStrategy === s.value;
-                return (
-                  <label
-                    key={s.value}
-                    className={`ctg-strategy-card ${selected ? "ctg-strategy-card-selected" : ""}`}
-                  >
-                    <input
-                      type="radio"
-                      name="main-item-pricing-strategy"
-                      value={s.value}
-                      checked={selected}
-                      disabled={busy}
-                      onChange={() => setPricingStrategy(s.value)}
-                      className="ctg-strategy-card-radio"
-                    />
-                    <span className="ctg-strategy-card-body">
-                      <span className="ctg-strategy-card-title">
-                        {s.label}
-                        <InfoIcon
-                          title={PRICING_STRATEGY_LONG_DESCRIPTIONS[s.value] ?? s.label}
-                        />
-                      </span>
-                      <span className="ctg-strategy-card-desc">
-                        {PRICING_STRATEGY_DESCRIPTIONS[s.value] ?? ""}
-                      </span>
-                    </span>
-                  </label>
-                );
-              })}
-            </div>
-          </fieldset>
-
-          <div className="ctg-field-row">
-            {required.amount && (
-              <label className="ctg-field">
-                <span className="ctg-field-label">Varsayılan Tutar (TRY)</span>
-                <input
-                  id="main-item-default-amount-input"
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  className="ctg-input"
-                  value={defaultAmount}
-                  disabled={busy}
-                  onChange={(e) => setDefaultAmount(e.target.value)}
-                  placeholder="örn: 12000"
-                />
-              </label>
-            )}
-
-            {required.multiplier && (
-              <label className="ctg-field">
-                <span className="ctg-field-label">Varsayılan Çarpan</span>
-                <input
-                  id="main-item-default-multiplier-input"
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  className="ctg-input"
-                  value={defaultMultiplier}
-                  disabled={busy}
-                  onChange={(e) => setDefaultMultiplier(e.target.value)}
-                  placeholder="örn: 1.0"
-                />
-              </label>
-            )}
-
-            <label className="ctg-field">
-              <span className="ctg-field-label">Sıra</span>
-              <input
-                id="main-item-sort-order-input"
-                type="number"
-                step="1"
-                className="ctg-input"
-                value={sortOrder}
-                disabled={busy}
-                onChange={(e) => setSortOrder(e.target.value)}
-              />
-            </label>
-          </div>
-
-          {livePreview && (
-            <div className="ctg-live-preview" aria-live="polite">
-              <strong>Önizleme:</strong> {livePreview}
-            </div>
-          )}
-
-          {localError && (
-            <p className="ctg-form-error" role="alert">
-              {localError}
+      <form className="flex flex-col gap-4" onSubmit={submit}>
+        {/* Etiket (isim) */}
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Kalem adı</Label>
+          <Input
+            id="main-item-label-input"
+            value={label}
+            disabled={busy}
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder="ör: Aylık Kira, Depozito, Komisyon"
+            required
+          />
+          {!editing && autoCode.length > 0 && (
+            <p className="text-[11px] text-muted-foreground">
+              Sistem kodu: <code className="font-mono text-xs">{autoCode}</code>
+              {duplicate && <span className="text-destructive ml-1">(bu kod zaten var — farklı bir isim girin)</span>}
             </p>
           )}
+          {editing && (
+            <p className="text-[11px] text-muted-foreground">
+              Sistem kodu: <code className="font-mono text-xs">{row!.code}</code>
+            </p>
+          )}
+        </div>
 
-          <div className="ctg-dialog-footer">
-            <button
-              type="button"
-              className="ctg-action-btn"
-              disabled={busy}
-              onClick={onCancel}
-            >
-              Vazgeç
-            </button>
-            <button
-              type="submit"
-              id="main-item-submit-btn"
-              className="ctg-action-btn ctg-action-primary"
-              disabled={busy}
-            >
-              {busy ? "Kaydediliyor…" : editing ? "Kaydet" : "Oluştur"}
-            </button>
+        {/* Açıklama */}
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Açıklama (opsiyonel)</Label>
+          <Textarea
+            id="main-item-description-input"
+            value={description}
+            disabled={busy}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={2}
+          />
+        </div>
+
+        {/* Hesaplama yöntemi */}
+        <fieldset className="flex flex-col gap-2.5 border-0 p-0 m-0">
+          <legend className="flex items-center gap-1 text-xs font-medium text-muted-foreground mb-1">
+            Hesaplama yöntemi
+            <span title={PRICING_STRATEGY_FIELD_HELP}><Info className="size-3 text-muted-foreground/60" /></span>
+          </legend>
+          <div className="flex flex-col gap-2" role="radiogroup">
+            {PRICING_STRATEGIES.map((s) => {
+              const selected = pricingStrategy === s.value;
+              return (
+                <label
+                  key={s.value}
+                  className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
+                    selected
+                      ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                      : "border-border hover:border-muted-foreground/30"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="main-item-pricing-strategy"
+                    value={s.value}
+                    checked={selected}
+                    disabled={busy}
+                    onChange={() => setPricingStrategy(s.value)}
+                    className="mt-0.5 accent-primary"
+                  />
+                  <div className="flex flex-col gap-0.5 min-w-0">
+                    <span className="text-sm font-semibold flex items-center gap-1">
+                      {s.label}
+                      <span title={PRICING_STRATEGY_LONG_DESCRIPTIONS[s.value] ?? s.label}>
+                        <Info className="size-3.5 text-muted-foreground/50 shrink-0" />
+                      </span>
+                    </span>
+                    <span className="text-xs text-muted-foreground text-pretty">
+                      {PRICING_STRATEGY_DESCRIPTIONS[s.value] ?? ""}
+                    </span>
+                  </div>
+                </label>
+              );
+            })}
           </div>
-        </form>
-      </div>
-    </div>
+        </fieldset>
+
+        {/* Tutar / oran alanları */}
+        <div className="flex gap-3 flex-wrap">
+          {required.amount && (
+            <div className="flex flex-col gap-1.5 flex-1 min-w-[140px]">
+              <Label className="text-xs">Varsayılan tutar (₺)</Label>
+              <Input
+                id="main-item-default-amount-input"
+                type="number"
+                min={0}
+                step="0.01"
+                className="tabular-nums"
+                value={defaultAmount}
+                disabled={busy}
+                onChange={(e) => setDefaultAmount(e.target.value)}
+                placeholder="ör: 5000"
+              />
+            </div>
+          )}
+
+          {required.multiplier && (
+            <div className="flex flex-col gap-1.5 flex-1 min-w-[140px]">
+              <Label className="text-xs" title={multiplierHint}>
+                {multiplierLabel}
+                <Info className="inline-block ml-1 size-3 text-muted-foreground/60" />
+              </Label>
+              <Input
+                id="main-item-default-multiplier-input"
+                type="number"
+                min={0}
+                step="0.01"
+                className="tabular-nums"
+                value={defaultMultiplier}
+                disabled={busy}
+                onChange={(e) => setDefaultMultiplier(e.target.value)}
+                placeholder={pricingStrategy === "listing_price_multiplier" ? "ör: 1.0" : "ör: 500"}
+              />
+              <p className="text-[11px] text-muted-foreground text-pretty">{multiplierHint}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Sıra — hidden by default, uses 0 */}
+        <input type="hidden" name="sort_order" value={sortOrder} />
+
+        {/* Canlı önizleme */}
+        {livePreview && (
+          <div
+            className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2.5 text-xs text-emerald-700 dark:text-emerald-300 text-pretty"
+            aria-live="polite"
+          >
+            <strong>Önizleme:</strong> {livePreview}
+          </div>
+        )}
+
+        {/* Hata */}
+        {localError && (
+          <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-xs text-destructive" role="alert">
+            {localError}
+          </p>
+        )}
+
+        <DialogFooter>
+          <Button type="button" variant="outline" disabled={busy} onClick={onCancel}>
+            Vazgeç
+          </Button>
+          <Button type="submit" id="main-item-submit-btn" disabled={busy}>
+            <Save className="size-4" />
+            {busy ? "Kaydediliyor…" : editing ? "Kaydet" : "Oluştur"}
+          </Button>
+        </DialogFooter>
+      </form>
+    </Dialog>
   );
 }
 
@@ -1065,7 +1037,7 @@ function ServiceDialog({
   onCancel,
   onSave,
 }: {
-  state: { mode: "create" } | { mode: "edit"; row: AdminCatalogServiceRow };
+  state: ServiceDialogState;
   busy: boolean;
   existingCodes: string[];
   onCancel: () => void;
@@ -1077,10 +1049,9 @@ function ServiceDialog({
       | AdminCatalogServiceUpdatePayload,
   ) => void;
 }) {
-  const editing = state.mode === "edit";
+  const editing = state?.mode === "edit";
   const row = editing ? state.row : null;
 
-  const [code, setCode] = useState(row?.code ?? "");
   const [name, setName] = useState(row?.name ?? "");
   const [description, setDescription] = useState(row?.description ?? "");
   const [basePrice, setBasePrice] = useState(
@@ -1090,25 +1061,26 @@ function ServiceDialog({
   );
   const [localError, setLocalError] = useState<string | null>(null);
 
-  const normalizedCode = code.trim().toLowerCase();
+  // Auto-generate code from name for create mode
+  const autoCode = editing ? row!.code : slugify(name);
   const duplicate =
     !editing &&
-    normalizedCode.length > 0 &&
-    existingCodes.some((c) => c.toLowerCase() === normalizedCode);
+    autoCode.length > 0 &&
+    existingCodes.some((c) => c.toLowerCase() === autoCode);
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
     setLocalError(null);
 
-    const trimmedCode = code.trim();
     const trimmedName = name.trim();
+    const trimmedCode = editing ? row!.code : slugify(trimmedName);
 
     if (!editing && trimmedCode.length === 0) {
-      setLocalError("Kod zorunludur.");
+      setLocalError("İsim girildiğinde sistem kodu otomatik oluşturulur.");
       return;
     }
     if (duplicate) {
-      setLocalError(`"${trimmedCode}" kodu zaten kullanılıyor. Farklı bir kod seç.`);
+      setLocalError(`Bu isimden üretilen kod ("${trimmedCode}") zaten kullanılıyor. Farklı bir isim girin.`);
       return;
     }
     if (trimmedName.length === 0) {
@@ -1121,7 +1093,7 @@ function ServiceDialog({
       priceParsed !== undefined &&
       (!Number.isFinite(priceParsed) || priceParsed < 0)
     ) {
-      setLocalError("Katalog fiyatı 0 veya pozitif sayı olmalı.");
+      setLocalError("Fiyat 0 veya pozitif sayı olmalı.");
       return;
     }
 
@@ -1147,108 +1119,88 @@ function ServiceDialog({
   };
 
   return (
-    <div
-      className="ctg-dialog-backdrop"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="service-dialog-title"
-      onClick={onCancel}
-    >
-      <div className="ctg-dialog" onClick={(e) => e.stopPropagation()}>
-        <h2 id="service-dialog-title" className="ctg-dialog-title">
+    <Dialog open={state !== null} onOpenChange={(open) => { if (!open) onCancel(); }}>
+      <DialogHeader>
+        <DialogTitle>
           {editing ? "Hizmeti Düzenle" : "Yeni Hizmet"}
-        </h2>
+        </DialogTitle>
+        <DialogDescription>
+          {editing
+            ? "Bu ek hizmetin ayarlarını güncelleyin."
+            : "İlanlara eklenebilecek yeni bir ek hizmet tanımlayın."}
+        </DialogDescription>
+      </DialogHeader>
 
-        <form className="ctg-form" onSubmit={submit}>
-          <label className="ctg-field">
-            <span className="ctg-field-label">
-              Kod
-              <InfoIcon title="İç sistem tanıtıcısı — ör. temizlik, transfer, kahvaltı. Oluşturulduktan sonra değiştirilemez." />
-            </span>
-            <input
-              id="service-code-input"
-              type="text"
-              className={`ctg-input ${duplicate ? "ctg-input-error" : ""}`}
-              value={code}
-              disabled={editing || busy}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="örn: temizlik"
-              required={!editing}
-            />
-            {duplicate && (
-              <span className="ctg-field-hint ctg-field-hint-error">
-                Bu kod zaten kullanılıyor.
-              </span>
-            )}
-          </label>
-
-          <label className="ctg-field">
-            <span className="ctg-field-label">Ad</span>
-            <input
-              id="service-name-input"
-              type="text"
-              className="ctg-input"
-              value={name}
-              disabled={busy}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Örn: Profesyonel Temizlik"
-              required
-            />
-          </label>
-
-          <label className="ctg-field">
-            <span className="ctg-field-label">Açıklama</span>
-            <textarea
-              id="service-description-input"
-              className="ctg-input ctg-textarea"
-              value={description}
-              disabled={busy}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={2}
-            />
-          </label>
-
-          <label className="ctg-field">
-            <span className="ctg-field-label">Katalog Fiyatı (TRY)</span>
-            <input
-              id="service-base-price-input"
-              type="number"
-              min={0}
-              step="0.01"
-              className="ctg-input"
-              value={basePrice}
-              disabled={busy}
-              onChange={(e) => setBasePrice(e.target.value)}
-              placeholder="örn: 500"
-            />
-          </label>
-
-          {localError && (
-            <p className="ctg-form-error" role="alert">
-              {localError}
+      <form className="flex flex-col gap-4" onSubmit={submit}>
+        {/* Hizmet adı */}
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Hizmet adı</Label>
+          <Input
+            id="service-name-input"
+            value={name}
+            disabled={busy}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="ör: Profesyonel Temizlik, Transfer"
+            required
+          />
+          {!editing && autoCode.length > 0 && (
+            <p className="text-[11px] text-muted-foreground">
+              Sistem kodu: <code className="font-mono text-xs">{autoCode}</code>
+              {duplicate && <span className="text-destructive ml-1">(bu kod zaten var — farklı bir isim girin)</span>}
             </p>
           )}
+          {editing && (
+            <p className="text-[11px] text-muted-foreground">
+              Sistem kodu: <code className="font-mono text-xs">{row!.code}</code>
+            </p>
+          )}
+        </div>
 
-          <div className="ctg-dialog-footer">
-            <button
-              type="button"
-              className="ctg-action-btn"
-              disabled={busy}
-              onClick={onCancel}
-            >
-              Vazgeç
-            </button>
-            <button
-              type="submit"
-              id="service-submit-btn"
-              className="ctg-action-btn ctg-action-primary"
-              disabled={busy}
-            >
-              {busy ? "Kaydediliyor…" : editing ? "Kaydet" : "Oluştur"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        {/* Açıklama */}
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Açıklama (opsiyonel)</Label>
+          <Textarea
+            id="service-description-input"
+            value={description}
+            disabled={busy}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={2}
+          />
+        </div>
+
+        {/* Fiyat */}
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Katalog fiyatı (₺)</Label>
+          <Input
+            id="service-base-price-input"
+            type="number"
+            min={0}
+            step="0.01"
+            className="tabular-nums"
+            value={basePrice}
+            disabled={busy}
+            onChange={(e) => setBasePrice(e.target.value)}
+            placeholder="ör: 500"
+          />
+        </div>
+
+        {/* Hata */}
+        {localError && (
+          <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-xs text-destructive" role="alert">
+            {localError}
+          </p>
+        )}
+
+        <DialogFooter>
+          <Button type="button" variant="outline" disabled={busy} onClick={onCancel}>
+            Vazgeç
+          </Button>
+          <Button type="submit" id="service-submit-btn" disabled={busy}>
+            <Save className="size-4" />
+            {busy ? "Kaydediliyor…" : editing ? "Kaydet" : "Oluştur"}
+          </Button>
+        </DialogFooter>
+      </form>
+    </Dialog>
   );
 }

@@ -505,6 +505,29 @@ test("loadAdminPaymentEvents throws typed error on failure", async () => {
   );
 });
 
+test("operations overview tolerates orders/payments failure and returns empty for failed parts", async () => {
+  let callCount = 0;
+  const overview = await loadAdminOperationsOverview({
+    fetcher: async (input) => {
+      callCount++;
+      const url = String(input);
+      if (url.includes("/reservations")) {
+        return jsonResponse({
+          success: true,
+          data: { items: [{ id: "r1" }], limit: 20, offset: 0 },
+        });
+      }
+      // orders and payments fail
+      return jsonResponse({ success: false, error: "server error" }, 500);
+    },
+  });
+
+  assert.equal(callCount, 3, "all three endpoints should be called");
+  assert.equal(overview.reservations.items.length, 1, "reservations should still load");
+  assert.equal(overview.orders.items.length, 0, "failed orders should fall back to empty");
+  assert.equal(overview.payments.items.length, 0, "failed payments should fall back to empty");
+});
+
 function jsonResponse(payload: unknown, status = 200): Response {
   return Response.json(payload, {
     status,

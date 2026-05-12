@@ -3,7 +3,9 @@ import test from "node:test";
 
 import {
   applyCommunicationsFilters,
+  buildCommunicationsBackendFilters,
   COMMUNICATIONS_INITIAL_FILTER_STATE,
+  hasCommunicationsBackendFilterChange,
   type CommunicationsFilterState,
 } from "../lib/admin-ui/communications-filters.ts";
 import type { CommunicationsOverviewRow } from "../lib/admin-ui/communications-view-model.ts";
@@ -106,4 +108,28 @@ test("search and status combine", () => {
 
   assert.equal(result.length, 1);
   assert.equal(result[0].conversationId, "a");
+});
+
+test("buildCommunicationsBackendFilters omits search so typing filters local rows only", () => {
+  assert.deepEqual(
+    buildCommunicationsBackendFilters({ search: "deniz", status: "issues" }),
+    { status: "issues" },
+  );
+});
+
+test("hasCommunicationsBackendFilterChange ignores search-only changes", () => {
+  assert.equal(
+    hasCommunicationsBackendFilterChange(
+      { search: "", status: "issues" },
+      { search: "d", status: "issues" },
+    ),
+    false,
+  );
+  assert.equal(
+    hasCommunicationsBackendFilterChange(
+      { search: "d", status: "issues" },
+      { search: "d", status: "all" },
+    ),
+    true,
+  );
 });
