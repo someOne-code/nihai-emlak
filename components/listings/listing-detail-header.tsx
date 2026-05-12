@@ -1,23 +1,46 @@
+import { BedDouble, Bath, Maximize, Building2, MapPin } from "lucide-react";
 import {
-  formatListingPrice,
-  getListingBadgeLabel,
   getListingLocation,
 } from "@/lib/mappers/listing.mapper";
 import type { ApiListingDetail } from "@/types/listing";
 
 export function ListingDetailHeader({ listing }: { listing: ApiListingDetail }) {
   return (
-    <div className="py-12 md:py-16 lg:py-20">
-      <div className="mx-auto flex max-w-screen-xl items-center justify-center">
-        <div className="max-w-[43.75rem] px-4 text-center" data-aos="fade-up">
-          <p className="mb-4 inline-block rounded-md bg-white px-4 py-1 text-[#2F73F2] shadow-property">
-            {getListingBadgeLabel(listing)}
-          </p>
-          <h1 className="mb-6 text-3xl font-bold text-[#102D47] sm:text-4xl md:text-5xl lg:text-6xl">
-            {listing.title}
-          </h1>
-          <p className="text-xl text-[#668199]">{getListingLocation(listing)}</p>
-          <p className="mt-4 text-3xl font-bold text-[#2F73F2]">{formatListingPrice(listing)}</p>
+    <div className="flex flex-col gap-5">
+      <h1 className="text-3xl font-bold text-[#102D47] dark:text-white sm:text-4xl md:text-5xl">
+        {listing.title}
+      </h1>
+      
+      <div className="flex items-center text-[#668199] dark:text-[#94a3b8] gap-1.5">
+        <MapPin className="h-5 w-5" />
+        <span className="text-[17px]">{getListingLocation(listing)}</span>
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center gap-6 text-[15px] font-medium text-[#668199] dark:text-gray-400">
+        {typeof listing.room_count === "number" && (
+          <div className="flex items-center gap-2">
+            <BedDouble className="h-5 w-5 opacity-70" />
+            <span>{listing.room_count} Oda</span>
+          </div>
+        )}
+        
+        {typeof listing.bathroom_count === "number" && (
+          <div className="flex items-center gap-2">
+            <Bath className="h-5 w-5 opacity-70" />
+            <span>{listing.bathroom_count} Banyo</span>
+          </div>
+        )}
+
+        {listing.gross_area_m2 && (
+          <div className="flex items-center gap-2">
+            <Maximize className="h-5 w-5 opacity-70" />
+            <span>{listing.gross_area_m2} m²</span>
+          </div>
+        )}
+
+        <div className="flex items-center gap-2">
+          <Building2 className="h-5 w-5 opacity-70" />
+          <span>{listing.is_furnished ? "Eşyalı" : "Eşyasız"}</span>
         </div>
       </div>
     </div>

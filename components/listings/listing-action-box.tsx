@@ -1,5 +1,5 @@
 import { RentPaymentPreviewBox } from "@/components/rent/rent-payment-preview-box";
-import { SaleLeadBox } from "@/components/sale/sale-lead-box";
+import { SaleLeadPreviewBox } from "@/components/sale/sale-lead-preview-box";
 import { createClient } from "@/lib/supabase/server";
 import type { ApiListingDetail } from "@/types/listing";
 
@@ -10,7 +10,7 @@ export async function ListingActionBox({ listing }: { listing: ApiListingDetail 
     return <RentPaymentPreviewBox listing={listing} isAuthenticated={isAuthenticated} />;
   }
 
-  return <SaleLeadBox listing={listing} isAuthenticated={isAuthenticated} />;
+  return <SaleLeadPreviewBox listing={listing} isAuthenticated={isAuthenticated} />;
 }
 
 async function resolveIsAuthenticated(): Promise<boolean> {

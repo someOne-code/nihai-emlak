@@ -1,18 +1,37 @@
+import { type Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { connection } from "next/server";
+import { ArrowLeft } from "lucide-react";
 
 import { ListingActionBox } from "@/components/listings/listing-action-box";
+import { ListingContactBox } from "@/components/listings/listing-contact-box";
 import { ListingDetailHeader } from "@/components/listings/listing-detail-header";
 import { ListingFeatureList } from "@/components/listings/listing-feature-list";
-import { ListingGallery } from "@/components/listings/listing-gallery";
+import { ListingDetailGallery } from "@/components/listings/listing-detail-gallery";
+import { ListingLocationSection } from "@/components/listings/listing-location-section";
 import { PublicFooter } from "@/components/site/public-footer";
 import { PublicHeader } from "@/components/site/public-header";
-import { Button } from "@/components/ui/button";
 import { getPublicListingDetail } from "@/lib/api/listings";
 
 type ListingDetailPageProps = {
   params: Promise<{ id: string }>;
 };
+
+export async function generateMetadata({ params }: ListingDetailPageProps): Promise<Metadata> {
+  try {
+    const { id } = await params;
+    const listing = await getPublicListingDetail(id);
+    return {
+      title: `${listing.title} | Nihai Emlak`,
+      description: listing.summary || listing.description?.slice(0, 160) || "İlan detayı.",
+    };
+  } catch {
+    return {
+      title: "İlan Bulunamadı | Nihai Emlak",
+    };
+  }
+}
 
 export default async function ListingDetailPage({ params }: ListingDetailPageProps) {
   await connection();
@@ -26,51 +45,73 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
     return (
       <>
         <PublicHeader />
-        <main>
-          <section className="relative overflow-x-hidden bg-property-hero pt-36">
-            <ListingDetailHeader listing={listing} />
-          </section>
+        <main className="bg-slate-50 dark:bg-slate-900 pb-24 pt-36">
+          <div className="mx-auto max-w-screen-xl px-4 md:px-8">
+            
+            {/* Geri Linki */}
+            <div className="mb-6" data-aos="fade-down">
+              <Link
+                href="/listings"
+                className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                İlanlara Dön
+              </Link>
+            </div>
 
-          <section className="bg-white py-14">
-            <ListingGallery listing={listing} />
-            <div className="mx-auto grid max-w-screen-xl gap-10 px-4 pt-16 lg:grid-cols-[1fr_360px]">
-              <article className="flex flex-col gap-10">
-                <section className="mx-auto max-w-4xl text-center text-[#668199]" data-aos="fade-up">
-                  <p className="px-4 text-base sm:px-6 sm:text-lg md:px-8 md:text-xl lg:text-2xl">
-                    {listing.description || listing.summary || "Bu ilan için açıklama henüz eklenmedi."}
-                  </p>
-                </section>
+            {/* Ana Grid Layout */}
+            <div className="grid gap-12 lg:grid-cols-[1fr_400px]">
+              
+              {/* Sol Kolon */}
+              <div className="flex flex-col gap-10">
+                
+                {/* Galeri */}
+                <div data-aos="fade-up">
+                  <ListingDetailGallery listing={listing} />
+                </div>
 
-                <section className="rounded-lg bg-[#F0F6FA] p-8" data-aos="fade-up">
-                  <h2 className="mb-6 flex justify-center text-2xl font-bold text-[#102D47] sm:text-4xl">
-                    Available
+                {/* Başlık ve Temel Özellikler */}
+                <div data-aos="fade-up" data-aos-delay="100">
+                  <ListingDetailHeader listing={listing} />
+                </div>
+
+                {/* Açıklama (Başlıksız, düz metin) */}
+                <div className="text-[17px] leading-relaxed text-[#668199] dark:text-[#94a3b8]" data-aos="fade-up" data-aos-delay="200">
+                  {listing.description || listing.summary || "Bu ilan için açıklama eklenmemiş."}
+                </div>
+
+                {/* Özellikler Listesi */}
+                <section className="flex flex-col gap-6 pt-4" data-aos="fade-up" data-aos-delay="300">
+                  <h2 className="text-2xl md:text-3xl font-bold text-[#102D47] dark:text-white">
+                    Özellikler
                   </h2>
                   <ListingFeatureList listing={listing} />
                 </section>
-              </article>
 
-              <aside className="lg:sticky lg:top-28 lg:self-start" data-aos="fade-left">
-                {actionBox}
-              </aside>
+                {/* Konum */}
+                <section className="flex flex-col gap-6 pt-4" data-aos="fade-up" data-aos-delay="400">
+                  <h2 className="text-2xl md:text-3xl font-bold text-[#102D47] dark:text-white">
+                    Konum
+                  </h2>
+                  <ListingLocationSection listing={listing} />
+                </section>
+
+              </div>
+
+              {/* Sağ Kolon */}
+              <div className="flex flex-col gap-6">
+                <div className="sticky top-28 flex flex-col gap-6" data-aos="fade-left" data-aos-delay="200">
+                  {actionBox}
+                  <ListingContactBox />
+                </div>
+              </div>
             </div>
-          </section>
+          </div>
         </main>
         <PublicFooter />
       </>
     );
   } catch {
-    return (
-      <>
-        <PublicHeader />
-        <main className="flex min-h-[70vh] flex-col items-center justify-center gap-4 bg-property-hero px-4 pt-36 text-center">
-          <h1 className="text-3xl font-semibold text-[#102D47]">İlan yüklenemedi</h1>
-          <p className="text-[#668199]">İlan detayları yüklenirken bir sorun oluştu.</p>
-          <Button asChild>
-            <Link href="/listings">İlanlara Dön</Link>
-          </Button>
-        </main>
-        <PublicFooter />
-      </>
-    );
+    notFound();
   }
 }
