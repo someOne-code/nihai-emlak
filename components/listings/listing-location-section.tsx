@@ -1,17 +1,28 @@
-import { getListingLocation } from "@/lib/mappers/listing.mapper";
 import type { ApiListingDetail } from "@/types/listing";
 import { MapPin } from "lucide-react";
 
 export function ListingLocationSection({ listing }: { listing: ApiListingDetail }) {
-  const location = getListingLocation(listing);
+  let locationStr = "Konum bilgisi belirtilmemiş.";
+  
+  if (listing.district && listing.city) {
+    locationStr = `${listing.district}, ${listing.city}`;
+  } else if (listing.city) {
+    locationStr = listing.city;
+  } else if (listing.district) {
+    locationStr = listing.district;
+  }
 
   return (
-    <div className="relative flex aspect-[21/9] w-full flex-col items-center justify-center overflow-hidden rounded-xl bg-[#f8f9fa] border shadow-sm dark:bg-[#1e293b]">
-      <MapPin className="mb-2 h-8 w-8 text-muted-foreground opacity-50" />
-      <div className="text-center">
-        <p className="font-medium text-muted-foreground">Harita görünümü yakında eklenecek</p>
-        <p className="text-sm text-muted-foreground/80 mt-1">{location}</p>
+    <div className="flex flex-col gap-2 rounded-xl bg-slate-50 p-6 border border-slate-100 dark:bg-[#1F2A37] dark:border-slate-800">
+      <div className="flex items-center gap-2">
+        <MapPin className="h-5 w-5 text-[#2F73F2]" />
+        <span className="font-medium text-[#102D47] dark:text-white text-lg">
+          {locationStr}
+        </span>
       </div>
+      <p className="text-sm text-muted-foreground ml-7">
+        Harita görünümü yakında eklenecek.
+      </p>
     </div>
   );
 }

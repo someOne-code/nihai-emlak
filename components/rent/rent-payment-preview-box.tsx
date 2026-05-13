@@ -19,29 +19,36 @@ export function RentPaymentPreviewBox({
           <div className="text-3xl font-bold text-[#2F73F2]">{formatListingPrice(listing)}</div>
         </div>
 
-        <div className="rounded-md bg-[#F0F6FA] p-4 text-center dark:bg-[#0e1624]">
-          <div className="text-xs text-[#668199] dark:text-[#94a3b8] uppercase tracking-wider mb-1">İlan Modu</div>
-          <div className="font-medium text-[#102D47] dark:text-white">Talep Bırakın</div>
+        <div className="rounded-xl border border-primary/15 bg-primary/5 px-4 py-5 text-center">
+          <div className="mb-1 text-xs uppercase tracking-wider text-primary/80">Süreç</div>
+          <div className="font-medium text-primary">Kiralama Talebi</div>
         </div>
 
         <p className="text-sm leading-6 text-[#668199] dark:text-[#94a3b8] text-center px-2">
-          İlk ödeme ve ek hizmetleri sonraki adımda seçebilirsiniz.
+          Bu ilan için kiralama sürecini başlatabilirsiniz. Ödeme kalemleri ve ek hizmetler sonraki adımda net olarak gösterilir.
         </p>
 
         {isAuthenticated ? (
-          <Button asChild className="w-full bg-[#2F73F2] hover:bg-blue-600 text-white">
+          <Button asChild className="h-12 w-full bg-primary font-semibold text-primary-foreground hover:bg-primary/90">
             <Link href={`/checkout?listingId=${encodeURIComponent(listing.id)}`}>
-              Ödemeye Geç
+              Kiralamayı Başlat
             </Link>
           </Button>
         ) : (
-          <Button asChild className="w-full bg-[#2F73F2] hover:bg-blue-600 text-white">
-            <Link href={getLoginRedirectUrl(`/listings/${listing.id}`)}>Giriş Yap</Link>
-          </Button>
+          <>
+            <p className="text-sm leading-6 text-[#668199] dark:text-[#94a3b8] text-center px-2">
+              Kiralama sürecine devam etmek için giriş yapmanız gerekir.
+            </p>
+            <Button asChild className="h-12 w-full bg-primary font-semibold text-primary-foreground hover:bg-primary/90">
+              <Link href={getLoginRedirectUrl(`/checkout?listingId=${encodeURIComponent(listing.id)}`)}>
+                Giriş Yaparak Başlat
+              </Link>
+            </Button>
+          </>
         )}
         
-        <Button asChild variant="outline" className="w-full border-[#2F73F2] text-[#2F73F2] hover:bg-[#2F73F2] hover:text-white transition-colors">
-          <Link href="#listing-contact">İletişime Geçin</Link>
+        <Button asChild variant="outline" className="h-11 w-full rounded-lg border border-primary/35 bg-primary/5 font-medium text-primary transition hover:bg-primary/10 hover:border-primary/40">
+          <Link href="#listing-contact">İletişime Geç</Link>
         </Button>
       </div>
     </div>

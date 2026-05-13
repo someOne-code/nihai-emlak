@@ -102,7 +102,7 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
               <div className="flex flex-col gap-6">
                 <div className="sticky top-28 flex flex-col gap-6" data-aos="fade-left" data-aos-delay="200">
                   {actionBox}
-                  <ListingContactBox />
+                  <ListingContactBox listingId={listing.id} />
                 </div>
               </div>
             </div>

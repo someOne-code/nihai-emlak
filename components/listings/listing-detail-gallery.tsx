@@ -11,7 +11,7 @@ export function ListingDetailGallery({ listing }: { listing: ApiListingDetail })
   return (
     <div className="flex flex-col gap-4">
       {/* Main Image */}
-      <div className="relative aspect-[16/9] md:aspect-[21/9] lg:aspect-[16/10] w-full overflow-hidden rounded-xl bg-muted shadow-property">
+      <div className="relative aspect-[4/3] md:aspect-[16/9] w-full max-h-[500px] overflow-hidden rounded-xl bg-slate-100 shadow-property dark:bg-slate-800">
         <img
           src={activeImage.src}
           alt={activeImage.alt}

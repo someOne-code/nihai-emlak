@@ -7,7 +7,7 @@ import type { ApiListingDetail } from "@/types/listing";
 export function ListingDetailHeader({ listing }: { listing: ApiListingDetail }) {
   return (
     <div className="flex flex-col gap-5">
-      <h1 className="text-3xl font-bold text-[#102D47] dark:text-white sm:text-4xl md:text-5xl">
+      <h1 className="text-2xl font-bold text-[#102D47] dark:text-white sm:text-3xl md:text-4xl">
         {listing.title}
       </h1>
       

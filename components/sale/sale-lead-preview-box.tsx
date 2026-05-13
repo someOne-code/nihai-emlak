@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { formatListingPrice } from "@/lib/mappers/listing.mapper";
+import { getLoginRedirectUrl } from "@/lib/auth/redirect";
 import type { ApiListingDetail } from "@/types/listing";
 
 export function SaleLeadPreviewBox({
+  isAuthenticated,
   listing,
 }: {
   isAuthenticated: boolean;
@@ -17,14 +19,10 @@ export function SaleLeadPreviewBox({
           <div className="text-3xl font-bold text-[#2F73F2]">{formatListingPrice(listing)}</div>
         </div>
 
-        <div className="rounded-md bg-[#F0F6FA] p-4 text-center dark:bg-[#0e1624]">
-          <div className="text-xs text-[#668199] dark:text-[#94a3b8] uppercase tracking-wider mb-1">İlan Modu</div>
-          <div className="font-medium text-[#102D47] dark:text-white">Talep Bırakın</div>
+        <div className="rounded-xl border border-primary/15 bg-primary/5 px-4 py-5 text-center">
+          <div className="mb-1 text-xs uppercase tracking-wider text-primary/80">Süreç</div>
+          <div className="font-medium text-primary">Satış Bilgi Talebi</div>
         </div>
-
-        <p className="text-sm leading-6 text-[#668199] dark:text-[#94a3b8] text-center px-2">
-          Bu ilan hakkında bilgi almak için iletişim talebi oluşturabilirsiniz.
-        </p>
 
         {/* 
           // The sale lead form is out of scope for this task,
@@ -32,11 +30,30 @@ export function SaleLeadPreviewBox({
         */}
         <div id="sale-lead-preview" className="hidden"></div>
 
-        <Button asChild className="w-full bg-[#2F73F2] hover:bg-blue-600 text-white">
-          <Link href="#sale-lead-preview">İletişim Talebi Gönder</Link>
-        </Button>
-        <Button asChild variant="outline" className="w-full border-[#2F73F2] text-[#2F73F2] hover:bg-[#2F73F2] hover:text-white transition-colors">
-          <Link href="#listing-contact">İletişime Geçin</Link>
+        {isAuthenticated ? (
+          <>
+            <p className="text-sm leading-6 text-[#668199] dark:text-[#94a3b8] text-center px-2">
+              Bu ilan hakkında bilgi almak için iletişim talebi oluşturabilirsiniz.
+            </p>
+            <Button asChild className="h-12 w-full bg-primary font-semibold text-primary-foreground hover:bg-primary/90">
+              <Link href="#sale-lead-preview">İletişim Talebi Gönder</Link>
+            </Button>
+          </>
+        ) : (
+          <>
+            <p className="text-sm leading-6 text-[#668199] dark:text-[#94a3b8] text-center px-2">
+              İletişim talebi göndermek için giriş yapmanız gerekiyor.
+            </p>
+            <Button asChild className="h-12 w-full bg-primary font-semibold text-primary-foreground hover:bg-primary/90">
+              <Link href={getLoginRedirectUrl(`/listings/${listing.id}`)}>
+                Giriş Yap ve Talep Oluştur
+              </Link>
+            </Button>
+          </>
+        )}
+
+        <Button asChild variant="outline" className="h-11 w-full rounded-lg border border-primary/35 bg-primary/5 font-medium text-primary transition hover:bg-primary/10 hover:border-primary/40">
+          <Link href="#listing-contact">İletişime Geç</Link>
         </Button>
       </div>
     </div>
