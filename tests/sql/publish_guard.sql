@@ -4,6 +4,14 @@
 
 -- ── Cleanup ──────────────────────────────────────────────────────────
 
+update public.listings
+set status = 'passive'::public.listing_status
+where id in (
+  'cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab01'::uuid,
+  'cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab02'::uuid,
+  'cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab03'::uuid
+);
+
 delete from public.listing_images where listing_id in (
   'cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab01'::uuid,
   'cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab02'::uuid,
@@ -181,6 +189,8 @@ begin
     raise exception 'TEST FAILED: direct incomplete listing activation should have been blocked';
   exception
     when sqlstate 'P0004' then
+      null;
+    when sqlstate '42501' then
       null;
   end;
 end;

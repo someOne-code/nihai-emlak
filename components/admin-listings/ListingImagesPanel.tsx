@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState, type DragEvent, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
 import { ArrowDown, ArrowUp, ImagePlus, Loader2, Trash2, Upload } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +9,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { resolveAdminDisplayImageUrl } from "@/lib/admin-ui/admin-image-url";
-import { uploadListingImage } from "@/lib/admin-ui/listings-client";
+import {
+  resolveListingImageUploadUrl,
+  uploadListingImage,
+} from "@/lib/admin-ui/listings-client";
 import type { AdminListingImage } from "@/lib/admin-ui/listings-view-model";
 
 // Listing images panel with direct file upload via Supabase Storage.
@@ -50,7 +53,11 @@ export default function ListingImagesPanel({
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <ImageUploadBox busy={busy} onAddImage={onAddImage} />
+        <ImageUploadBox
+          busy={busy}
+          hasExistingImages={images.length > 0}
+          onAddImage={onAddImage}
+        />
 
         {images.length === 0 ? (
           <div className="text-sm text-muted-foreground py-4 text-center">
@@ -82,19 +89,27 @@ const ACCEPTED_TYPES = "image/jpeg,image/png,image/webp";
 
 function ImageUploadBox({
   busy,
+  hasExistingImages,
   onAddImage,
 }: {
   busy: boolean;
+  hasExistingImages: boolean;
   onAddImage: (payload: AddImagePayload) => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [altText, setAltText] = useState("");
-  const [isPrimary, setIsPrimary] = useState(false);
+  const [isPrimary, setIsPrimary] = useState(!hasExistingImages);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+  useEffect(() => {
+    if (!selectedFile) {
+      setIsPrimary(!hasExistingImages);
+    }
+  }, [hasExistingImages, selectedFile]);
 
   const selectFile = useCallback((file: File) => {
     setSelectedFile(file);
@@ -106,12 +121,12 @@ function ImageUploadBox({
   const resetForm = useCallback(() => {
     setSelectedFile(null);
     setAltText("");
-    setIsPrimary(false);
+    setIsPrimary(!hasExistingImages);
     setUploadError(null);
     if (preview) URL.revokeObjectURL(preview);
     setPreview(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
-  }, [preview]);
+  }, [hasExistingImages, preview]);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -134,7 +149,7 @@ function ImageUploadBox({
     try {
       const result = await uploadListingImage(selectedFile);
       onAddImage({
-        image_url: result.url,
+        image_url: resolveListingImageUploadUrl(result),
         alt_text: altText.trim() || null,
         is_primary: isPrimary,
       });
@@ -193,7 +208,7 @@ function ImageUploadBox({
                 Fotoğraf sürükle veya tıkla
               </p>
               <p className="text-xs text-muted-foreground/70 mt-0.5">
-                JPEG, PNG veya WebP • Maks. 5 MB
+                JPEG, PNG veya WebP • Maks. 5 MB • Optimize varyantlar ve net kapak icin yatay fotograf onerilir
               </p>
             </div>
           </>

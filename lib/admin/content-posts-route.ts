@@ -166,6 +166,7 @@ export async function handlePostsListGet(
     limit: query.limit,
     sort: "-createdAt",
     depth: 1,
+    overrideAccess: true,
   });
 
   const items = result.docs.map((doc) => toPostDTO(doc as unknown as PayloadPostDoc));
@@ -209,6 +210,7 @@ export async function handlePostsCreatePost(
     const doc = await payload.create({
       collection: "blog_posts",
       data: buildPayloadPostCreateData(parsed.value),
+      overrideAccess: true,
     });
 
     return jsonResponse(
@@ -240,6 +242,7 @@ export async function handlePostGet(
       collection: "blog_posts",
       id,
       depth: 1,
+      overrideAccess: true,
     });
 
     return jsonResponse(
@@ -277,6 +280,7 @@ export async function handlePostUpdate(
       collection: "blog_posts",
       id,
       data: buildPayloadPostUpdateData(parsed.value),
+      overrideAccess: true,
     });
 
     return jsonResponse(
@@ -313,6 +317,7 @@ export async function handlePostDelete(
     await payload.delete({
       collection: "blog_posts",
       id,
+      overrideAccess: true,
     });
 
     return jsonResponse({ success: true }, 200);

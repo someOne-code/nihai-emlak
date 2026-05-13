@@ -155,3 +155,31 @@ test("catalog client: throws AdminCatalogClientError on failure envelope", async
     },
   );
 });
+
+test("catalog client: aborts timed out requests with typed timeout error", async () => {
+  const fetcher: AdminCatalogFetch = async (_input, init) => {
+    const signal = init?.signal;
+    assert.ok(signal instanceof AbortSignal);
+    return await new Promise<Response>((_resolve, reject) => {
+      if (signal.aborted) {
+        reject(new DOMException("Aborted", "AbortError"));
+        return;
+      }
+      signal.addEventListener(
+        "abort",
+        () => reject(new DOMException("Aborted", "AbortError")),
+        { once: true },
+      );
+    });
+  };
+
+  await assert.rejects(
+    () => fetchAdminCatalogMainItems({ fetcher, requestTimeoutMs: 1 }),
+    (err: unknown) => {
+      assert.ok(err instanceof AdminCatalogClientError);
+      assert.equal(err.status, 408);
+      assert.match(err.message, /zaman aşımına uğradı/i);
+      return true;
+    },
+  );
+});

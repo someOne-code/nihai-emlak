@@ -10,7 +10,9 @@
 // contract via shared helpers and parsers — not the handler functions directly.
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test, { type TestContext } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import {
   validateContentAdminJsonEnvelope,
@@ -33,6 +35,7 @@ import { buildCategoriesListFindArgsForTest } from "../lib/admin/content-categor
 import { buildCategoryLinkedPostsFindArgsForTest } from "../lib/admin/content-category-linked-posts.ts";
 
 const OVERSIZED_CONTENT_ADMIN_JSON_BYTES = 256 * 1024 + 1;
+const PROJECT_ROOT = fileURLToPath(new URL("..", import.meta.url));
 
 // ── Env setup (mirrors phase8-admin-listings-route.test.mts) ────────────────
 
@@ -64,6 +67,29 @@ function restoreEnv(key: string, value: string | undefined): void {
 }
 
 // ── Envelope guard helpers ──────────────────────────────────────────────────
+
+function extractPayloadObjectCalls(source: string): string[] {
+  const calls: string[] = [];
+  const pattern = /payload\.(find|findByID|create|update|delete)\(\s*\{/g;
+
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(source)) !== null) {
+    const objectStart = source.indexOf("{", match.index);
+    let depth = 0;
+    let index = objectStart;
+    for (; index < source.length; index += 1) {
+      const char = source[index];
+      if (char === "{") depth += 1;
+      if (char === "}") depth -= 1;
+      if (depth === 0) {
+        calls.push(source.slice(match.index, index + 1));
+        break;
+      }
+    }
+  }
+
+  return calls;
+}
 
 function makeRequest(
   method: string,
@@ -198,6 +224,28 @@ test("content admin envelope accepts content-type with charset parameter", (t) =
 
   const result = validateContentAdminJsonEnvelope(req);
   assert.equal(result.ok, true);
+});
+
+test("content admin Payload Local API object calls declare overrideAccess explicitly", () => {
+  const files = [
+    "lib/admin/content-posts-route.ts",
+    "lib/admin/content-categories-route.ts",
+    "lib/admin/content-consultants-route.ts",
+  ];
+
+  for (const file of files) {
+    const source = readFileSync(`${PROJECT_ROOT}/${file}`, "utf8");
+    const calls = extractPayloadObjectCalls(source);
+    assert.ok(calls.length > 0, `${file} should contain Payload Local API calls`);
+
+    for (const call of calls) {
+      assert.match(
+        call,
+        /\boverrideAccess\s*:/,
+        `${file} Payload Local API call must set overrideAccess explicitly:\n${call}`,
+      );
+    }
+  }
 });
 
 test("posts create rejects oversized JSON before auth and request.json", async (t) => {
@@ -705,6 +753,7 @@ test("category options query includes inactive categories for admin post forms",
   assert.equal(args.limit, 500);
   assert.equal(args.sort, "sortOrder");
   assert.equal("where" in args, false);
+  assert.equal(args.overrideAccess, true);
 });
 
 test("buildCategoriesListFindArgs selects only fields needed for instant category editing", () => {
@@ -716,6 +765,7 @@ test("buildCategoriesListFindArgs selects only fields needed for instant categor
   assert.equal(args.select.title, true);
   assert.equal(args.select.description, true);
   assert.equal(args.select.updatedAt, true);
+  assert.equal(args.overrideAccess, true);
 });
 
 test("category detail linked posts query uses relationship id and lightweight result bounds", () => {
@@ -726,6 +776,7 @@ test("category detail linked posts query uses relationship id and lightweight re
   assert.equal(args.limit, 50);
   assert.equal(args.sort, "-updatedAt");
   assert.equal(args.depth, 0);
+  assert.equal(args.overrideAccess, true);
 });
 
 test("category detail DTO exposes total linked post count and delete warning", async () => {

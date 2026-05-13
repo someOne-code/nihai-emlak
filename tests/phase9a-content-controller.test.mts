@@ -13,6 +13,7 @@ import {
   loadCategoriesModel,
   loadConsultantsModel,
   loadContentDetailModel,
+  refreshContentModelAfterMutation,
   ContentControllerError,
 } from "../lib/admin-ui/content-controller.ts";
 
@@ -326,3 +327,183 @@ test("ContentControllerError carries status and message", () => {
   assert.equal(err.message, "Not found");
   assert.equal(err.name, "ContentControllerError");
 });
+
+test("refreshContentModelAfterMutation replaces post row/detail without refetch", () => {
+  const current = {
+    rows: [
+      {
+        id: "p1",
+        title: "Old Post",
+        slug: "old-post",
+        statusLabel: "Taslak",
+        categoryLabel: "News",
+        publishedAt: null,
+        updatedAt: "2024-01-01",
+        detail: {
+          id: "p1",
+          title: "Old Post",
+          slug: "old-post",
+          excerpt: null,
+          content: "old",
+          category: { id: "c1", title: "News" },
+          status: "draft" as const,
+          publishedAt: null,
+          coverImageUrl: null,
+          seoTitle: null,
+          seoDescription: null,
+          createdAt: "2024-01-01",
+          updatedAt: "2024-01-01",
+        },
+      },
+    ],
+    total: 1,
+    page: 1,
+    totalPages: 1,
+    isEmpty: false,
+  };
+
+  const result = refreshContentModelAfterMutation("posts", current, {
+    id: "p1",
+    title: "New Post",
+    slug: "new-post",
+    excerpt: null,
+    content: "new",
+    category: { id: "c1", title: "News" },
+    status: "published",
+    publishedAt: "2024-01-02",
+    coverImageUrl: null,
+    seoTitle: null,
+    seoDescription: null,
+    createdAt: "2024-01-01",
+    updatedAt: "2024-01-02",
+  });
+
+  assert.equal(result.type, "post");
+  assert.equal(result.model.rows[0].title, "New Post");
+  assert.equal(result.model.rows[0].statusLabel, "Yayında");
+  assert.equal(result.detail?.title, "New Post");
+});
+
+test("refreshContentModelAfterMutation replaces category row/detail without refetch", () => {
+  const result = refreshContentModelAfterMutation(
+    "categories",
+    buildCategoriesListViewModelForTest("Old Category"),
+    {
+      id: "c1",
+      title: "New Category",
+      slug: "new-category",
+      description: "updated",
+      isActive: false,
+      sortOrder: 2,
+      linkedPosts: [],
+      linkedPostCount: 0,
+      createdAt: "2024-01-01",
+      updatedAt: "2024-01-02",
+    },
+  );
+
+  assert.equal(result.type, "category");
+  assert.equal(result.model.rows[0].title, "New Category");
+  assert.equal(result.model.rows[0].isActiveLabel, "Pasif");
+  assert.equal(result.detail?.title, "New Category");
+});
+
+test("refreshContentModelAfterMutation replaces consultant row/detail without refetch", () => {
+  const result = refreshContentModelAfterMutation(
+    "consultants",
+    buildConsultantsListViewModelForTest("Old Consultant"),
+    {
+      id: "co1",
+      fullName: "New Consultant",
+      slug: "new-consultant",
+      title: "Broker",
+      photoUrl: null,
+      shortBio: "updated",
+      phone: null,
+      email: null,
+      whatsappUrl: null,
+      linkedinUrl: null,
+      isPublished: true,
+      sortOrder: 3,
+      previewLink: "/consultants/new-consultant",
+      relatedCounts: { contactChannels: 0, externalLinks: 0 },
+      createdAt: "2024-01-01",
+      updatedAt: "2024-01-02",
+    },
+  );
+
+  assert.equal(result.type, "consultant");
+  assert.equal(result.model.rows[0].fullName, "New Consultant");
+  assert.equal(result.model.rows[0].isPublishedLabel, "Yayında");
+  assert.equal(result.detail?.fullName, "New Consultant");
+});
+
+function buildCategoriesListViewModelForTest(title: string) {
+  return {
+    rows: [
+      {
+        id: "c1",
+        title,
+        slug: "category",
+        isActiveLabel: "Aktif",
+        sortOrder: 0,
+        updatedAt: "2024-01-01",
+        detail: {
+          id: "c1",
+          title,
+          slug: "category",
+          description: null,
+          isActive: true,
+          sortOrder: 0,
+          linkedPosts: [],
+          linkedPostCount: 0,
+          deleteWarning: { hasLinkedPosts: false, linkedPostCount: 0, message: null },
+          createdAt: "2024-01-01",
+          updatedAt: "2024-01-01",
+        },
+      },
+    ],
+    total: 1,
+    page: 1,
+    totalPages: 1,
+    isEmpty: false,
+  };
+}
+
+function buildConsultantsListViewModelForTest(fullName: string) {
+  return {
+    rows: [
+      {
+        id: "co1",
+        fullName,
+        slug: "consultant",
+        titleLabel: "Broker",
+        isPublishedLabel: "Taslak",
+        sortOrder: 0,
+        updatedAt: "2024-01-01",
+        detail: {
+          id: "co1",
+          fullName,
+          slug: "consultant",
+          title: "Broker",
+          photoUrl: null,
+          shortBio: null,
+          phone: null,
+          email: null,
+          whatsappUrl: null,
+          linkedinUrl: null,
+          isPublished: false,
+          sortOrder: 0,
+          previewLink: "",
+          relatedCounts: { contactChannels: 0, externalLinks: 0 },
+          createdAt: "2024-01-01",
+          updatedAt: "2024-01-01",
+        },
+      },
+    ],
+    total: 1,
+    page: 1,
+    totalPages: 1,
+    isEmpty: false,
+  };
+}

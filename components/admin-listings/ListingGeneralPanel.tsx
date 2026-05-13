@@ -59,6 +59,25 @@ export default function ListingGeneralPanel({
   const [bathroomCount, setBathroomCount] = useState(
     numericFieldValue(detail.listing.bathroomCount),
   );
+  const [heatingType, setHeatingType] = useState(detail.listing.heatingType ?? "");
+  const [fuelType, setFuelType] = useState(detail.listing.fuelType ?? "");
+  const [balconyCount, setBalconyCount] = useState(
+    numericFieldValue(detail.listing.balconyCount),
+  );
+  const [hasElevator, setHasElevator] = useState(
+    nullableBooleanFieldValue(detail.listing.hasElevator),
+  );
+  const [parkingType, setParkingType] = useState(detail.listing.parkingType ?? "");
+  const [inSite, setInSite] = useState(nullableBooleanFieldValue(detail.listing.inSite));
+  const [buildingAge, setBuildingAge] = useState(
+    numericFieldValue(detail.listing.buildingAge),
+  );
+  const [floorCount, setFloorCount] = useState(
+    numericFieldValue(detail.listing.floorCount),
+  );
+  const [floorNumber, setFloorNumber] = useState(detail.listing.floorNumber ?? "");
+  const [usageStatus, setUsageStatus] = useState(detail.listing.usageStatus ?? "");
+  const [facade, setFacade] = useState(detail.listing.facade ?? "");
   const [grossArea, setGrossArea] = useState(
     numericFieldValue(detail.listing.grossAreaM2),
   );
@@ -91,6 +110,17 @@ export default function ListingGeneralPanel({
       room_count: roomCount.trim() === "" ? null : Number(roomCount),
       bathroom_count:
         bathroomCount.trim() === "" ? null : Number(bathroomCount),
+      heating_type: heatingType || null,
+      fuel_type: fuelType || null,
+      balcony_count: balconyCount.trim() === "" ? null : Number(balconyCount),
+      has_elevator: parseNullableBooleanFieldValue(hasElevator),
+      parking_type: parkingType || null,
+      in_site: parseNullableBooleanFieldValue(inSite),
+      building_age: buildingAge.trim() === "" ? null : Number(buildingAge),
+      floor_count: floorCount.trim() === "" ? null : Number(floorCount),
+      floor_number: floorNumber.trim() || null,
+      usage_status: usageStatus || null,
+      facade: facade.trim() || null,
       gross_area_m2: grossArea.trim() === "" ? null : Number(grossArea),
       is_furnished: isFurnished,
     });
@@ -262,6 +292,100 @@ export default function ListingGeneralPanel({
                 onChange={(event) => setBathroomCount(event.target.value)}
               />
             </Field>
+            <Field label="Isıtma">
+              <Select value={heatingType} onChange={(event) => setHeatingType(event.target.value)}>
+                <option value="">Belirtilmedi</option>
+                <option value="central">Merkezi Sistem</option>
+                <option value="combi">Kombi</option>
+                <option value="floor_heating">Yerden Isıtma</option>
+                <option value="stove">Soba</option>
+                <option value="air_conditioning">Klima</option>
+                <option value="none">Yok</option>
+                <option value="other">Diğer</option>
+              </Select>
+            </Field>
+            <Field label="Yakıt">
+              <Select value={fuelType} onChange={(event) => setFuelType(event.target.value)}>
+                <option value="">Belirtilmedi</option>
+                <option value="natural_gas">Doğalgaz</option>
+                <option value="electricity">Elektrik</option>
+                <option value="coal">Kömür</option>
+                <option value="fuel_oil">Fuel Oil</option>
+                <option value="none">Yok</option>
+                <option value="other">Diğer</option>
+              </Select>
+            </Field>
+            <Field label="Balkon sayısı">
+              <Input
+                type="number"
+                min={0}
+                value={balconyCount}
+                onChange={(event) => setBalconyCount(event.target.value)}
+              />
+            </Field>
+            <Field label="Asansör">
+              <Select value={hasElevator} onChange={(event) => setHasElevator(event.target.value)}>
+                <option value="">Belirtilmedi</option>
+                <option value="true">Var</option>
+                <option value="false">Yok</option>
+              </Select>
+            </Field>
+            <Field label="Otopark">
+              <Select value={parkingType} onChange={(event) => setParkingType(event.target.value)}>
+                <option value="">Belirtilmedi</option>
+                <option value="open">Açık Otopark</option>
+                <option value="closed">Kapalı Otopark</option>
+                <option value="open_closed">Açık ve Kapalı Otopark</option>
+                <option value="none">Yok</option>
+                <option value="other">Diğer</option>
+              </Select>
+            </Field>
+            <Field label="Site içerisinde">
+              <Select value={inSite} onChange={(event) => setInSite(event.target.value)}>
+                <option value="">Belirtilmedi</option>
+                <option value="true">Evet</option>
+                <option value="false">Hayır</option>
+              </Select>
+            </Field>
+            <Field label="Bina yaşı">
+              <Input
+                type="number"
+                min={0}
+                value={buildingAge}
+                onChange={(event) => setBuildingAge(event.target.value)}
+              />
+            </Field>
+            <Field label="Kat sayısı">
+              <Input
+                type="number"
+                min={0}
+                value={floorCount}
+                onChange={(event) => setFloorCount(event.target.value)}
+              />
+            </Field>
+            <Field label="Bulunduğu kat">
+              <Input
+                value={floorNumber}
+                onChange={(event) => setFloorNumber(event.target.value)}
+                placeholder="Örn: 3. Kat"
+              />
+            </Field>
+            <Field label="Kullanım durumu">
+              <Select value={usageStatus} onChange={(event) => setUsageStatus(event.target.value)}>
+                <option value="">Belirtilmedi</option>
+                <option value="empty">Boş</option>
+                <option value="tenant_occupied">Kiracılı</option>
+                <option value="owner_occupied">Mülk Sahibi Oturuyor</option>
+                <option value="unknown">Belirtilmemiş</option>
+              </Select>
+            </Field>
+            <Field label="Cephe">
+              <Input
+                value={facade}
+                onChange={(event) => setFacade(event.target.value)}
+                placeholder="Örn: Güney Batı"
+              />
+            </Field>
             <Field label="Brüt alan (m²)">
               <Input
                 type="number"
@@ -355,4 +479,24 @@ function ReadOnlyValue({ children }: { children: ReactNode }) {
 
 function numericFieldValue(value: number | null): string {
   return value === null ? "" : String(value);
+}
+
+function nullableBooleanFieldValue(value: boolean | null): string {
+  if (value === true) {
+    return "true";
+  }
+  if (value === false) {
+    return "false";
+  }
+  return "";
+}
+
+function parseNullableBooleanFieldValue(value: string): boolean | null {
+  if (value === "true") {
+    return true;
+  }
+  if (value === "false") {
+    return false;
+  }
+  return null;
 }

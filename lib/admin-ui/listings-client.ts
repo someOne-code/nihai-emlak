@@ -11,6 +11,8 @@ export type AdminListingsFetch = (
 
 export type AdminListingsClientOptions = {
   fetcher?: AdminListingsFetch;
+  requestTimeoutMs?: number;
+  signal?: AbortSignal;
 };
 
 export type AdminListingsListFilters = {
@@ -54,6 +56,9 @@ export class AdminListingsClientError extends Error {
     this.status = status;
   }
 }
+
+const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
+const ADMIN_LISTINGS_TIMEOUT_MESSAGE = "Admin ilan isteği zaman aşımına uğradı.";
 
 export async function fetchAdminListingsList(
   filters: AdminListingsListFilters,
@@ -144,14 +149,10 @@ export async function deleteAdminListingImage(
   imageId: string,
   options: AdminListingsClientOptions = {},
 ): Promise<null> {
-  const fetcher = options.fetcher ?? globalThis.fetch.bind(globalThis);
-  const response = await fetcher(
+  const response = await requestAdminResponse(
     `/api/admin/listings/${encodeURIComponent(listingId)}/images/${encodeURIComponent(imageId)}`,
-    {
-      method: "DELETE",
-      credentials: "same-origin",
-      cache: "no-store",
-    },
+    { method: "DELETE" },
+    options,
   );
 
   if (response.status === 204) {
@@ -239,12 +240,7 @@ async function requestAdminJson<T = unknown>(
   init: RequestInit,
   options: AdminListingsClientOptions,
 ): Promise<T> {
-  const fetcher = options.fetcher ?? globalThis.fetch.bind(globalThis);
-  const response = await fetcher(url, {
-    ...init,
-    credentials: "same-origin",
-    cache: "no-store",
-  });
+  const response = await requestAdminResponse(url, init, options);
   const envelope = await readJsonEnvelope(response);
 
   if (!envelope.success) {
@@ -256,6 +252,62 @@ async function requestAdminJson<T = unknown>(
   }
 
   return envelope.data as T;
+}
+
+async function requestAdminResponse(
+  url: string,
+  init: RequestInit,
+  options: AdminListingsClientOptions,
+): Promise<Response> {
+  const fetcher = options.fetcher ?? globalThis.fetch.bind(globalThis);
+  const abort = createRequestAbort(options);
+
+  try {
+    return await fetcher(url, {
+      ...init,
+      credentials: "same-origin",
+      cache: "no-store",
+      signal: abort.signal,
+    });
+  } catch (err) {
+    if (isAbortError(err)) {
+      throw new AdminListingsClientError(ADMIN_LISTINGS_TIMEOUT_MESSAGE, 408);
+    }
+    throw err;
+  } finally {
+    abort.cleanup();
+  }
+}
+
+function createRequestAbort(options: AdminListingsClientOptions): {
+  signal: AbortSignal;
+  cleanup: () => void;
+} {
+  const controller = new AbortController();
+  const externalSignal = options.signal;
+  const abortFromExternal = () => controller.abort();
+  const timer = setTimeout(
+    () => controller.abort(),
+    options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
+  );
+
+  if (externalSignal?.aborted) {
+    controller.abort();
+  } else {
+    externalSignal?.addEventListener("abort", abortFromExternal, { once: true });
+  }
+
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      clearTimeout(timer);
+      externalSignal?.removeEventListener("abort", abortFromExternal);
+    },
+  };
+}
+
+function isAbortError(err: unknown): boolean {
+  return err instanceof DOMException && err.name === "AbortError";
 }
 
 async function readJsonEnvelope(
@@ -319,21 +371,29 @@ export type ListingImageUploadResult = {
   url: string;
   path: string;
   bucket: string;
+  variants?: Record<string, unknown>;
 };
+
+export function resolveListingImageUploadUrl(result: ListingImageUploadResult): string {
+  return (
+    getUploadVariantUrl(result.variants, "canonical") ??
+    getUploadVariantUrl(result.variants, "detail") ??
+    getUploadVariantUrl(result.variants, "card") ??
+    result.url
+  );
+}
 
 export async function uploadListingImage(
   file: File,
   options: AdminListingsClientOptions = {},
 ): Promise<ListingImageUploadResult> {
-  const fetcher = options.fetcher ?? globalThis.fetch.bind(globalThis);
   const formData = new FormData();
   formData.append("file", file);
 
-  const response = await fetcher("/api/admin/content/uploads/listing-image", {
+  const response = await requestAdminResponse("/api/admin/content/uploads/listing-image", {
     method: "POST",
-    credentials: "same-origin",
     body: formData,
-  });
+  }, options);
 
   if (!response.ok) {
     let message = `Upload failed (${response.status})`;
@@ -354,9 +414,27 @@ export async function uploadListingImage(
   }
 
   const data = body.data as Record<string, unknown>;
+  const variants = isRecord(data.variants) ? data.variants : undefined;
   return {
     url: String(data.url ?? ""),
     path: String(data.path ?? ""),
     bucket: String(data.bucket ?? ""),
+    ...(variants ? { variants } : {}),
   };
+}
+
+function getUploadVariantUrl(
+  variants: Record<string, unknown> | undefined,
+  key: "canonical" | "detail" | "card",
+): string | null {
+  if (!variants) {
+    return null;
+  }
+
+  const variant = variants[key];
+  if (!isRecord(variant)) {
+    return null;
+  }
+
+  return asNonEmptyString(variant.url);
 }

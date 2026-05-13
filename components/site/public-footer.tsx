@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 export function PublicFooter() {
@@ -7,11 +8,12 @@ export function PublicFooter() {
         <div className="grid grid-cols-12 gap-4">
           <div className="col-span-12 flex items-center px-4 md:col-span-4 sm:px-0">
             <Link href="/" className="mb-6 inline-block max-w-40">
-              <img
+              <Image
                 src="/property-nextjs-pro/images/logo/logo-white.svg"
                 alt="logo"
                 width={156}
                 height={38}
+                unoptimized
               />
             </Link>
           </div>

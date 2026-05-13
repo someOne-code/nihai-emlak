@@ -17,6 +17,7 @@ export function buildCategoriesListFindArgs(page: number, limit: number) {
     sort: "sortOrder",
     depth: 0,
     select: CATEGORY_LIST_SELECT,
+    overrideAccess: true,
   } as const;
 }
 

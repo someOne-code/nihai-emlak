@@ -48,3 +48,217 @@ values (
 update public.profiles
 set role = 'admin'
 where id = 'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb800'::uuid;
+
+-- Public demo listings for local development.
+-- These rows keep active-listing invariants intact: every listing has a
+-- description, district, image, and rent listings have an enabled main item.
+delete from public.listing_main_item_options
+where listing_id in (
+  'dddddddd-1111-4111-8111-111111111111'::uuid,
+  'dddddddd-2222-4222-8222-222222222222'::uuid,
+  'dddddddd-3333-4333-8333-333333333333'::uuid
+);
+
+delete from public.listing_images
+where listing_id in (
+  'dddddddd-1111-4111-8111-111111111111'::uuid,
+  'dddddddd-2222-4222-8222-222222222222'::uuid,
+  'dddddddd-3333-4333-8333-333333333333'::uuid
+);
+
+delete from public.listings
+where id in (
+  'dddddddd-1111-4111-8111-111111111111'::uuid,
+  'dddddddd-2222-4222-8222-222222222222'::uuid,
+  'dddddddd-3333-4333-8333-333333333333'::uuid
+);
+
+insert into public.main_item_catalog (
+  id,
+  code,
+  label,
+  description,
+  pricing_strategy,
+  default_multiplier,
+  is_active,
+  sort_order
+)
+values (
+  'dddddddd-aaaa-4aaa-8aaa-aaaaaaaaaaa1'::uuid,
+  'demo_rent_deposit',
+  'Kira Depozitosu',
+  'Local demo kiralik ilan checkout kalemi',
+  'listing_price_multiplier',
+  1.0000,
+  true,
+  10
+)
+on conflict (code) do update
+set label = excluded.label,
+    description = excluded.description,
+    pricing_strategy = excluded.pricing_strategy,
+    default_multiplier = excluded.default_multiplier,
+    is_active = excluded.is_active,
+    sort_order = excluded.sort_order;
+
+insert into public.listings (
+  id,
+  type,
+  status,
+  title,
+  slug,
+  summary,
+  description,
+  city,
+  district,
+  price,
+  currency,
+  room_count,
+  bathroom_count,
+  gross_area_m2,
+  is_furnished,
+  heating_type,
+  fuel_type,
+  balcony_count,
+  has_elevator,
+  parking_type,
+  in_site,
+  building_age,
+  floor_count,
+  floor_number,
+  usage_status,
+  facade
+)
+values
+  (
+    'dddddddd-1111-4111-8111-111111111111'::uuid,
+    'rent',
+    'active',
+    'Kadikoy Merkezi Kiralik Daire',
+    'kadikoy-merkezi-kiralik-daire',
+    'Metroya yakin, esyali ve kullanima hazir kiralik daire.',
+    'Kadikoy merkezde, ulasim akslarina yakin, esyali ve bakimli kiralik daire.',
+    'Istanbul',
+    'Kadikoy',
+    42000,
+    'TRY',
+    3,
+    2,
+    125,
+    true,
+    'central',
+    'natural_gas',
+    2,
+    true,
+    'open',
+    true,
+    6,
+    12,
+    '5. Kat',
+    'empty',
+    'Guney Bati'
+  ),
+  (
+    'dddddddd-2222-4222-8222-222222222222'::uuid,
+    'sale',
+    'active',
+    'Besiktas Manzarali Satilik Daire',
+    'besiktas-manzarali-satilik-daire',
+    'Genis cepheli, otoparkli satilik daire.',
+    'Besiktas sahiline yakin, genis cepheli ve kapali otoparkli satilik daire.',
+    'Istanbul',
+    'Besiktas',
+    8750000,
+    'TRY',
+    4,
+    2,
+    165,
+    false,
+    'combi',
+    'natural_gas',
+    1,
+    true,
+    'closed',
+    false,
+    12,
+    8,
+    '4. Kat',
+    'owner_occupied',
+    'Guney'
+  ),
+  (
+    'dddddddd-3333-4333-8333-333333333333'::uuid,
+    'rent',
+    'active',
+    'Sisli Site Icinde Kiralik Residence',
+    'sisli-site-icinde-kiralik-residence',
+    'Site icinde, kapali otoparkli modern residence.',
+    'Sisli merkezde, site icinde, kapali otoparkli ve modern kiralik residence.',
+    'Istanbul',
+    'Sisli',
+    58000,
+    'TRY',
+    2,
+    1,
+    92,
+    false,
+    'floor_heating',
+    'electricity',
+    1,
+    true,
+    'closed',
+    true,
+    3,
+    24,
+    '11. Kat',
+    'tenant_occupied',
+    'Kuzey Dogu'
+  );
+
+insert into public.listing_images (
+  listing_id,
+  image_url,
+  alt_text,
+  sort_order,
+  is_primary
+)
+values
+  (
+    'dddddddd-1111-4111-8111-111111111111'::uuid,
+    'https://example.com/property-nextjs-pro/placeholder-property.jpg',
+    'Kadikoy merkezi kiralik daire',
+    0,
+    true
+  ),
+  (
+    'dddddddd-2222-4222-8222-222222222222'::uuid,
+    'https://example.com/property-nextjs-pro/placeholder-property.jpg',
+    'Besiktas manzarali satilik daire',
+    0,
+    true
+  ),
+  (
+    'dddddddd-3333-4333-8333-333333333333'::uuid,
+    'https://example.com/property-nextjs-pro/placeholder-property.jpg',
+    'Sisli site icinde kiralik residence',
+    0,
+    true
+  );
+
+insert into public.listing_main_item_options (
+  listing_id,
+  main_item_id,
+  is_enabled,
+  sort_order
+)
+select listing_id, main_item.id, true, 10
+from (
+  values
+    ('dddddddd-1111-4111-8111-111111111111'::uuid),
+    ('dddddddd-3333-4333-8333-333333333333'::uuid)
+) as rent_listings(listing_id)
+cross join (
+  select id
+  from public.main_item_catalog
+  where code = 'demo_rent_deposit'
+) as main_item;

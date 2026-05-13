@@ -528,6 +528,38 @@ test("operations overview tolerates orders/payments failure and returns empty fo
   assert.equal(overview.payments.items.length, 0, "failed payments should fall back to empty");
 });
 
+test("operations client aborts timed out requests with typed timeout error", async () => {
+  const fetcher = async (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const signal = init?.signal;
+    assert.ok(signal instanceof AbortSignal);
+    return await new Promise<Response>((_resolve, reject) => {
+      if (signal.aborted) {
+        reject(new DOMException("Aborted", "AbortError"));
+        return;
+      }
+      signal.addEventListener(
+        "abort",
+        () => reject(new DOMException("Aborted", "AbortError")),
+        { once: true },
+      );
+    });
+  };
+
+  await assert.rejects(
+    () =>
+      fetchReservationWorkflowSnapshot("11111111-1111-4111-8111-111111111111", {
+        fetcher,
+        requestTimeoutMs: 1,
+      }),
+    (err: unknown) => {
+      assert.ok(err instanceof AdminOperationsClientError);
+      assert.equal(err.status, 408);
+      assert.match(err.message, /zaman aşımına uğradı/i);
+      return true;
+    },
+  );
+});
+
 function jsonResponse(payload: unknown, status = 200): Response {
   return Response.json(payload, {
     status,

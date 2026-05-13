@@ -77,6 +77,17 @@ function createSnapshot() {
       currency: "TRY",
       room_count: 3,
       bathroom_count: 1,
+      heating_type: "central",
+      fuel_type: "natural_gas",
+      balcony_count: 2,
+      has_elevator: true,
+      parking_type: "open_closed",
+      in_site: false,
+      building_age: 5,
+      floor_count: 12,
+      floor_number: "3. Kat",
+      usage_status: "tenant_occupied",
+      facade: "Guney Bati",
       gross_area_m2: 110,
       is_furnished: true,
       created_at: "2026-04-30T10:00:00Z",
@@ -258,6 +269,17 @@ test("admin listings view-model returns sanitized detail when snapshot is provid
   assert.ok(model.detail);
   assert.equal(model.detail.listing.id, LISTING_ID);
   assert.equal(model.detail.listing.title, "Phase 8 Test Daire");
+  assert.equal(model.detail.listing.heatingType, "central");
+  assert.equal(model.detail.listing.fuelType, "natural_gas");
+  assert.equal(model.detail.listing.balconyCount, 2);
+  assert.equal(model.detail.listing.hasElevator, true);
+  assert.equal(model.detail.listing.parkingType, "open_closed");
+  assert.equal(model.detail.listing.inSite, false);
+  assert.equal(model.detail.listing.buildingAge, 5);
+  assert.equal(model.detail.listing.floorCount, 12);
+  assert.equal(model.detail.listing.floorNumber, "3. Kat");
+  assert.equal(model.detail.listing.usageStatus, "tenant_occupied");
+  assert.equal(model.detail.listing.facade, "Guney Bati");
   assert.equal(model.detail.images.length, 2);
   assert.equal(model.detail.images[0].isPrimary, true);
   assert.equal(model.detail.mainItems.length, 1);
@@ -683,6 +705,17 @@ function createReadinessDetail(overrides: {
       currency: null,
       roomCount: null,
       bathroomCount: null,
+      heatingType: null,
+      fuelType: null,
+      balconyCount: null,
+      hasElevator: null,
+      parkingType: null,
+      inSite: null,
+      buildingAge: null,
+      floorCount: null,
+      floorNumber: null,
+      usageStatus: null,
+      facade: null,
       grossAreaM2: null,
       isFurnished: false,
       createdAt: null,

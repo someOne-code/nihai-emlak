@@ -32,6 +32,36 @@ const ADMIN_LISTING_JSON_ROUTE_CONFIG: StateChangingJsonRouteConfig = {
 };
 
 const ALLOWED_LISTING_STATUSES = new Set(["active", "passive"]);
+const CREATE_LISTING_FIELDS = new Set([
+  "type",
+  "status",
+  "title",
+  "slug",
+  "summary",
+  "description",
+  "city",
+  "district",
+  "price",
+  "currency",
+  "room_count",
+  "bathroom_count",
+  "gross_area_m2",
+  "is_furnished",
+  "heating_type",
+  "fuel_type",
+  "balcony_count",
+  "has_elevator",
+  "parking_type",
+  "in_site",
+  "building_age",
+  "floor_count",
+  "floor_number",
+  "usage_status",
+  "facade",
+]);
+const UPDATE_LISTING_FIELDS = new Set(
+  [...CREATE_LISTING_FIELDS].filter((field) => field !== "type" && field !== "status"),
+);
 
 export async function handleAdminListingsCreatePost(
   request: Request,
@@ -50,6 +80,11 @@ export async function handleAdminListingsCreatePost(
   const bodyResult = await readAdminListingPayload(request);
   if (!bodyResult.ok) {
     return jsonError(bodyResult.error, bodyResult.status);
+  }
+
+  const fieldsResult = validateAdminListingFields(bodyResult.value, CREATE_LISTING_FIELDS);
+  if (!fieldsResult.ok) {
+    return jsonError(fieldsResult.error, 400);
   }
 
   const rpcResult = await guard.supabase.rpc("admin_create_listing", {
@@ -101,6 +136,13 @@ export async function handleAdminListingsUpdatePatch(
   const dispatch = classifyAdminListingPatch(bodyResult.value);
   if (!dispatch.ok) {
     return jsonError(dispatch.error, dispatch.status);
+  }
+
+  if (dispatch.kind === "update") {
+    const fieldsResult = validateAdminListingFields(bodyResult.value, UPDATE_LISTING_FIELDS);
+    if (!fieldsResult.ok) {
+      return jsonError(fieldsResult.error, 400);
+    }
   }
 
   const rpcResult = dispatch.kind === "status"
@@ -164,6 +206,22 @@ async function readAdminListingPayload(
     ok: true,
     value: payloadResult.value,
   };
+}
+
+function validateAdminListingFields(
+  body: Record<string, unknown>,
+  allowedFields: Set<string>,
+): { ok: true } | { ok: false; error: string } {
+  for (const field of Object.keys(body)) {
+    if (!allowedFields.has(field)) {
+      return {
+        ok: false,
+        error: `Unsupported admin listing field: ${field}`,
+      };
+    }
+  }
+
+  return { ok: true };
 }
 
 function classifyAdminListingPatch(

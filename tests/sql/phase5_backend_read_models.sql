@@ -164,6 +164,17 @@ insert into public.listings (
   currency,
   room_count,
   bathroom_count,
+  heating_type,
+  fuel_type,
+  balcony_count,
+  has_elevator,
+  parking_type,
+  in_site,
+  building_age,
+  floor_count,
+  floor_number,
+  usage_status,
+  facade,
   gross_area_m2,
   is_furnished
 )
@@ -182,6 +193,17 @@ values
   'TRY',
   2,
   1,
+  'central',
+  'natural_gas',
+  2,
+  true,
+  'open_closed',
+  false,
+  5,
+  12,
+  '3. Kat',
+  'tenant_occupied',
+  'Guney Bati',
   95,
   true
 ),
@@ -199,6 +221,17 @@ values
   'TRY',
   1,
   1,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
   70,
   false
 );
@@ -219,6 +252,20 @@ values
   0,
   true
 );
+
+insert into public.main_item_catalog (
+  id, code, label, pricing_strategy, default_amount, is_active, sort_order
+)
+values (
+  'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeee1'::uuid,
+  'phase5_monthly_rent',
+  'Phase 5 Monthly Rent',
+  'fixed',
+  42000,
+  true,
+  1
+)
+on conflict (id) do nothing;
 
 -- Make Phase 5 Active Listing checkout-ready: attach an active main item
 -- so the rent + active invariant is satisfied.
@@ -695,6 +742,20 @@ begin
 
   if v_detail ? 'address_line' then
     raise exception 'TEST FAILED: public listing detail should not expose exact address_line: %', v_detail;
+  end if;
+
+  if (v_detail ->> 'heating_type') <> 'central'
+     or (v_detail ->> 'fuel_type') <> 'natural_gas'
+     or (v_detail ->> 'balcony_count')::integer <> 2
+     or (v_detail ->> 'has_elevator')::boolean is not true
+     or (v_detail ->> 'parking_type') <> 'open_closed'
+     or (v_detail ->> 'in_site')::boolean is not false
+     or (v_detail ->> 'building_age')::integer <> 5
+     or (v_detail ->> 'floor_count')::integer <> 12
+     or (v_detail ->> 'floor_number') <> '3. Kat'
+     or (v_detail ->> 'usage_status') <> 'tenant_occupied'
+     or (v_detail ->> 'facade') <> 'Guney Bati' then
+    raise exception 'TEST FAILED: public detail housing fields mismatch: %', v_detail;
   end if;
 
   begin

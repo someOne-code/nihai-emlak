@@ -19,6 +19,7 @@ export function buildCategoryLinkedPostsFindArgs(categoryId: string) {
     limit: 50,
     sort: "-updatedAt",
     depth: 0,
+    overrideAccess: true,
   };
 }
 

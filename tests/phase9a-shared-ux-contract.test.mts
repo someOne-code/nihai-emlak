@@ -120,6 +120,33 @@ test("Content mutation refreshes run independent list and detail reads in parall
   }
 });
 
+test("Content update actions reuse mutation documents across posts/categories/consultants", () => {
+  const cases = [
+    {
+      relativePath: "components/admin-posts/AdminPostsView.tsx",
+      updateCall: /const document = await updateAdminPost\(detail\.id, payload\)/,
+      target: /return \{ postId: detail\.id, document, reuseList: true \};/,
+    },
+    {
+      relativePath: "components/admin-categories/AdminCategoriesView.tsx",
+      updateCall: /const document = await updateAdminCategory\(detail\.id, payload\)/,
+      target: /return \{ categoryId: detail\.id, document, reuseList: true \};/,
+    },
+    {
+      relativePath: "components/admin-consultants/AdminConsultantsView.tsx",
+      updateCall: /const document = await updateAdminConsultant\(detail\.id, payload\)/,
+      target: /return \{ consultantId: detail\.id, document, reuseList: true \};/,
+    },
+  ];
+
+  for (const { relativePath, updateCall, target } of cases) {
+    const source = readFileSync(resolve(import.meta.dirname, "..", relativePath), "utf-8");
+    assert.match(source, /refreshContentModelAfterMutation/);
+    assert.match(source, updateCall);
+    assert.match(source, target);
+  }
+});
+
 // ── computeSlug* helpers must freeze on manual edit (parametric over modules) ─
 
 test("computeSlugFromTitle/Name freezes auto-generation when slug is manually edited", async () => {

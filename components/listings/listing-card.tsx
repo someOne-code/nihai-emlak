@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 import {
   formatListingPrice,
@@ -37,13 +38,14 @@ export function ListingCard({
     <div className="overflow-hidden rounded-lg bg-white shadow-property dark:bg-[#1F2A37]" data-aos="fade-up">
       <Link href={`/listings/${listing.id}`} className={`group ${isList ? "flex" : ""}`}>
         <div className={`relative ${isList ? "w-[30%]" : ""}`}>
-          <div className={`imageContainer h-[250px] w-full ${isList ? "h-full md:h-52" : ""}`}>
-            <img
+          <div className={`imageContainer relative h-[250px] w-full overflow-hidden ${isList ? "h-full md:h-52" : ""}`}>
+            <Image
               src={getListingPrimaryImage(listing)}
               alt={`Image of ${listing.title}`}
-              width={400}
-              height={250}
-              className="h-full w-full object-cover duration-500 group-hover:scale-125"
+              fill
+              sizes={isList ? "(min-width: 768px) 30vw, 100vw" : "(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"}
+              loading="lazy"
+              className="object-cover duration-500 group-hover:scale-125"
             />
           </div>
           <p className="absolute left-[10px] top-[10px] items-center rounded-md bg-white px-4 py-1 text-[#2F73F2]">
@@ -86,7 +88,7 @@ function PropertyStat({
   return (
     <div className="flex flex-col">
       <p className="flex gap-2 text-lg font-bold text-[#102D47] dark:text-white md:text-xl">
-        <img src={icon} alt="" width={18} height={18} className="h-auto w-auto" />
+        <Image src={icon} alt="" width={18} height={18} className="h-auto w-auto" unoptimized />
         {value}
       </p>
       <p className="text-sm text-[#668199]">{label}</p>

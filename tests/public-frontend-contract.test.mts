@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import test from "node:test";
 
 import {
   formatListingPrice,
   getListingBadgeLabel,
   getListingDetailImages,
+  getListingDetailFeatureRows,
   getListingFeatures,
   getListingLocation,
   getListingPrimaryImage,
@@ -29,7 +32,7 @@ const rentListing = {
   bathroom_count: 2,
   gross_area_m2: "120.50",
   is_furnished: true,
-  primary_image_url: "https://example.com/cover.jpg",
+  primary_image_url: "https://project.supabase.co/storage/v1/object/public/content-media/listing-images/cover.jpg",
   created_at: "2026-05-12T10:00:00.000Z",
 } satisfies ApiListingListItem;
 
@@ -46,7 +49,10 @@ test("listing mapper formats rent and sale listing summaries for public cards", 
   assert.equal(formatListingPrice(saleListing), "₺4.250.000");
   assert.equal(getListingBadgeLabel(rentListing), "Kiralık");
   assert.equal(getListingBadgeLabel(saleListing), "Satılık");
-  assert.equal(getListingPrimaryImage(rentListing), "https://example.com/cover.jpg");
+  assert.equal(
+    getListingPrimaryImage(rentListing),
+    "https://project.supabase.co/storage/v1/object/public/content-media/listing-images/cover.jpg",
+  );
   assert.equal(getListingPrimaryImage(saleListing), "/property-nextjs-pro/placeholder-property.jpg");
   assert.equal(getListingLocation(rentListing), "Kadikoy, Istanbul");
   assert.deepEqual(getListingFeatures(rentListing), [
@@ -57,14 +63,46 @@ test("listing mapper formats rent and sale listing summaries for public cards", 
   ]);
 });
 
+test("listing mapper prefers optimized card image variant before legacy primary image", () => {
+  const listing = {
+    ...rentListing,
+    primary_image_url: "https://project.supabase.co/storage/v1/object/public/content-media/listing-images/original.jpg",
+    primary_image_card_url: "https://project.supabase.co/storage/v1/object/public/content-media/listing-images/card.webp",
+  } satisfies ApiListingListItem;
+
+  assert.equal(
+    getListingPrimaryImage(listing),
+    "https://project.supabase.co/storage/v1/object/public/content-media/listing-images/card.webp",
+  );
+
+  assert.equal(
+    getListingPrimaryImage({
+      ...listing,
+      primary_image_card_url: null,
+    }),
+    "https://project.supabase.co/storage/v1/object/public/content-media/listing-images/original.jpg",
+  );
+});
+
 test("listing mapper uses detail gallery images before fallback", () => {
   const detail = {
     ...rentListing,
     description: "Detaylı açıklama",
+    heating_type: "central",
+    fuel_type: "natural_gas",
+    balcony_count: 2,
+    has_elevator: true,
+    parking_type: "open_closed",
+    in_site: false,
+    building_age: 5,
+    floor_count: 12,
+    floor_number: "3. Kat",
+    usage_status: "tenant_occupied",
+    facade: "Guney Bati",
     images: [
       {
         id: "22222222-2222-4222-8222-222222222222",
-        image_url: "https://example.com/detail.jpg",
+        image_url: "https://project.supabase.co/storage/v1/object/public/content-media/listing-images/detail.jpg",
         alt_text: "Salon",
         sort_order: 0,
         is_primary: true,
@@ -76,7 +114,7 @@ test("listing mapper uses detail gallery images before fallback", () => {
   assert.deepEqual(getListingDetailImages(detail), [
     {
       id: "22222222-2222-4222-8222-222222222222",
-      src: "https://example.com/detail.jpg",
+      src: "https://project.supabase.co/storage/v1/object/public/content-media/listing-images/detail.jpg",
       alt: "Salon",
       isPrimary: true,
     },
@@ -90,6 +128,147 @@ test("listing mapper uses detail gallery images before fallback", () => {
       isPrimary: true,
     },
   ]);
+});
+
+test("listing mapper prefers optimized detail image variant for gallery images", () => {
+  const detail = {
+    ...rentListing,
+    description: "Detayli aciklama",
+    heating_type: null,
+    fuel_type: null,
+    balcony_count: null,
+    has_elevator: null,
+    parking_type: null,
+    in_site: null,
+    building_age: null,
+    floor_count: null,
+    floor_number: null,
+    usage_status: null,
+    facade: null,
+    images: [
+      {
+        id: "22222222-2222-4222-8222-222222222222",
+        image_url: "https://project.supabase.co/storage/v1/object/public/content-media/listing-images/original.jpg",
+        card_image_url: "https://project.supabase.co/storage/v1/object/public/content-media/listing-images/card.webp",
+        detail_image_url: "https://project.supabase.co/storage/v1/object/public/content-media/listing-images/detail.webp",
+        alt_text: "Salon",
+        sort_order: 0,
+        is_primary: true,
+      },
+    ],
+    updated_at: "2026-05-12T11:00:00.000Z",
+  } satisfies ApiListingDetail;
+
+  assert.deepEqual(getListingDetailImages(detail), [
+    {
+      id: "22222222-2222-4222-8222-222222222222",
+      src: "https://project.supabase.co/storage/v1/object/public/content-media/listing-images/detail.webp",
+      alt: "Salon",
+      isPrimary: true,
+    },
+  ]);
+});
+
+test("listing detail feature rows expose backend housing fields with Turkish labels", () => {
+  const detail = {
+    ...rentListing,
+    description: "Detayli aciklama",
+    heating_type: "central",
+    fuel_type: "natural_gas",
+    balcony_count: 2,
+    has_elevator: true,
+    parking_type: "open",
+    in_site: false,
+    building_age: 5,
+    floor_count: 12,
+    floor_number: "3. Kat",
+    usage_status: "empty",
+    facade: "Guney Bati",
+    images: [],
+    updated_at: "2026-05-12T11:00:00.000Z",
+  } satisfies ApiListingDetail;
+
+  assert.deepEqual(getListingDetailFeatureRows(detail), [
+    { label: "İlan Tipi", value: "Kiralık" },
+    { label: "Şehir", value: "Istanbul" },
+    { label: "İlçe", value: "Kadikoy" },
+    { label: "Oda Sayısı", value: 3 },
+    { label: "Banyo Sayısı", value: 2 },
+    { label: "Brüt Alan", value: "120.50 m²" },
+    { label: "Eşyalı", value: "Evet" },
+    { label: "Isıtma", value: "Merkezi Sistem" },
+    { label: "Yakıt", value: "Doğalgaz" },
+    { label: "Balkon", value: 2 },
+    { label: "Asansör", value: "Var" },
+    { label: "Otopark", value: "Açık Otopark" },
+    { label: "Site İçinde", value: "Hayır" },
+    { label: "Bina Yaşı", value: 5 },
+    { label: "Kat Sayısı", value: 12 },
+    { label: "Bulunduğu Kat", value: "3. Kat" },
+    { label: "Kullanım Durumu", value: "Boş" },
+    { label: "Cephe", value: "Guney Bati" },
+  ]);
+
+  assert.deepEqual(
+    getListingDetailFeatureRows({
+      ...detail,
+      heating_type: null,
+      fuel_type: null,
+      balcony_count: null,
+      has_elevator: null,
+      parking_type: null,
+      in_site: null,
+      building_age: null,
+      floor_count: null,
+      floor_number: null,
+      usage_status: null,
+      facade: null,
+    }).map((row) => row.label),
+    ["İlan Tipi", "Şehir", "İlçe", "Oda Sayısı", "Banyo Sayısı", "Brüt Alan", "Eşyalı"],
+  );
+});
+
+test("listing mapper hides non-real seed image URLs behind the local placeholder", () => {
+  assert.equal(
+    getListingPrimaryImage({ primary_image_url: "https://example.com/phase5-active.jpg" }),
+    "/property-nextjs-pro/placeholder-property.jpg",
+  );
+
+  assert.deepEqual(
+    getListingDetailImages({
+      ...rentListing,
+      description: "Detayli aciklama",
+      heating_type: null,
+      fuel_type: null,
+      balcony_count: null,
+      has_elevator: null,
+      parking_type: null,
+      in_site: null,
+      building_age: null,
+      floor_count: null,
+      floor_number: null,
+      usage_status: null,
+      facade: null,
+      images: [
+        {
+          id: "22222222-2222-4222-8222-222222222222",
+          image_url: "https://example.com/rent1.jpg",
+          alt_text: "Seed placeholder",
+          sort_order: 0,
+          is_primary: true,
+        },
+      ],
+      updated_at: "2026-05-12T11:00:00.000Z",
+    }),
+    [
+      {
+        id: "fallback",
+        src: "/property-nextjs-pro/placeholder-property.jpg",
+        alt: rentListing.title,
+        isPrimary: true,
+      },
+    ],
+  );
 });
 
 test("login redirect helper encodes in-app paths for auth-required listing actions", () => {
@@ -116,6 +295,57 @@ test("sale lead helper builds the snake_case backend payload", () => {
       message: "Bu satılık ilanla ilgileniyorum.",
     },
   );
+});
+
+test("listing detail action components receive auth state from the page boundary", () => {
+  const actionBoxSource = readFileSync(
+    resolve("components/listings/listing-action-box.tsx"),
+    "utf8",
+  );
+  const contactBoxSource = readFileSync(
+    resolve("components/listings/listing-contact-box.tsx"),
+    "utf8",
+  );
+  const pageSource = readFileSync(
+    resolve("app/(site)/listings/[id]/page.tsx"),
+    "utf8",
+  );
+
+  for (const source of [actionBoxSource, contactBoxSource]) {
+    assert.match(source, /isAuthenticated\s*:\s*boolean/);
+    assert.doesNotMatch(source, /@\/lib\/supabase\/server/);
+    assert.doesNotMatch(source, /createClient\s*\(/);
+    assert.doesNotMatch(source, /\.auth\.getUser\s*\(/);
+  }
+
+  assert.match(pageSource, /cache\s*\(/);
+  assert.match(pageSource, /ListingActionBox\s*\(\s*\{[^}]*isAuthenticated/s);
+  assert.match(pageSource, /<ListingContactBox[^>]*isAuthenticated=/s);
+});
+
+test("public listings page and filters keep Turkish listing copy", () => {
+  const pageSource = readFileSync(
+    resolve("app/(site)/listings/page.tsx"),
+    "utf8",
+  );
+  const filtersSource = readFileSync(
+    resolve("components/listings/listing-filters.tsx"),
+    "utf8",
+  );
+  const resultsSource = readFileSync(
+    resolve("components/listings/listing-results.tsx"),
+    "utf8",
+  );
+
+  for (const source of [pageSource, filtersSource, resultsSource]) {
+    assert.doesNotMatch(source, /Properties List|Property List|Properties Found|Advanced Search|Find Property|Sort by Title/);
+  }
+
+  assert.match(pageSource, /İlanlar/);
+  assert.match(pageSource, /Ana Sayfa/);
+  assert.match(resultsSource, /Sıralama/);
+  assert.match(filtersSource, /Gelişmiş Filtre/);
+  assert.match(filtersSource, /İlanları Bul/);
 });
 
 test("server API helper fails closed in production without a canonical origin", async () => {

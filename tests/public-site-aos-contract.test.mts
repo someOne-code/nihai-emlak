@@ -31,20 +31,43 @@ test("public site keeps AOS motion controlled by the upstream AOS stylesheet", (
   );
 });
 
-test("public site layout owns AOS css and initialization wrapper", () => {
+test("public site layout owns AOS css and initialization boundary without statically importing AOS JS", () => {
   const layout = readProjectFile("app/(site)/layout.tsx");
 
   assert.match(layout, /import "aos\/dist\/aos\.css";/);
   assert.match(layout, /<AosInit>/);
+  assert.doesNotMatch(layout, /from "aos"/);
 });
 
-test("AOS initialization waits for page load so animation classes do not race React hydration", () => {
+test("AOS initialization lazy-loads AOS JS after page load so animation classes do not race React hydration", () => {
   const source = readProjectFile("components/site/aos-init.tsx");
 
+  assert.doesNotMatch(
+    source,
+    /import\s+AOS\s+from\s+"aos"/,
+    "AosInit must not statically import the AOS JS module into the global site client chunk.",
+  );
+  assert.match(source, /import\("aos"\)/);
   assert.match(source, /window\.addEventListener\("load", initializeAos/);
   assert.match(source, /window\.setTimeout/);
-  assert.match(source, /AOS\.refreshHard\(\)/);
+  assert.match(source, /\.refreshHard\(\)/);
   assert.match(source, /window\.removeEventListener\("load", initializeAos\)/);
+});
+
+test("public header keeps scroll stickiness listener passive and independent from mobile menu state", () => {
+  const source = readProjectFile("components/site/public-header.tsx");
+  const scrollRegistrations = [...source.matchAll(/window\.addEventListener\("scroll"/g)];
+  const scrollRegistrationIndex = source.indexOf('window.addEventListener("scroll", handleScroll, { passive: true })');
+  const stableEffectDependencyIndex = source.indexOf("  }, []);", scrollRegistrationIndex);
+  const outsideClickDependencyIndex = source.indexOf("  }, [navbarOpen]);");
+
+  assert.equal(scrollRegistrations.length, 1, "PublicHeader should register exactly one scroll listener.");
+  assert.match(source, /window\.addEventListener\("scroll", handleScroll, \{\s*passive: true\s*\}\)/);
+  assert.ok(stableEffectDependencyIndex > scrollRegistrationIndex, "Scroll listener should live in an empty-dependency effect.");
+  assert.ok(
+    outsideClickDependencyIndex > stableEffectDependencyIndex,
+    "navbarOpen-dependent outside-click effect should be separate from the scroll effect.",
+  );
 });
 
 test("home page renders template-adapted sections after featured listings without changing data flow", () => {
@@ -53,8 +76,30 @@ test("home page renders template-adapted sections after featured listings withou
   assert.match(page, /import \{ DiscoverProperties \} from "@\/components\/home\/discover-properties";/);
   assert.match(page, /import \{ HomeFeatures \} from "@\/components\/home\/home-features";/);
   assert.match(page, /<FeaturedListings listings=\{featuredListings\} source=\{featuredListingsSource\} \/>[\s\S]*<DiscoverProperties \/>[\s\S]*<HomeFeatures \/>/);
-  assert.match(page, /listPublicListings\(\{ limit: 6 \}\)/);
+  assert.match(page, /listPublicListingsForServerPage\(\{ limit: 6 \}\)/);
   assert.doesNotMatch(page, /tmp\/templates|property-nextjs-pro\/package\/src/);
+});
+
+test("public listing server pages use direct server read helper instead of self-fetch API client", () => {
+  const homePage = readProjectFile("app/(site)/page.tsx");
+  const listingsPage = readProjectFile("app/(site)/listings/page.tsx");
+  const listingDetailPage = readProjectFile("app/(site)/listings/[id]/page.tsx");
+
+  for (const source of [homePage, listingsPage]) {
+    assert.doesNotMatch(source, /@\/lib\/api\/listings/);
+    assert.match(
+      source,
+      /import \{ listPublicListingsForServerPage \} from "@\/lib\/read-models\/public-listings";/,
+    );
+    assert.match(source, /listPublicListingsForServerPage\(/);
+  }
+
+  assert.doesNotMatch(listingDetailPage, /@\/lib\/api\/listings/);
+  assert.match(
+    listingDetailPage,
+    /import \{ getPublicListingDetailForServerPage \} from "@\/lib\/read-models\/public-listings";/,
+  );
+  assert.match(listingDetailPage, /cache\(getPublicListingDetailForServerPage\)/);
 });
 
 test("home discover properties section uses local static categories and copied public assets", () => {

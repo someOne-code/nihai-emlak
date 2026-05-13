@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 import { ListingCard } from "./listing-card";
 import type { ListingCardData } from "./listing-card";
 
@@ -5,7 +7,7 @@ export function ListingGrid({ listings }: { listings: ListingCardData[] }) {
   if (listings.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-5 pt-20">
-        <img
+        <Image
           src="/property-nextjs-pro/images/not-found/no-results.png"
           alt=""
           width={100}

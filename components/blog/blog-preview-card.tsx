@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 import type { BlogPreviewPost } from "@/types/blog";
 
@@ -22,10 +23,12 @@ export function BlogPreviewCard({ post }: { post: BlogPreviewPost }) {
       className="group block overflow-hidden rounded-lg bg-property-surface shadow-[0_2px_16px_rgba(0,0,0,0.08)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_10px_32px_rgba(0,0,0,0.14)] dark:shadow-[0_2px_16px_rgba(0,0,0,0.35)]"
     >
       <div className="relative aspect-[16/10] overflow-hidden">
-        <img
+        <Image
           src={post.coverImageUrl}
           alt={post.coverImageAlt}
-          className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+          fill
+          sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+          className="object-cover transition duration-500 group-hover:scale-105"
         />
       </div>
       <div className="p-6">

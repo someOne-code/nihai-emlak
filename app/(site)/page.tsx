@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { connection } from "next/server";
 
 import { BlogPreview } from "@/components/home/blog-preview";
@@ -10,7 +11,7 @@ import { FeaturedListings } from "@/components/listings/featured-listings";
 import { PublicFooter } from "@/components/site/public-footer";
 import { PublicHeader } from "@/components/site/public-header";
 import { listPublishedBlogPreviewPosts } from "@/lib/api/blog";
-import { listPublicListings } from "@/lib/api/listings";
+import { listPublicListingsForServerPage } from "@/lib/read-models/public-listings";
 import type { ApiListingListItem } from "@/types/listing";
 
 export default async function Index() {
@@ -20,7 +21,7 @@ export default async function Index() {
   let featuredListingsSource: "api" | "fallback" = "fallback";
 
   try {
-    const response = await listPublicListings({ limit: 6 });
+    const response = await listPublicListingsForServerPage({ limit: 6 });
     featuredListings = response.items;
     featuredListingsSource = response.items.length > 0 ? "api" : "fallback";
   } catch {
@@ -89,10 +90,13 @@ export default async function Index() {
                 </div>
               </div>
               <div className="absolute bottom-0 right-0 col-span-6 hidden lg:block xl:-right-60">
-                <img
+                <Image
                   src="/property-nextjs-pro/images/hero/hero-image.png"
                   alt="heroimage"
                   width={800}
+                  height={818}
+                  priority
+                  sizes="(min-width: 1280px) 800px, 50vw"
                   className="h-auto w-full"
                 />
               </div>

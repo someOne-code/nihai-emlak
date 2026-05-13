@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -31,21 +32,29 @@ export function PublicHeader() {
       setSticky(window.scrollY >= 80);
     }
 
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!navbarOpen) {
+      return;
+    }
+
     function handleClickOutside(event: MouseEvent) {
       if (
         mobileMenuRef.current
         && !mobileMenuRef.current.contains(event.target as Node)
-        && navbarOpen
       ) {
         setNavbarOpen(false);
       }
     }
 
-    handleScroll();
-    window.addEventListener("scroll", handleScroll);
     document.addEventListener("mousedown", handleClickOutside);
     return () => {
-      window.removeEventListener("scroll", handleScroll);
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [navbarOpen]);
@@ -99,7 +108,7 @@ export function PublicHeader() {
             </Link>
 
             <button
-              onClick={() => setNavbarOpen(!navbarOpen)}
+              onClick={() => setNavbarOpen((isOpen) => !isOpen)}
               className="block rounded-lg p-2 lg:hidden"
               aria-label="Mobil menüyü aç/kapat"
               type="button"
@@ -156,19 +165,21 @@ export function PublicHeader() {
 function Logo() {
   return (
     <Link href="/">
-      <img
+      <Image
         src="/property-nextjs-pro/images/logo/logo.svg"
         alt="logo"
         width={160}
         height={50}
         className="dark:hidden"
+        unoptimized
       />
-      <img
+      <Image
         src="/property-nextjs-pro/images/logo/logo-white.svg"
         alt="logo"
         width={160}
         height={50}
         className="hidden dark:block"
+        unoptimized
       />
     </Link>
   );

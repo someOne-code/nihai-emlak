@@ -63,3 +63,79 @@ test("admin listings product shell uses the current two-surface layout", () => {
     "The stale third checkout side panel layout rule must not remain.",
   );
 });
+
+test("admin listings general save reuses mutation snapshot without detail refetch", () => {
+  const source = readFileSync(
+    resolve(repoRoot, "components/admin-listings/AdminListingsView.tsx"),
+    "utf8",
+  );
+
+  assert.match(source, /refreshAdminListingsModelAfterMutation/);
+  assert.match(source, /const snapshot = await updateAdminListing\(listingId, payload\)/);
+  assert.match(source, /return \{ listingId, snapshot, reuseList: true \};/);
+});
+
+test("admin listings ignores stale list load responses", () => {
+  const source = readFileSync(
+    resolve(repoRoot, "components/admin-listings/AdminListingsView.tsx"),
+    "utf8",
+  );
+
+  assert.match(
+    source,
+    /loadRequestSeqRef = useRef\(0\)/,
+    "List loads must keep a monotonic request sequence.",
+  );
+  assert.match(
+    source,
+    /const requestSeq = loadRequestSeqRef\.current \+ 1;/,
+    "Each list load must capture its own request sequence.",
+  );
+  assert.match(
+    source,
+    /loadRequestSeqRef\.current !== requestSeq/,
+    "Older list load responses must be ignored before mutating state.",
+  );
+});
+
+test("listing images panel stores the canonical upload url in the legacy add-image payload", () => {
+  const source = readFileSync(
+    resolve(repoRoot, "components/admin-listings/ListingImagesPanel.tsx"),
+    "utf8",
+  );
+
+  assert.match(
+    source,
+    /image_url:\s*resolveListingImageUploadUrl\(result\)/,
+    "ListingImagesPanel must keep the add-image payload legacy-compatible while choosing the best upload URL.",
+  );
+});
+
+test("listing images panel defaults the first upload to primary cover", () => {
+  const source = readFileSync(
+    resolve(repoRoot, "components/admin-listings/ListingImagesPanel.tsx"),
+    "utf8",
+  );
+
+  assert.match(
+    source,
+    /<ImageUploadBox\b[^>]*hasExistingImages=\{images\.length > 0\}/s,
+    "ListingImagesPanel must tell the upload box whether the listing already has images.",
+  );
+  assert.match(
+    source,
+    /useState\(!hasExistingImages\)/,
+    "The upload box should default the first image to primary without forcing later uploads primary.",
+  );
+});
+
+test("listing images panel helper copy explains optimized upload and cover quality rules", () => {
+  const source = readFileSync(
+    resolve(repoRoot, "components/admin-listings/ListingImagesPanel.tsx"),
+    "utf8",
+  );
+
+  assert.match(source, /optimize/i);
+  assert.match(source, /kapak/i);
+  assert.match(source, /WebP/);
+});

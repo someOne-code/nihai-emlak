@@ -2,21 +2,14 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { MessageCircle } from "lucide-react";
 import { getLoginRedirectUrl } from "@/lib/auth/redirect";
-import { createClient } from "@/lib/supabase/server";
 
-async function resolveIsAuthenticated(): Promise<boolean> {
-  try {
-    const supabase = await createClient();
-    const { data, error } = await supabase.auth.getUser();
-    return !error && Boolean(data.user);
-  } catch {
-    return false;
-  }
-}
-
-export async function ListingContactBox({ listingId }: { listingId: string }) {
-  const isAuthenticated = await resolveIsAuthenticated();
-
+export function ListingContactBox({
+  listingId,
+  isAuthenticated,
+}: {
+  listingId: string;
+  isAuthenticated: boolean;
+}) {
   return (
     <div id="listing-contact" className="rounded-xl bg-white p-8 shadow-sm border border-slate-100 dark:bg-[#1F2A37] dark:border-slate-800">
       <div className="flex flex-col gap-6">

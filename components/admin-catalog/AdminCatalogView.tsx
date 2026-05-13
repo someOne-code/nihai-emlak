@@ -8,7 +8,7 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -36,6 +36,8 @@ import {
 import {
   buildAdminCatalogMainItemRow,
   buildAdminCatalogServiceRow,
+  upsertAdminCatalogMainItemRow,
+  upsertAdminCatalogServiceRow,
   pricingStrategyRequires,
   PRICING_STRATEGY_LABELS,
   PRICING_STRATEGY_DESCRIPTIONS,
@@ -98,8 +100,20 @@ export default function AdminCatalogView() {
   const [serviceDialog, setServiceDialog] = useState<ServiceDialogState>(null);
 
   const alertRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountedRef = useRef(true);
+  const loadRequestSeqRef = useRef(0);
   const initialLoadGuardRef = useRef(createInitialLoadGuard());
   const resumeRefreshGateRef = useRef(createContentRefreshGate());
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (alertRef.current) {
+        clearTimeout(alertRef.current);
+      }
+    };
+  }, []);
 
   const showAlert = useCallback((kind: "success" | "error", message: string) => {
     setAlert({ kind, message });
@@ -108,12 +122,15 @@ export default function AdminCatalogView() {
   }, []);
 
   const reload = useCallback(async () => {
+    const requestSeq = loadRequestSeqRef.current + 1;
+    loadRequestSeqRef.current = requestSeq;
     setLoading(true);
     try {
       const results = await Promise.allSettled([
         fetchAdminCatalogMainItems(),
         fetchAdminCatalogServices(),
       ]);
+      if (!mountedRef.current || loadRequestSeqRef.current !== requestSeq) return;
 
       if (results[0].status === "fulfilled") {
         setMainItems(
@@ -136,13 +153,16 @@ export default function AdminCatalogView() {
         showAlert("error", message);
       }
     } catch (err) {
+      if (!mountedRef.current || loadRequestSeqRef.current !== requestSeq) return;
       const message =
         err instanceof AdminCatalogClientError
           ? err.message
           : "Katalog yüklenemedi";
       showAlert("error", message);
     } finally {
-      setLoading(false);
+      if (mountedRef.current && loadRequestSeqRef.current === requestSeq) {
+        setLoading(false);
+      }
     }
   }, [showAlert]);
 
@@ -178,9 +198,9 @@ export default function AdminCatalogView() {
     async (code: string, isActive: boolean) => {
       setBusy(true);
       try {
-        await updateAdminCatalogMainItem(code, { is_active: !isActive });
+        const item = await updateAdminCatalogMainItem(code, { is_active: !isActive });
+        setMainItems((current) => upsertAdminCatalogMainItemRow(current, item));
         showAlert("success", `Katalog kalemi "${code}" güncellendi.`);
-        await reload();
       } catch (err) {
         const message =
           err instanceof AdminCatalogClientError ? err.message : "Güncelleme başarısız";
@@ -189,7 +209,7 @@ export default function AdminCatalogView() {
         setBusy(false);
       }
     },
-    [reload, showAlert],
+    [showAlert],
   );
 
   const handleSaveMainItem = useCallback(
@@ -202,20 +222,21 @@ export default function AdminCatalogView() {
     ) => {
       setBusy(true);
       try {
+        let item: unknown;
         if (mode === "create") {
-          await createAdminCatalogMainItem(
+          item = await createAdminCatalogMainItem(
             payload as AdminCatalogMainItemCreatePayload,
           );
           showAlert("success", `Katalog kalemi "${code}" oluşturuldu.`);
         } else {
-          await updateAdminCatalogMainItem(
+          item = await updateAdminCatalogMainItem(
             code,
             payload as AdminCatalogMainItemUpdatePayload,
           );
           showAlert("success", `Katalog kalemi "${code}" güncellendi.`);
         }
+        setMainItems((current) => upsertAdminCatalogMainItemRow(current, item));
         setMainDialog(null);
-        await reload();
       } catch (err) {
         const message =
           err instanceof AdminCatalogClientError
@@ -226,7 +247,7 @@ export default function AdminCatalogView() {
         setBusy(false);
       }
     },
-    [reload, showAlert],
+    [showAlert],
   );
 
   const handleSaveService = useCallback(
@@ -239,20 +260,21 @@ export default function AdminCatalogView() {
     ) => {
       setBusy(true);
       try {
+        let service: unknown;
         if (mode === "create") {
-          await createAdminCatalogService(
+          service = await createAdminCatalogService(
             payload as AdminCatalogServiceCreatePayload,
           );
           showAlert("success", `Hizmet "${code}" oluşturuldu.`);
         } else {
-          await updateAdminCatalogService(
+          service = await updateAdminCatalogService(
             code,
             payload as AdminCatalogServiceUpdatePayload,
           );
           showAlert("success", `Hizmet "${code}" güncellendi.`);
         }
+        setServices((current) => upsertAdminCatalogServiceRow(current, service));
         setServiceDialog(null);
-        await reload();
       } catch (err) {
         const message =
           err instanceof AdminCatalogClientError
@@ -263,16 +285,16 @@ export default function AdminCatalogView() {
         setBusy(false);
       }
     },
-    [reload, showAlert],
+    [showAlert],
   );
 
   const handleToggleService = useCallback(
     async (code: string, isActive: boolean) => {
       setBusy(true);
       try {
-        await updateAdminCatalogService(code, { is_active: !isActive });
+        const service = await updateAdminCatalogService(code, { is_active: !isActive });
+        setServices((current) => upsertAdminCatalogServiceRow(current, service));
         showAlert("success", `Hizmet "${code}" güncellendi.`);
-        await reload();
       } catch (err) {
         const message =
           err instanceof AdminCatalogClientError ? err.message : "Güncelleme başarısız";
@@ -281,7 +303,7 @@ export default function AdminCatalogView() {
         setBusy(false);
       }
     },
-    [reload, showAlert],
+    [showAlert],
   );
 
   return (
@@ -758,7 +780,7 @@ function MainItemDialog({
       ? String(row.defaultMultiplier)
       : "",
   );
-  const [sortOrder, setSortOrder] = useState(String(row?.sortOrder ?? 0));
+  const [sortOrder] = useState(String(row?.sortOrder ?? 0));
   const [localError, setLocalError] = useState<string | null>(null);
 
   const required = pricingStrategyRequires(pricingStrategy);

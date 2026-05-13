@@ -2,6 +2,7 @@ export type CategoryOptionsFindArgs = {
   collection: "blog_categories";
   limit: number;
   sort: string;
+  overrideAccess: true;
 };
 
 export function buildCategoryOptionsFindArgs(): CategoryOptionsFindArgs {
@@ -9,6 +10,7 @@ export function buildCategoryOptionsFindArgs(): CategoryOptionsFindArgs {
     collection: "blog_categories",
     limit: 500,
     sort: "sortOrder",
+    overrideAccess: true,
   };
 }
 

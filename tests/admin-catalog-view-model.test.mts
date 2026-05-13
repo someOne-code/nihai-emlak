@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 import {
   buildAdminCatalogMainItemRow,
   buildAdminCatalogServiceRow,
+  upsertAdminCatalogMainItemRow,
+  upsertAdminCatalogServiceRow,
 } from "../lib/admin-ui/catalog-view-model.ts";
 
 // ---------------------------------------------------------------------------
@@ -148,6 +152,65 @@ test("catalog view-model: main item row never leaks unknown fields", () => {
   assert.ok(!serialized.includes("leak"), "view-model must drop unknown raw fields");
 });
 
+test("catalog view-model: main item mutation snapshot replaces existing row", () => {
+  const rows = [
+    buildAdminCatalogMainItemRow({
+      id: "1",
+      code: "kira",
+      label: "Kira",
+      pricing_strategy: "fixed",
+      default_amount: 12000,
+      is_active: true,
+      sort_order: 10,
+      updated_at: "2026-01-01T00:00:00Z",
+    }),
+  ];
+
+  const next = upsertAdminCatalogMainItemRow(rows, {
+    id: "1",
+    code: "kira",
+    label: "Guncel Kira",
+    pricing_strategy: "fixed",
+    default_amount: 14000,
+    is_active: false,
+    sort_order: 10,
+    updated_at: "2026-05-13T10:00:00Z",
+  });
+
+  assert.equal(next.length, 1);
+  assert.equal(next[0].label, "Guncel Kira");
+  assert.equal(next[0].defaultAmount, 14000);
+  assert.equal(next[0].statusLabel, "Pasif");
+  assert.equal(next[0].updatedAt, "2026-05-13T10:00:00Z");
+});
+
+test("catalog view-model: main item mutation snapshot inserts and sorts new row", () => {
+  const rows = [
+    buildAdminCatalogMainItemRow({
+      id: "2",
+      code: "komisyon",
+      label: "Komisyon",
+      pricing_strategy: "fixed",
+      is_active: true,
+      sort_order: 20,
+    }),
+  ];
+
+  const next = upsertAdminCatalogMainItemRow(rows, {
+    id: "1",
+    code: "depozito",
+    label: "Depozito",
+    pricing_strategy: "fixed",
+    is_active: true,
+    sort_order: 5,
+  });
+
+  assert.deepEqual(
+    next.map((row) => row.code),
+    ["depozito", "komisyon"],
+  );
+});
+
 // ---------------------------------------------------------------------------
 // Service catalog view-model
 // ---------------------------------------------------------------------------
@@ -214,6 +277,102 @@ test("catalog view-model: service row never leaks unknown fields", () => {
 
   const serialized = JSON.stringify(row);
   assert.ok(!serialized.includes("leak"), "view-model must drop unknown raw fields");
+});
+
+test("catalog view-model: service mutation snapshot replaces existing row", () => {
+  const rows = [
+    buildAdminCatalogServiceRow({
+      id: "1",
+      code: "temizlik",
+      name: "Temizlik",
+      base_price: 500,
+      is_active: true,
+      updated_at: "2026-01-01T00:00:00Z",
+    }),
+  ];
+
+  const next = upsertAdminCatalogServiceRow(rows, {
+    id: "1",
+    code: "temizlik",
+    name: "Detayli Temizlik",
+    base_price: 650,
+    is_active: false,
+    updated_at: "2026-05-13T10:00:00Z",
+  });
+
+  assert.equal(next.length, 1);
+  assert.equal(next[0].name, "Detayli Temizlik");
+  assert.equal(next[0].basePrice, 650);
+  assert.equal(next[0].statusLabel, "Pasif");
+  assert.equal(next[0].updatedAt, "2026-05-13T10:00:00Z");
+});
+
+test("catalog view-model: service mutation snapshot inserts and sorts new row", () => {
+  const rows = [
+    buildAdminCatalogServiceRow({
+      id: "2",
+      code: "transfer",
+      name: "Transfer",
+      base_price: 900,
+      is_active: true,
+    }),
+  ];
+
+  const next = upsertAdminCatalogServiceRow(rows, {
+    id: "1",
+    code: "temizlik",
+    name: "Temizlik",
+    base_price: 500,
+    is_active: true,
+  });
+
+  assert.deepEqual(
+    next.map((row) => row.code),
+    ["temizlik", "transfer"],
+  );
+});
+
+test("catalog admin page applies mutation snapshots without reloading both tables", () => {
+  const source = readFileSync(
+    resolve(import.meta.dirname, "..", "components/admin-catalog/AdminCatalogView.tsx"),
+    "utf-8",
+  );
+
+  assert.match(source, /upsertAdminCatalogMainItemRow/);
+  assert.match(source, /upsertAdminCatalogServiceRow/);
+  assert.match(source, /const item = await updateAdminCatalogMainItem/);
+  assert.match(source, /item = await createAdminCatalogMainItem/);
+  assert.match(source, /service = await updateAdminCatalogService/);
+  assert.match(source, /service = await createAdminCatalogService/);
+  assert.doesNotMatch(source, /await reload\(\);/);
+});
+
+test("catalog admin page ignores stale reload responses", () => {
+  const source = readFileSync(
+    resolve(import.meta.dirname, "..", "components/admin-catalog/AdminCatalogView.tsx"),
+    "utf-8",
+  );
+
+  assert.match(
+    source,
+    /mountedRef = useRef\(true\)/,
+    "Catalog reloads must avoid setting state after unmount.",
+  );
+  assert.match(
+    source,
+    /loadRequestSeqRef = useRef\(0\)/,
+    "Catalog reloads must keep a monotonic request sequence.",
+  );
+  assert.match(
+    source,
+    /const requestSeq = loadRequestSeqRef\.current \+ 1;/,
+    "Each catalog reload must capture its own request sequence.",
+  );
+  assert.match(
+    source,
+    /loadRequestSeqRef\.current !== requestSeq/,
+    "Older catalog reload responses must be ignored before mutating state.",
+  );
 });
 
 // ---------------------------------------------------------------------------

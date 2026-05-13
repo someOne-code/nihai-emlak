@@ -216,4 +216,5 @@ test("consultants list query selects only fields needed to open the edit form", 
   assert.equal(args.select.shortBio, true);
   assert.equal(args.select.email, true);
   assert.equal(args.select.updatedAt, true);
+  assert.equal(args.overrideAccess, true);
 });

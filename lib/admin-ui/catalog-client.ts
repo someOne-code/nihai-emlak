@@ -17,6 +17,8 @@ export type AdminCatalogFetch = (
 
 export type AdminCatalogClientOptions = {
   fetcher?: AdminCatalogFetch;
+  requestTimeoutMs?: number;
+  signal?: AbortSignal;
 };
 
 export type AdminCatalogMainItemCreatePayload = {
@@ -64,6 +66,9 @@ export class AdminCatalogClientError extends Error {
     this.status = status;
   }
 }
+
+const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
+const ADMIN_CATALOG_TIMEOUT_MESSAGE = "Admin katalog isteği zaman aşımına uğradı.";
 
 // ---------------------------------------------------------------------------
 // Main item catalog
@@ -171,12 +176,7 @@ async function requestAdminCatalogJson<T = unknown>(
   init: RequestInit,
   options: AdminCatalogClientOptions,
 ): Promise<T> {
-  const fetcher = options.fetcher ?? globalThis.fetch.bind(globalThis);
-  const response = await fetcher(url, {
-    ...init,
-    credentials: "same-origin",
-    cache: "no-store",
-  });
+  const response = await requestAdminCatalogResponse(url, init, options);
   const envelope = await readJsonEnvelope(response);
 
   if (!envelope.success) {
@@ -188,6 +188,62 @@ async function requestAdminCatalogJson<T = unknown>(
   }
 
   return envelope.data as T;
+}
+
+async function requestAdminCatalogResponse(
+  url: string,
+  init: RequestInit,
+  options: AdminCatalogClientOptions,
+): Promise<Response> {
+  const fetcher = options.fetcher ?? globalThis.fetch.bind(globalThis);
+  const abort = createRequestAbort(options);
+
+  try {
+    return await fetcher(url, {
+      ...init,
+      credentials: "same-origin",
+      cache: "no-store",
+      signal: abort.signal,
+    });
+  } catch (err) {
+    if (isAbortError(err)) {
+      throw new AdminCatalogClientError(ADMIN_CATALOG_TIMEOUT_MESSAGE, 408);
+    }
+    throw err;
+  } finally {
+    abort.cleanup();
+  }
+}
+
+function createRequestAbort(options: AdminCatalogClientOptions): {
+  signal: AbortSignal;
+  cleanup: () => void;
+} {
+  const controller = new AbortController();
+  const externalSignal = options.signal;
+  const abortFromExternal = () => controller.abort();
+  const timer = setTimeout(
+    () => controller.abort(),
+    options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
+  );
+
+  if (externalSignal?.aborted) {
+    controller.abort();
+  } else {
+    externalSignal?.addEventListener("abort", abortFromExternal, { once: true });
+  }
+
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      clearTimeout(timer);
+      externalSignal?.removeEventListener("abort", abortFromExternal);
+    },
+  };
+}
+
+function isAbortError(err: unknown): boolean {
+  return err instanceof DOMException && err.name === "AbortError";
 }
 
 async function readJsonEnvelope(
