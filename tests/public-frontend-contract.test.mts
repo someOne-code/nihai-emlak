@@ -297,7 +297,7 @@ test("sale lead helper builds the snake_case backend payload", () => {
   );
 });
 
-test("sale listing detail exposes one guest sale lead surface without auth redirect", () => {
+test("sale listing detail exposes guest sale lead and separate login-gated chat surfaces", () => {
   const pageSource = readFileSync(
     resolve("app/(site)/listings/[id]/page.tsx"),
     "utf8",
@@ -317,7 +317,7 @@ test("sale listing detail exposes one guest sale lead surface without auth redir
 
   assert.doesNotMatch(pageSource, /import\s+\{\s*SaleLeadForm\s*\}/);
   assert.match(pageSource, /listing\.type\s*===\s*"rent"[\s\S]*<ListingContactBox/);
-  assert.doesNotMatch(pageSource, /listing\.type\s*===\s*"sale"[\s\S]*<ListingContactBox/);
+  assert.match(pageSource, /\)\s*:\s*\([\s\S]*<ListingContactBox/);
   assert.doesNotMatch(pageSource, /listing\.type\s*===\s*"sale"[\s\S]*<SaleLeadForm/);
   assert.doesNotMatch(rentActionSource, /SaleLeadForm|sale-lead-form/);
 
@@ -336,6 +336,46 @@ test("sale listing detail exposes one guest sale lead surface without auth redir
   assert.match(formSource, /contactEmail[\s\S]*contactPhone|contactPhone[\s\S]*contactEmail/);
   assert.match(formSource, /!\s*(?:input\.)?contactEmail\s*&&\s*!\s*(?:input\.)?contactPhone/);
   assert.doesNotMatch(formSource, /getLoginRedirectUrl|\/auth\/login|if\s*\(\s*!isAuthenticated\s*\)/);
+});
+
+test("listing contact box is login-aware and opens the listing chat panel for authenticated users", () => {
+  const source = readFileSync(
+    resolve("components/listings/listing-contact-box.tsx"),
+    "utf8",
+  );
+
+  assert.match(source, /"use client";/);
+  assert.match(source, /import\s+\{\s*ListingChatPanel\s*\}/);
+  assert.match(source, /useState\s*\(/);
+  assert.match(source, /Bu ilanla ilgili mesajla[sÅş]mak i[çc]in giri[sÅş] yapman[ıi]z gerekir/);
+  assert.match(source, /Giri[sÅş] Yap ve Mesaj G[öo]nder/);
+  assert.match(source, /getLoginRedirectUrl\(`\/listings\/\$\{listingId\}`\)/);
+  assert.match(source, /Bu ilanla ilgili sorular[ıi]n[ıi]z[ıi] ofisimize iletebilirsiniz/);
+  assert.match(source, /Mesaj G[öo]nder/);
+  assert.match(source, /setChatOpen\(true\)/);
+  assert.doesNotMatch(source, /disabled[\s\S]*Mesaj G[öo]nder/);
+  assert.doesNotMatch(source, /Mesajla[sÅş]ma [öo]zelli[gğ]i sonraki ad[ıi]mda eklenecek/);
+});
+
+test("listing chat panel opens conversation on dialog load without sending an automatic initial message", () => {
+  const source = readFileSync(
+    resolve("components/chat/listing-chat-panel.tsx"),
+    "utf8",
+  );
+
+  assert.match(source, /getListingConversation/);
+  assert.match(source, /createListingConversation/);
+  assert.match(source, /getConversationMessages/);
+  assert.match(source, /sendConversationMessage/);
+  assert.match(source, /İlan Mesajlaşması|Ilan Mesajlasmasi/);
+  assert.match(source, /Bu ilanla ilgili sorularınızı ekibimize iletebilirsiniz|Bu ilanla ilgili sorularinizi ekibimize iletebilirsiniz/);
+  assert.match(source, /placeholder="Mesajınızı yazın\.\.\."|placeholder="Mesajinizi yazin\.\.\."/);
+  assert.match(source, /const MAX_MESSAGE_LENGTH = 2000;/);
+  assert.match(source, /maxLength=\{MAX_MESSAGE_LENGTH\}/);
+  assert.match(source, /Mesajlaşma başlatılırken bir sorun oluştu\. Lütfen tekrar deneyin\.|Mesajlasma baslatilirken bir sorun olustu\. Lutfen tekrar deneyin\./);
+  assert.match(source, /Mesaj gönderilemedi\. Lütfen tekrar deneyin\.|Mesaj gonderilemedi\. Lutfen tekrar deneyin\./);
+  assert.doesNotMatch(source, /DEFAULT_INITIAL_MESSAGE|initialMessage|initial_message/);
+  assert.doesNotMatch(source, /Mesajla[sÅş]may[ıi] Ba[sÅş]lat/);
 });
 
 test("listing detail action components receive auth state from the page boundary", () => {

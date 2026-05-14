@@ -23,6 +23,22 @@ test("node baseline script remains wired through npm test", async () => {
     packageJson.scripts?.["test:admin-system"],
     "node --experimental-strip-types --test tests/admin-system-route.test.mts tests/admin-system-view-model.test.mts",
   );
+  assert.match(
+    packageJson.scripts?.["test:admin-communications"] ?? "",
+    /\btests\/phase7-communication-route\.test\.mts\b/,
+  );
+  assert.match(
+    packageJson.scripts?.["test:admin-communications"] ?? "",
+    /\btests\/phase7-communication-read-messages-route\.test\.mts\b/,
+  );
+  assert.match(
+    packageJson.scripts?.["test:admin-communications"] ?? "",
+    /\btests\/phase7-chatwoot-client\.test\.mts\b/,
+  );
+  assert.match(
+    packageJson.scripts?.["test:admin-communications"] ?? "",
+    /\btests\/phase7-chatwoot-concurrency-contract\.test\.mts\b/,
+  );
   assert.equal(
     packageJson.scripts?.["test:chatwoot-live"],
     "node --env-file-if-exists=.env.local --experimental-strip-types --test tests/chatwoot-live-smoke.test.mts",

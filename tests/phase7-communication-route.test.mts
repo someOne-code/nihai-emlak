@@ -316,6 +316,122 @@ test("conversation open provisions a new Chatwoot conversation and optional init
   });
 });
 
+test("conversation open returns the same ready mapping on a second POST by the same user and listing", async (t) => {
+  setupCommunicationEnv(t);
+  const rpcCalls: RpcCall[] = [];
+  const adminRpcCalls: RpcCall[] = [];
+  const chatwootCalls: ChatwootCall[] = [];
+  let isReady = false;
+
+  const dependencies = createDependencies({
+    chatwootClient: {
+      createContact: async (input: Record<string, unknown>) => {
+        chatwootCalls.push({ method: "createContact", input });
+        return { ok: true, value: { sourceId: CHATWOOT_SOURCE_ID } };
+      },
+      createConversation: async (input: Record<string, unknown>) => {
+        chatwootCalls.push({ method: "createConversation", input });
+        return { ok: true, value: { conversationId: CHATWOOT_CONVERSATION_ID } };
+      },
+      createIncomingMessage: async (input: Record<string, unknown>) => {
+        chatwootCalls.push({ method: "createIncomingMessage", input });
+        return { ok: true, value: { id: "message-1" } };
+      },
+    },
+    rpc: (functionName, args) => {
+      rpcCalls.push({ functionName, args });
+      if (functionName !== "claim_chatwoot_conversation") {
+        throw new Error(`Unexpected rpc ${functionName}`);
+      }
+
+      return {
+        data: {
+          result: isReady ? "ready" : "claimed",
+          conversation_id: MAPPING_ID,
+          listing_id: LISTING_ID,
+          status: isReady ? "ready" : "provisioning",
+          chatwoot_source_id: isReady ? CHATWOOT_SOURCE_ID : null,
+          chatwoot_conversation_id: isReady ? CHATWOOT_CONVERSATION_ID : null,
+          failure_reason: null,
+        },
+        error: null,
+      };
+    },
+    adminRpc: (functionName, args) => {
+      adminRpcCalls.push({ functionName, args });
+      isReady = true;
+      return {
+        data: {
+          conversation_id: MAPPING_ID,
+          listing_id: LISTING_ID,
+          status: "ready",
+          chatwoot_source_id: CHATWOOT_SOURCE_ID,
+          chatwoot_conversation_id: CHATWOOT_CONVERSATION_ID,
+          failure_reason: null,
+        },
+        error: null,
+      };
+    },
+  });
+
+  const firstResponse = await handleListingConversationPost(
+    createJsonRequest({ initial_message: "Merhaba" }),
+    dependencies,
+    { listingId: LISTING_ID },
+  );
+  const secondResponse = await handleListingConversationPost(
+    createJsonRequest({ initial_message: "Yeni conversation acmamali" }),
+    dependencies,
+    { listingId: LISTING_ID },
+  );
+
+  assert.equal(firstResponse.status, 201);
+  assert.equal(secondResponse.status, 200);
+  assert.deepEqual(await firstResponse.json(), {
+    success: true,
+    data: {
+      conversation_id: MAPPING_ID,
+      listing_id: LISTING_ID,
+      chatwoot_conversation_id: CHATWOOT_CONVERSATION_ID,
+      status: "ready",
+    },
+  });
+  assert.deepEqual(await secondResponse.json(), {
+    success: true,
+    data: {
+      conversation_id: MAPPING_ID,
+      listing_id: LISTING_ID,
+      chatwoot_conversation_id: CHATWOOT_CONVERSATION_ID,
+      status: "ready",
+    },
+  });
+  assert.deepEqual(rpcCalls, [
+    {
+      functionName: "claim_chatwoot_conversation",
+      args: { p_listing_id: LISTING_ID },
+    },
+    {
+      functionName: "claim_chatwoot_conversation",
+      args: { p_listing_id: LISTING_ID },
+    },
+  ]);
+  assert.deepEqual(adminRpcCalls, [
+    {
+      functionName: "system_complete_chatwoot_conversation_claim",
+      args: {
+        p_mapping_id: MAPPING_ID,
+        p_chatwoot_source_id: CHATWOOT_SOURCE_ID,
+        p_chatwoot_conversation_id: CHATWOOT_CONVERSATION_ID,
+      },
+    },
+  ]);
+  assert.deepEqual(chatwootCalls.map((call) => call.method), [
+    "createContact",
+    "createConversation",
+    "createIncomingMessage",
+  ]);
+});
+
 test("conversation open maps duplicate first-claim race to in-progress response", async (t) => {
   setupCommunicationEnv(t);
 

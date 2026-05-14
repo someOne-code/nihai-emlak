@@ -1,5 +1,15 @@
 import type { ApiResponse } from "@/types/api";
 
+export class ApiFetchError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiFetchError";
+    this.status = status;
+  }
+}
+
 function resolveApiUrl(path: string): string {
   if (path.startsWith("http://") || path.startsWith("https://")) {
     return path;
@@ -50,15 +60,15 @@ export async function apiFetch<T>(
   const json = (await response.json().catch(() => null)) as ApiResponse<T> | null;
 
   if (!response.ok) {
-    throw new Error(readApiError(json) ?? "İstek başarısız oldu");
+    throw new ApiFetchError(readApiError(json) ?? "İstek başarısız oldu", response.status);
   }
 
   if (json?.success === false) {
-    throw new Error(json.error || "Bir hata oluştu");
+    throw new ApiFetchError(json.error || "Bir hata oluştu", response.status);
   }
 
   if (!json || json.success !== true) {
-    throw new Error("Geçersiz API yanıtı");
+    throw new ApiFetchError("Geçersiz API yanıtı", response.status);
   }
 
   return json.data;
