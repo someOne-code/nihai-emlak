@@ -29,7 +29,10 @@ import {
   setAdminListingStatus,
   updateAdminListing,
 } from "@/lib/admin-ui/listings-client.ts";
-import { selectAdminListing } from "@/lib/admin-ui/listings-controller.ts";
+import {
+  refreshAdminListingsModelAfterMutation,
+  selectAdminListing,
+} from "@/lib/admin-ui/listings-controller.ts";
 import {
   fetchAdminListingsList as fetchListFn,
   fetchAdminListingSnapshot as fetchSnapshotFn,
@@ -80,6 +83,15 @@ type ListingLoadOptions = {
   selectFirstWhenMissing?: boolean;
 };
 
+type MutationRefreshTarget =
+  | string
+  | null
+  | {
+      listingId: string | null;
+      snapshot?: unknown;
+      reuseList?: boolean;
+    };
+
 export default function AdminListingsView() {
   const [viewModel, setViewModel] = useState<AdminListingsViewModel>(INITIAL_VIEW_MODEL);
   const [list, setList] = useState<AdminListingsListResponse | null>(null);
@@ -93,6 +105,7 @@ export default function AdminListingsView() {
   const [initialDetailTab, setInitialDetailTab] = useState<AdminListingDetailTabId>("general");
 
   const mountedRef = useRef(true);
+  const loadRequestSeqRef = useRef(0);
   const initialLoadGuardRef = useRef(createInitialLoadGuard());
   const resumeRefreshGateRef = useRef(createContentRefreshGate());
   useEffect(() => {
@@ -108,6 +121,8 @@ export default function AdminListingsView() {
       nextFilters: FilterState,
       options: ListingLoadOptions = {},
     ) => {
+      const requestSeq = loadRequestSeqRef.current + 1;
+      loadRequestSeqRef.current = requestSeq;
       setLoading(true);
       setError(null);
       try {
@@ -115,7 +130,7 @@ export default function AdminListingsView() {
           fetchListFn(filterStateToQuery(nextFilters)),
           selectedListingId ? fetchSnapshotFn(selectedListingId) : Promise.resolve(null),
         ]);
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || loadRequestSeqRef.current !== requestSeq) return;
 
         if (results[0].status === "rejected") {
           setError(safeErrorMessage((results[0] as PromiseRejectedResult).reason));
@@ -134,10 +149,10 @@ export default function AdminListingsView() {
           }),
         );
       } catch (err) {
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || loadRequestSeqRef.current !== requestSeq) return;
         setError(safeErrorMessage(err));
       } finally {
-        if (mountedRef.current) {
+        if (mountedRef.current && loadRequestSeqRef.current === requestSeq) {
           setLoading(false);
         }
       }
@@ -209,18 +224,46 @@ export default function AdminListingsView() {
   );
 
   const refreshAfterMutation = useCallback(
-    async (listingId: string | null, message: string) => {
+    async (target: MutationRefreshTarget, message: string) => {
+      const refreshTarget = normalizeMutationRefreshTarget(target);
       setActionSuccess(message);
       setActionError(null);
-      await loadAllAndCacheList(listingId, filters, {
-        selectFirstWhenMissing: listingId !== null,
+      if (refreshTarget.snapshot !== undefined) {
+        setLoading(true);
+        try {
+          const result = await refreshAdminListingsModelAfterMutation(
+            {
+              fetchAdminListingsList: fetchListFn,
+              fetchAdminListingSnapshot: fetchSnapshotFn,
+            },
+            {
+              selectedListingId: refreshTarget.listingId,
+              cachedList: refreshTarget.reuseList ? list : null,
+              filters: filterStateToQuery(filters),
+              mutationSnapshot: refreshTarget.snapshot,
+              selectFirstWhenMissing: refreshTarget.listingId !== null,
+            },
+          );
+          if (!mountedRef.current) return;
+          setList(result.list);
+          setViewModel(result.model);
+        } finally {
+          if (mountedRef.current) {
+            setLoading(false);
+          }
+        }
+        return;
+      }
+
+      await loadAllAndCacheList(refreshTarget.listingId, filters, {
+        selectFirstWhenMissing: refreshTarget.listingId !== null,
       });
     },
-    [filters, loadAllAndCacheList],
+    [filters, list, loadAllAndCacheList],
   );
 
   const runAction = useCallback(
-    async (label: string, action: () => Promise<string | null>) => {
+    async (label: string, action: () => Promise<MutationRefreshTarget>) => {
       setBusy(true);
       setActionError(null);
       setActionSuccess(null);
@@ -355,15 +398,17 @@ export default function AdminListingsView() {
                   onSave={(payload) =>
                     runAction("İlan bilgileri güncellendi.", async () => {
                       if (!viewModel.detail) return null;
-                      await updateAdminListing(viewModel.detail.listing.id, payload);
-                      return viewModel.detail.listing.id;
+                      const listingId = viewModel.detail.listing.id;
+                      const snapshot = await updateAdminListing(listingId, payload);
+                      return { listingId, snapshot, reuseList: true };
                     })
                   }
                   onStatusChange={(nextStatus) =>
                     runAction(`Durum güncellendi: ${nextStatus}`, async () => {
                       if (!viewModel.detail) return null;
-                      await setAdminListingStatus(viewModel.detail.listing.id, nextStatus);
-                      return viewModel.detail.listing.id;
+                      const listingId = viewModel.detail.listing.id;
+                      const snapshot = await setAdminListingStatus(listingId, nextStatus);
+                      return { listingId, snapshot };
                     })
                   }
                 />
@@ -611,6 +656,17 @@ function CreateListingPanel({
   const [description, setDescription] = useState("");
   const [roomCount, setRoomCount] = useState("");
   const [bathroomCount, setBathroomCount] = useState("");
+  const [heatingType, setHeatingType] = useState("");
+  const [fuelType, setFuelType] = useState("");
+  const [balconyCount, setBalconyCount] = useState("");
+  const [hasElevator, setHasElevator] = useState("");
+  const [parkingType, setParkingType] = useState("");
+  const [inSite, setInSite] = useState("");
+  const [buildingAge, setBuildingAge] = useState("");
+  const [floorCount, setFloorCount] = useState("");
+  const [floorNumber, setFloorNumber] = useState("");
+  const [usageStatus, setUsageStatus] = useState("");
+  const [facade, setFacade] = useState("");
   const [grossArea, setGrossArea] = useState("");
   const [isFurnished, setIsFurnished] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
@@ -647,6 +703,17 @@ function CreateListingPanel({
       description: description.trim() || null,
       room_count: roomCount ? Number(roomCount) : null,
       bathroom_count: bathroomCount ? Number(bathroomCount) : null,
+      heating_type: heatingType || null,
+      fuel_type: fuelType || null,
+      balcony_count: balconyCount ? Number(balconyCount) : null,
+      has_elevator: parseNullableBooleanFieldValue(hasElevator),
+      parking_type: parkingType || null,
+      in_site: parseNullableBooleanFieldValue(inSite),
+      building_age: buildingAge ? Number(buildingAge) : null,
+      floor_count: floorCount ? Number(floorCount) : null,
+      floor_number: floorNumber.trim() || null,
+      usage_status: usageStatus || null,
+      facade: facade.trim() || null,
       gross_area_m2: grossArea ? Number(grossArea) : null,
       is_furnished: isFurnished,
     });
@@ -796,6 +863,103 @@ function CreateListingPanel({
                   placeholder="Örn: 1"
                 />
               </FormField>
+              <FormField label="Isıtma">
+                <Select value={heatingType} onChange={(event) => setHeatingType(event.target.value)}>
+                  <option value="">Belirtilmedi</option>
+                  <option value="central">Merkezi Sistem</option>
+                  <option value="combi">Kombi</option>
+                  <option value="floor_heating">Yerden Isıtma</option>
+                  <option value="stove">Soba</option>
+                  <option value="air_conditioning">Klima</option>
+                  <option value="none">Yok</option>
+                  <option value="other">Diğer</option>
+                </Select>
+              </FormField>
+              <FormField label="Yakıt">
+                <Select value={fuelType} onChange={(event) => setFuelType(event.target.value)}>
+                  <option value="">Belirtilmedi</option>
+                  <option value="natural_gas">Doğalgaz</option>
+                  <option value="electricity">Elektrik</option>
+                  <option value="coal">Kömür</option>
+                  <option value="fuel_oil">Fuel Oil</option>
+                  <option value="none">Yok</option>
+                  <option value="other">Diğer</option>
+                </Select>
+              </FormField>
+              <FormField label="Balkon sayısı">
+                <Input
+                  type="number"
+                  min={0}
+                  value={balconyCount}
+                  onChange={(event) => setBalconyCount(event.target.value)}
+                  placeholder="Örn: 2"
+                />
+              </FormField>
+              <FormField label="Asansör">
+                <Select value={hasElevator} onChange={(event) => setHasElevator(event.target.value)}>
+                  <option value="">Belirtilmedi</option>
+                  <option value="true">Var</option>
+                  <option value="false">Yok</option>
+                </Select>
+              </FormField>
+              <FormField label="Otopark">
+                <Select value={parkingType} onChange={(event) => setParkingType(event.target.value)}>
+                  <option value="">Belirtilmedi</option>
+                  <option value="open">Açık Otopark</option>
+                  <option value="closed">Kapalı Otopark</option>
+                  <option value="open_closed">Açık ve Kapalı Otopark</option>
+                  <option value="none">Yok</option>
+                  <option value="other">Diğer</option>
+                </Select>
+              </FormField>
+              <FormField label="Site içerisinde">
+                <Select value={inSite} onChange={(event) => setInSite(event.target.value)}>
+                  <option value="">Belirtilmedi</option>
+                  <option value="true">Evet</option>
+                  <option value="false">Hayır</option>
+                </Select>
+              </FormField>
+              <FormField label="Bina yaşı">
+                <Input
+                  type="number"
+                  min={0}
+                  value={buildingAge}
+                  onChange={(event) => setBuildingAge(event.target.value)}
+                  placeholder="Örn: 5"
+                />
+              </FormField>
+              <FormField label="Kat sayısı">
+                <Input
+                  type="number"
+                  min={0}
+                  value={floorCount}
+                  onChange={(event) => setFloorCount(event.target.value)}
+                  placeholder="Örn: 12"
+                />
+              </FormField>
+              <FormField label="Bulunduğu kat">
+                <Input
+                  value={floorNumber}
+                  onChange={(event) => setFloorNumber(event.target.value)}
+                  placeholder="Örn: 3. Kat"
+                />
+              </FormField>
+              <FormField label="Kullanım durumu">
+                <Select value={usageStatus} onChange={(event) => setUsageStatus(event.target.value)}>
+                  <option value="">Belirtilmedi</option>
+                  <option value="empty">Boş</option>
+                  <option value="tenant_occupied">Kiracılı</option>
+                  <option value="owner_occupied">Mülk Sahibi Oturuyor</option>
+                  <option value="unknown">Belirtilmemiş</option>
+                </Select>
+              </FormField>
+              <FormField label="Cephe">
+                <Input
+                  value={facade}
+                  onChange={(event) => setFacade(event.target.value)}
+                  placeholder="Örn: Güney Batı"
+                />
+              </FormField>
               <FormField label="Brüt alan (m²)">
                 <Input
                   type="number"
@@ -900,6 +1064,28 @@ function filterStateToQuery(filters: FilterState): AdminListingsListFilters {
   if (filters.status) query.status = filters.status;
   if (filters.type) query.type = filters.type;
   return query;
+}
+
+function parseNullableBooleanFieldValue(value: string): boolean | null {
+  if (value === "true") {
+    return true;
+  }
+  if (value === "false") {
+    return false;
+  }
+  return null;
+}
+
+function normalizeMutationRefreshTarget(target: MutationRefreshTarget): {
+  listingId: string | null;
+  snapshot?: unknown;
+  reuseList?: boolean;
+} {
+  if (typeof target === "string" || target === null) {
+    return { listingId: target };
+  }
+
+  return target;
 }
 
 // Re-export type for external consumers if any.

@@ -19,6 +19,7 @@ import {
 import {
   loadConsultantsModel,
   loadContentDetailModel,
+  refreshContentModelAfterMutation,
 } from "@/lib/admin-ui/content-controller";
 import {
   createContentLoadGuard,
@@ -82,6 +83,15 @@ const INITIAL_VM: ConsultantsListViewModel = {
   totalPages: 0,
   isEmpty: true,
 };
+
+type ConsultantMutationRefreshTarget =
+  | string
+  | null
+  | {
+      consultantId: string | null;
+      document?: unknown;
+      reuseList?: boolean;
+    };
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
@@ -169,28 +179,46 @@ export default function AdminConsultantsView() {
   }, []);
 
   const refreshAfterMutation = useCallback(
-    async (consultantId: string | null, message: string) => {
+    async (target: ConsultantMutationRefreshTarget, message: string) => {
+      const refreshTarget = normalizeConsultantMutationRefreshTarget(target);
       setActionSuccess(message);
       setActionError(null);
-      if (consultantId) {
-        setSelectedId(consultantId);
+      if (refreshTarget.consultantId) {
+        setSelectedId(refreshTarget.consultantId);
         setDetailLoading(true);
       }
 
       try {
-        await refreshContentViews([
-          () => loadList(),
-          ...(consultantId ? [() => loadConsultantDetail(consultantId)] : []),
-        ]);
+        const consultantId = refreshTarget.consultantId;
+        if (refreshTarget.reuseList && refreshTarget.document !== undefined) {
+          const result = refreshContentModelAfterMutation(
+            "consultants",
+            viewModel,
+            refreshTarget.document,
+          );
+          setViewModel(result.model);
+          setDetail(result.detail);
+          return;
+        }
+
+        if (consultantId) {
+          const selectedConsultantId = consultantId;
+          await refreshContentViews([
+            () => loadList(),
+            () => loadConsultantDetail(selectedConsultantId),
+          ]);
+        } else {
+          await refreshContentViews([() => loadList()]);
+        }
       } finally {
-        if (consultantId && mountedRef.current) setDetailLoading(false);
+        if (refreshTarget.consultantId && mountedRef.current) setDetailLoading(false);
       }
     },
-    [loadList, loadConsultantDetail],
+    [loadList, loadConsultantDetail, viewModel],
   );
 
   const runAction = useCallback(
-    async (successMsg: string, action: () => Promise<string | null>) => {
+    async (successMsg: string, action: () => Promise<ConsultantMutationRefreshTarget>) => {
       setBusy(true);
       setActionError(null);
       setActionSuccess(null);
@@ -320,8 +348,8 @@ export default function AdminConsultantsView() {
               busy={busy || detailLoading}
               onSave={(payload) =>
                 runAction("Danışman güncellendi.", async () => {
-                  await updateAdminConsultant(detail.id, payload);
-                  return detail.id;
+                  const document = await updateAdminConsultant(detail.id, payload);
+                  return { consultantId: detail.id, document, reuseList: true };
                 })
               }
               onDelete={() =>
@@ -832,4 +860,16 @@ function ConsultantPhotoUpload({
       {uploadError && <p className="text-xs text-destructive">{uploadError}</p>}
     </div>
   );
+}
+
+function normalizeConsultantMutationRefreshTarget(target: ConsultantMutationRefreshTarget): {
+  consultantId: string | null;
+  document?: unknown;
+  reuseList?: boolean;
+} {
+  if (typeof target === "string" || target === null) {
+    return { consultantId: target };
+  }
+
+  return target;
 }

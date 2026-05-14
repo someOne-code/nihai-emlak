@@ -18,6 +18,13 @@ where id in (
   '44444444-4444-4444-4444-444444444444'::uuid
 );
 
+update public.listings
+set status = 'passive'
+where id in (
+  'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1'::uuid,
+  'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2'::uuid
+);
+
 delete from public.listing_service_options
 where id in (
   'dddddddd-dddd-dddd-dddd-ddddddddddd1'::uuid,
@@ -141,6 +148,8 @@ begin
 end;
 $$;
 
+reset role;
+
 insert into public.consultants (
   id,
   full_name,
@@ -178,7 +187,8 @@ insert into public.listings (
   price,
   currency,
   room_count,
-  bathroom_count
+  bathroom_count,
+  gross_area_m2
 )
 values
   (
@@ -192,7 +202,8 @@ values
     45000,
     'TRY',
     3,
-    2
+    2,
+    120
   ),
   (
     'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2'::uuid,
@@ -205,7 +216,8 @@ values
     12500000,
     'TRY',
     4,
-    2
+    2,
+    180
   );
 
 insert into public.listing_images (
@@ -232,9 +244,7 @@ values
     'Pasif ilanin kapak gorseli',
     0,
     true
-  );
-
-reset role;
+);
 
 insert into public.service_catalog (
   id,
@@ -257,11 +267,7 @@ values
     'Havalimani Transferi',
     3000,
     false
-	  );
-
-set role authenticated;
-select set_config('request.jwt.claim.sub', '33333333-3333-3333-3333-333333333333', false);
-select set_config('request.jwt.claim.role', 'authenticated', false);
+);
 
 insert into public.listing_service_options (
   id,
@@ -284,14 +290,16 @@ values
     'cccccccc-cccc-cccc-cccc-ccccccccccc2'::uuid,
     2800,
     true
-  );
+);
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', '33333333-3333-3333-3333-333333333333', false);
+select set_config('request.jwt.claim.role', 'authenticated', false);
 
 do $$
 declare
   v_consultant_title text;
   v_listing_title text;
-  v_image_alt_text text;
-  v_option_price numeric;
 begin
   update public.consultants
   set title = 'Bas Danisman'
@@ -305,45 +313,69 @@ begin
     raise exception 'Admin should be able to manage consultant rows';
   end if;
 
-  update public.listings
-  set title = 'Admin Guncelledi'
-  where id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1'::uuid;
+  perform public.admin_update_listing(
+    'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2'::uuid,
+    jsonb_build_object('title', 'Admin Guncelledi')
+  );
 
   select title into v_listing_title
   from public.listings
-  where id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1'::uuid;
+  where id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2'::uuid;
 
   if v_listing_title <> 'Admin Guncelledi' then
-    raise exception 'Admin should be able to manage listing rows';
-  end if;
-
-  update public.listing_images
-  set alt_text = 'Admin tarafindan guncellendi'
-  where id = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee1'::uuid;
-
-  select alt_text into v_image_alt_text
-  from public.listing_images
-  where id = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee1'::uuid;
-
-  if v_image_alt_text <> 'Admin tarafindan guncellendi' then
-    raise exception 'Admin should be able to manage listing image rows';
-  end if;
-
-  update public.listing_service_options
-  set override_price = 2300
-  where id = 'dddddddd-dddd-dddd-dddd-ddddddddddd1'::uuid;
-
-  select override_price into v_option_price
-  from public.listing_service_options
-  where id = 'dddddddd-dddd-dddd-dddd-ddddddddddd1'::uuid;
-
-  if v_option_price <> 2300 then
-    raise exception 'Admin should be able to manage listing_service_options rows';
+    raise exception 'Admin should be able to update listings through controlled RPCs';
   end if;
 end;
 $$;
 
+do $$
+begin
+  begin
+    insert into public.listings (
+      type,
+      title,
+      slug,
+      city,
+      price
+    )
+    values (
+      'rent',
+      'Admin Direct Insert',
+      'admin-direct-insert',
+      'Istanbul',
+      1000
+    );
+
+    raise exception 'Admin direct listing insert unexpectedly succeeded';
+  exception
+    when insufficient_privilege then
+      null;
+    when others then
+      if sqlstate <> '42501' then
+        raise;
+      end if;
+  end;
+
+  begin
+    update public.listings
+    set title = 'Admin Direct Update'
+    where id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1'::uuid;
+
+    raise exception 'Admin direct listing update unexpectedly succeeded';
+  exception
+    when insufficient_privilege then
+      null;
+    when others then
+      if sqlstate <> '42501' then
+        raise;
+      end if;
+  end;
+end;
+$$;
+
 -- duplicate listing-service pair must fail
+reset role;
+
 do $$
 begin
   begin
@@ -447,9 +479,7 @@ end;
 $$;
 
 -- negative price must fail
-set role authenticated;
-select set_config('request.jwt.claim.sub', '33333333-3333-3333-3333-333333333333', false);
-select set_config('request.jwt.claim.role', 'authenticated', false);
+reset role;
 
 do $$
 begin
@@ -644,6 +674,13 @@ delete from auth.users
 where id in (
   '33333333-3333-3333-3333-333333333333'::uuid,
   '44444444-4444-4444-4444-444444444444'::uuid
+);
+
+update public.listings
+set status = 'passive'
+where id in (
+  'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1'::uuid,
+  'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2'::uuid
 );
 
 delete from public.listing_service_options

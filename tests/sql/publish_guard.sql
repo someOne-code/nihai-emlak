@@ -4,25 +4,38 @@
 
 -- ── Cleanup ──────────────────────────────────────────────────────────
 
+update public.listings
+set status = 'passive'::public.listing_status
+where id in (
+  'cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab01'::uuid,
+  'cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab02'::uuid,
+  'cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab03'::uuid,
+  'cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab04'::uuid
+);
+
 delete from public.listing_images where listing_id in (
   'cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab01'::uuid,
   'cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab02'::uuid,
-  'cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab03'::uuid
+  'cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab03'::uuid,
+  'cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab04'::uuid
 );
 delete from public.listing_service_options where listing_id in (
   'cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab01'::uuid,
   'cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab02'::uuid,
-  'cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab03'::uuid
+  'cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab03'::uuid,
+  'cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab04'::uuid
 );
 delete from public.listing_main_item_options where listing_id in (
   'cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab01'::uuid,
   'cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab02'::uuid,
-  'cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab03'::uuid
+  'cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab03'::uuid,
+  'cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab04'::uuid
 );
 delete from public.listings where id in (
   'cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab01'::uuid,
   'cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab02'::uuid,
-  'cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab03'::uuid
+  'cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab03'::uuid,
+  'cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab04'::uuid
 );
 
 -- ── Fixtures ─────────────────────────────────────────────────────────
@@ -33,18 +46,31 @@ values ('cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab01'::uuid, 'sale', 'passive',
         'Publish Guard Test A', 'publish-guard-a', 'Istanbul', 500000, 'TRY');
 
 -- Listing 02: sale, has description + district + image → can publish
-insert into public.listings (id, type, status, title, slug, city, district, price, currency, description)
+insert into public.listings (
+  id, type, status, title, slug, city, district, price, currency, description,
+  room_count, bathroom_count, gross_area_m2
+)
 values ('cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab02'::uuid, 'sale', 'passive',
         'Publish Guard Test B', 'publish-guard-b', 'Istanbul', 'Kadikoy', 600000, 'TRY',
-        'Guzel bir daire');
+        'Guzel bir daire', 2, 1, 95);
 insert into public.listing_images (listing_id, image_url, sort_order)
 values ('cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab02'::uuid, 'https://example.com/img1.jpg', 0);
 
 -- Listing 03: sale, has description + district but NO image → cannot publish
-insert into public.listings (id, type, status, title, slug, city, district, price, currency, description)
+insert into public.listings (
+  id, type, status, title, slug, city, district, price, currency, description,
+  room_count, bathroom_count, gross_area_m2
+)
 values ('cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab03'::uuid, 'sale', 'passive',
         'Publish Guard Test C', 'publish-guard-c', 'Istanbul', 'Besiktas', 700000, 'TRY',
-        'Baska guzel bir daire');
+        'Baska guzel bir daire', 3, 2, 140);
+
+insert into public.listings (id, type, status, title, slug, city, district, price, currency, description)
+values ('cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab04'::uuid, 'sale', 'passive',
+        'Publish Guard Test D', 'publish-guard-d', 'Istanbul', 'Kadikoy', 800000, 'TRY',
+        'Gorunen kart detaylari eksik');
+insert into public.listing_images (listing_id, image_url, sort_order)
+values ('cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab04'::uuid, 'https://example.com/img4.jpg', 0);
 
 -- ── Test admin_listing_publish_missing ──────────────────────────────
 
@@ -57,14 +83,16 @@ declare
   v_missing_01 text[];
   v_missing_02 text[];
   v_missing_03 text[];
+  v_missing_04 text[];
 begin
   v_missing_01 := public.admin_listing_publish_missing('cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab01'::uuid);
   v_missing_02 := public.admin_listing_publish_missing('cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab02'::uuid);
   v_missing_03 := public.admin_listing_publish_missing('cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab03'::uuid);
+  v_missing_04 := public.admin_listing_publish_missing('cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab04'::uuid);
 
   -- 01: should have description, district, image missing
-  if array_length(v_missing_01, 1) <> 3 then
-    raise exception 'TEST FAILED [01 missing count]: expected 3, got %', array_length(v_missing_01, 1);
+  if array_length(v_missing_01, 1) <> 6 then
+    raise exception 'TEST FAILED [01 missing count]: expected 6, got %', array_length(v_missing_01, 1);
   end if;
   if not ('description' = any(v_missing_01)) then
     raise exception 'TEST FAILED [01]: description should be missing';
@@ -74,6 +102,15 @@ begin
   end if;
   if not ('image' = any(v_missing_01)) then
     raise exception 'TEST FAILED [01]: image should be missing';
+  end if;
+  if not ('room_count' = any(v_missing_01)) then
+    raise exception 'TEST FAILED [01]: room_count should be missing';
+  end if;
+  if not ('bathroom_count' = any(v_missing_01)) then
+    raise exception 'TEST FAILED [01]: bathroom_count should be missing';
+  end if;
+  if not ('gross_area_m2' = any(v_missing_01)) then
+    raise exception 'TEST FAILED [01]: gross_area_m2 should be missing';
   end if;
 
   -- 02: should have nothing missing
@@ -87,6 +124,19 @@ begin
   end if;
   if not ('image' = any(v_missing_03)) then
     raise exception 'TEST FAILED [03]: image should be missing';
+  end if;
+
+  if array_length(v_missing_04, 1) <> 3 then
+    raise exception 'TEST FAILED [04 missing count]: expected 3, got %', array_length(v_missing_04, 1);
+  end if;
+  if not ('room_count' = any(v_missing_04)) then
+    raise exception 'TEST FAILED [04]: room_count should be missing';
+  end if;
+  if not ('bathroom_count' = any(v_missing_04)) then
+    raise exception 'TEST FAILED [04]: bathroom_count should be missing';
+  end if;
+  if not ('gross_area_m2' = any(v_missing_04)) then
+    raise exception 'TEST FAILED [04]: gross_area_m2 should be missing';
   end if;
 end;
 $$;
@@ -124,6 +174,17 @@ begin
     'cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab02'::uuid,
     'active'::public.listing_status
   );
+
+  begin
+    perform public.admin_set_listing_status(
+      'cccccccc-aaaa-4aaa-8aaa-aaaaaaaaab04'::uuid,
+      'active'::public.listing_status
+    );
+    raise exception 'TEST FAILED: listing without visible card facts activation should have been blocked';
+  exception
+    when sqlstate 'P0004' then
+      null;
+  end;
 end;
 $$;
 
@@ -158,8 +219,8 @@ begin
     raise exception 'TEST FAILED: incomplete listing should not be publish-ready';
   end if;
 
-  if jsonb_array_length(v_pmissing) <> 3 then
-    raise exception 'TEST FAILED: expected 3 missing items in publish_readiness, got %', jsonb_array_length(v_pmissing);
+  if jsonb_array_length(v_pmissing) <> 6 then
+    raise exception 'TEST FAILED: expected 6 missing items in publish_readiness, got %', jsonb_array_length(v_pmissing);
   end if;
 
   -- Check listing 02 (complete)
@@ -181,6 +242,8 @@ begin
     raise exception 'TEST FAILED: direct incomplete listing activation should have been blocked';
   exception
     when sqlstate 'P0004' then
+      null;
+    when sqlstate '42501' then
       null;
   end;
 end;

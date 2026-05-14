@@ -31,6 +31,19 @@ export type AdminListingsLoadInput = {
   filters?: AdminListingsListFilters;
 };
 
+export type AdminListingsMutationRefreshInput = {
+  selectedListingId: string | null;
+  cachedList?: AdminListingsListResponse | null;
+  filters?: AdminListingsListFilters;
+  mutationSnapshot?: unknown;
+  selectFirstWhenMissing?: boolean;
+};
+
+export type AdminListingsMutationRefreshResult = {
+  list: AdminListingsListResponse;
+  model: AdminListingsViewModel;
+};
+
 export type AdminListingsSelectInput = {
   list: AdminListingsListResponse;
   listingId: string;
@@ -88,6 +101,40 @@ export async function selectAdminListing(
   });
 }
 
+export async function refreshAdminListingsModelAfterMutation(
+  dependencies: AdminListingsLoaderDependencies = DEFAULT_LOADER_DEPENDENCIES,
+  input: AdminListingsMutationRefreshInput,
+): Promise<AdminListingsMutationRefreshResult> {
+  const list =
+    input.cachedList && snapshotMatchesListing(input.mutationSnapshot, input.selectedListingId)
+      ? applyMutationSnapshotToList(input.cachedList, input.mutationSnapshot)
+      : await dependencies.fetchAdminListingsList(input.filters ?? {});
+  const targetListingId = resolveTargetListingId(list, input.selectedListingId);
+  let snapshot: unknown = null;
+
+  if (targetListingId) {
+    if (snapshotMatchesListing(input.mutationSnapshot, targetListingId)) {
+      snapshot = input.mutationSnapshot;
+    } else {
+      try {
+        snapshot = await dependencies.fetchAdminListingSnapshot(targetListingId);
+      } catch {
+        // Snapshot failure is non-critical; list still refreshes.
+      }
+    }
+  }
+
+  return {
+    list,
+    model: buildAdminListingsViewModel({
+      list,
+      selectedListingId: targetListingId,
+      snapshot,
+      selectFirstWhenMissing: input.selectFirstWhenMissing,
+    }),
+  };
+}
+
 function resolveTargetListingId(
   list: AdminListingsListResponse,
   candidate: string | null,
@@ -119,4 +166,94 @@ function asNonEmptyString(value: unknown): string | null {
     return null;
   }
   return value.trim();
+}
+
+function snapshotMatchesListing(snapshot: unknown, listingId: string | null): boolean {
+  if (!listingId) {
+    return false;
+  }
+  if (typeof snapshot !== "object" || snapshot === null || Array.isArray(snapshot)) {
+    return false;
+  }
+
+  const listing = (snapshot as Record<string, unknown>).listing;
+  if (typeof listing !== "object" || listing === null || Array.isArray(listing)) {
+    return false;
+  }
+
+  return asNonEmptyString((listing as Record<string, unknown>).id) === listingId;
+}
+
+function applyMutationSnapshotToList(
+  list: AdminListingsListResponse,
+  snapshot: unknown,
+): AdminListingsListResponse {
+  if (typeof snapshot !== "object" || snapshot === null || Array.isArray(snapshot)) {
+    return list;
+  }
+
+  const snapshotRecord = snapshot as Record<string, unknown>;
+  const listing = snapshotRecord.listing;
+  if (typeof listing !== "object" || listing === null || Array.isArray(listing)) {
+    return list;
+  }
+
+  const listingRecord = listing as Record<string, unknown>;
+  const listingId = asNonEmptyString(listingRecord.id);
+  if (!listingId) {
+    return list;
+  }
+
+  return {
+    ...list,
+    items: list.items.map((item) => {
+      if (typeof item !== "object" || item === null || Array.isArray(item)) {
+        return item;
+      }
+
+      const current = item as Record<string, unknown>;
+      if (asNonEmptyString(current.id) !== listingId) {
+        return item;
+      }
+
+      return {
+        ...current,
+        id: listingRecord.id,
+        type: listingRecord.type,
+        status: listingRecord.status,
+        title: listingRecord.title,
+        slug: listingRecord.slug,
+        city: listingRecord.city,
+        district: listingRecord.district,
+        price: listingRecord.price,
+        currency: listingRecord.currency,
+        is_furnished: listingRecord.is_furnished,
+        image_count: pickArrayLength(snapshotRecord.images, current.image_count),
+        main_item_count: pickArrayLength(snapshotRecord.main_item_options, current.main_item_count),
+        service_option_count: pickArrayLength(
+          snapshotRecord.service_options,
+          current.service_option_count,
+        ),
+        is_checkout_ready: pickCheckoutReady(
+          snapshotRecord.checkout_eligibility,
+          current.is_checkout_ready,
+        ),
+        created_at: listingRecord.created_at,
+        updated_at: listingRecord.updated_at,
+      };
+    }),
+  };
+}
+
+function pickArrayLength(value: unknown, fallback: unknown): unknown {
+  return Array.isArray(value) ? value.length : fallback;
+}
+
+function pickCheckoutReady(value: unknown, fallback: unknown): unknown {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return fallback;
+  }
+
+  const ready = (value as Record<string, unknown>).is_checkout_ready;
+  return typeof ready === "boolean" ? ready : fallback;
 }

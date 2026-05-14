@@ -23,5 +23,6 @@ export function buildConsultantsListFindArgs(page: number, limit: number) {
     sort: "sortOrder",
     depth: 0,
     select: CONSULTANT_LIST_SELECT,
+    overrideAccess: true,
   } as const;
 }

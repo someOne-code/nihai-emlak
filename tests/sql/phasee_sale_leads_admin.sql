@@ -1,35 +1,56 @@
 \set ON_ERROR_STOP on
 
 -- Phase E: sale leads admin contract.
--- Verifies sale-only creation, RLS ownership, admin read access, audited
--- status transitions, and direct status update denial.
+-- Verifies guest/authenticated RPC creation, closed direct table writes,
+-- RLS ownership, admin read access, audited status transitions, and listing
+-- eligibility checks.
 
 -- deterministic ids
--- owner:     eeee0001-0001-4001-8001-000000000001
--- admin:     eeee0001-0001-4001-8001-000000000002
--- other:     eeee0001-0001-4001-8001-000000000003
--- sale:      eeee0001-0001-4001-8001-100000000001
--- rent:      eeee0001-0001-4001-8001-100000000002
+-- owner:         eeee0001-0001-4001-8001-000000000001
+-- admin:         eeee0001-0001-4001-8001-000000000002
+-- other:         eeee0001-0001-4001-8001-000000000003
+-- active sale:   eeee0001-0001-4001-8001-100000000001
+-- active rent:   eeee0001-0001-4001-8001-100000000002
+-- inactive sale: eeee0001-0001-4001-8001-100000000003
+-- missing:       eeee0001-0001-4001-8001-100000000004
 
 reset role;
 
 delete from public.sale_lead_events
 where lead_id in (
-  select id from public.sale_leads
-  where user_id in (
+  select id
+  from public.sale_leads
+  where listing_id in (
+    'eeee0001-0001-4001-8001-100000000001'::uuid,
+    'eeee0001-0001-4001-8001-100000000002'::uuid,
+    'eeee0001-0001-4001-8001-100000000003'::uuid
+  )
+  or user_id in (
     'eeee0001-0001-4001-8001-000000000001'::uuid,
     'eeee0001-0001-4001-8001-000000000003'::uuid
   )
 );
 delete from public.sale_leads
-where user_id in (
+where listing_id in (
+  'eeee0001-0001-4001-8001-100000000001'::uuid,
+  'eeee0001-0001-4001-8001-100000000002'::uuid,
+  'eeee0001-0001-4001-8001-100000000003'::uuid
+)
+or user_id in (
   'eeee0001-0001-4001-8001-000000000001'::uuid,
   'eeee0001-0001-4001-8001-000000000003'::uuid
+);
+delete from public.listing_images
+where listing_id in (
+  'eeee0001-0001-4001-8001-100000000001'::uuid,
+  'eeee0001-0001-4001-8001-100000000002'::uuid,
+  'eeee0001-0001-4001-8001-100000000003'::uuid
 );
 delete from public.listings
 where id in (
   'eeee0001-0001-4001-8001-100000000001'::uuid,
-  'eeee0001-0001-4001-8001-100000000002'::uuid
+  'eeee0001-0001-4001-8001-100000000002'::uuid,
+  'eeee0001-0001-4001-8001-100000000003'::uuid
 );
 delete from auth.users
 where id in (
@@ -82,7 +103,22 @@ update public.profiles
 set role = 'admin'
 where id = 'eeee0001-0001-4001-8001-000000000002'::uuid;
 
-insert into public.listings (id, type, status, title, slug, city, price, currency)
+insert into public.listings (
+  id,
+  type,
+  status,
+  title,
+  slug,
+  summary,
+  description,
+  city,
+  district,
+  price,
+  currency,
+  room_count,
+  bathroom_count,
+  gross_area_m2
+)
 values
 (
   'eeee0001-0001-4001-8001-100000000001'::uuid,
@@ -90,20 +126,119 @@ values
   'active',
   'Phase E Sale Listing',
   'phase-e-sale-listing',
+  'Satilik daire',
+  'Phase E sale listing description',
   'Istanbul',
+  'Kadikoy',
   500000,
-  'TRY'
+  'TRY',
+  3,
+  1,
+  120
 ),
 (
   'eeee0001-0001-4001-8001-100000000002'::uuid,
   'rent',
-  'passive',
+  'active',
   'Phase E Rent Listing',
   'phase-e-rent-listing',
+  'Kiralik daire',
+  'Phase E rent listing description',
   'Istanbul',
+  'Besiktas',
   5000,
-  'TRY'
+  'TRY',
+  2,
+  1,
+  90
+),
+(
+  'eeee0001-0001-4001-8001-100000000003'::uuid,
+  'sale',
+  'passive',
+  'Phase E Passive Sale Listing',
+  'phase-e-passive-sale-listing',
+  'Pasif satilik daire',
+  'Phase E passive sale listing description',
+  'Istanbul',
+  'Uskudar',
+  450000,
+  'TRY',
+  2,
+  1,
+  100
 );
+
+insert into public.listing_images (listing_id, image_url, alt_text, is_primary)
+values
+(
+  'eeee0001-0001-4001-8001-100000000001'::uuid,
+  'https://example.com/phase-e-sale.jpg',
+  'Phase E sale listing',
+  true
+),
+(
+  'eeee0001-0001-4001-8001-100000000002'::uuid,
+  'https://example.com/phase-e-rent.jpg',
+  'Phase E rent listing',
+  true
+);
+
+set role anon;
+select set_config('request.jwt.claim.sub', '', false);
+select set_config('request.jwt.claim.role', 'anon', false);
+
+do $$
+declare
+  v_lead record;
+begin
+  select * into v_lead
+  from public.create_sale_lead(
+    'eeee0001-0001-4001-8001-100000000001'::uuid,
+    'Guest User',
+    'guest-sale-lead@example.com',
+    null,
+    'Bu ilan hakkinda bilgi almak istiyorum'
+  );
+
+  if v_lead.result <> 'created'
+    or v_lead.listing_id <> 'eeee0001-0001-4001-8001-100000000001'::uuid
+    or v_lead.status <> 'new'
+  then
+    raise exception 'anonymous create_sale_lead RPC did not create expected lead';
+  end if;
+end;
+$$;
+
+do $$
+begin
+  begin
+    insert into public.sale_leads (
+      listing_id,
+      user_id,
+      contact_name,
+      contact_email,
+      message
+    )
+    values (
+      'eeee0001-0001-4001-8001-100000000001'::uuid,
+      null,
+      'Direct Guest',
+      'direct-guest@example.com',
+      'Direct guest insert must stay closed'
+    );
+
+    raise exception 'direct anonymous sale lead insert unexpectedly succeeded';
+  exception
+    when insufficient_privilege then
+      raise notice 'direct anonymous sale lead insert rejected as expected';
+    when others then
+      if sqlstate <> '42501' then
+        raise;
+      end if;
+  end;
+end;
+$$;
 
 set role authenticated;
 select set_config('request.jwt.claim.sub', 'eeee0001-0001-4001-8001-000000000001', false);
@@ -124,7 +259,7 @@ begin
       'eeee0001-0001-4001-8001-100000000001'::uuid,
       'eeee0001-0001-4001-8001-000000000001'::uuid,
       'Ada User',
-      'ada@example.com',
+      'ada-direct@example.com',
       '+905551112233',
       'Bu ilanla cok ilgileniyorum'
     );
@@ -149,7 +284,7 @@ begin
   from public.create_sale_lead(
     'eeee0001-0001-4001-8001-100000000001'::uuid,
     'Ada User',
-    'ada@example.com',
+    null,
     '+905551112233',
     'Bu ilanla cok ilgileniyorum'
   );
@@ -158,7 +293,7 @@ begin
     or v_lead.listing_id <> 'eeee0001-0001-4001-8001-100000000001'::uuid
     or v_lead.status <> 'new'
   then
-    raise exception 'create_sale_lead RPC did not create expected lead';
+    raise exception 'authenticated create_sale_lead RPC did not create expected lead';
   end if;
 end;
 $$;
@@ -185,17 +320,72 @@ $$;
 do $$
 begin
   begin
-    insert into public.sale_leads (listing_id, user_id, contact_name, message)
-    values (
-      'eeee0001-0001-4001-8001-100000000002'::uuid,
-      'eeee0001-0001-4001-8001-000000000001'::uuid,
+    perform public.create_sale_lead(
+      'eeee0001-0001-4001-8001-100000000001'::uuid,
       'Ada User',
+      null,
+      null,
+      'Iletisim kanali olmayan satis leadi olmamali'
+    );
+
+    raise exception 'sale lead without email or phone unexpectedly succeeded';
+  exception
+    when check_violation then
+      raise notice 'sale lead without email or phone rejected as expected';
+  end;
+end;
+$$;
+
+do $$
+begin
+  begin
+    perform public.create_sale_lead(
+      'eeee0001-0001-4001-8001-100000000002'::uuid,
+      'Ada User',
+      'ada-rent@example.com',
+      null,
       'Bu kiralik ilan icin satis leadi olmamali'
     );
-    raise exception 'rent listing sale lead insert should fail';
+    raise exception 'rent listing sale lead RPC should fail';
   exception
-    when insufficient_privilege or check_violation or raise_exception then
-      raise notice 'rent listing sale lead insert rejected as expected';
+    when raise_exception then
+      raise notice 'rent listing sale lead RPC rejected as expected';
+  end;
+end;
+$$;
+
+do $$
+begin
+  begin
+    perform public.create_sale_lead(
+      'eeee0001-0001-4001-8001-100000000003'::uuid,
+      'Ada User',
+      'ada-inactive@example.com',
+      null,
+      'Pasif satis ilanina lead acilmamali'
+    );
+    raise exception 'inactive sale listing sale lead RPC should fail';
+  exception
+    when invalid_parameter_value then
+      raise notice 'inactive sale listing sale lead RPC rejected as expected';
+  end;
+end;
+$$;
+
+do $$
+begin
+  begin
+    perform public.create_sale_lead(
+      'eeee0001-0001-4001-8001-100000000004'::uuid,
+      'Ada User',
+      'ada-missing@example.com',
+      null,
+      'Olmayan ilana lead acilmamali'
+    );
+    raise exception 'missing sale listing sale lead RPC should fail';
+  exception
+    when no_data_found then
+      raise notice 'missing sale listing sale lead RPC rejected as expected';
   end;
 end;
 $$;
@@ -209,7 +399,7 @@ begin
   where user_id = 'eeee0001-0001-4001-8001-000000000001'::uuid;
 
   if v_count <> 1 then
-    raise exception 'owner should read exactly one own lead, found %', v_count;
+    raise exception 'owner should read exactly one own authenticated lead, found %', v_count;
   end if;
 end;
 $$;
@@ -222,10 +412,11 @@ declare
 begin
   select count(*) into v_count
   from public.sale_leads
-  where user_id = 'eeee0001-0001-4001-8001-000000000001'::uuid;
+  where user_id = 'eeee0001-0001-4001-8001-000000000001'::uuid
+     or user_id is null;
 
   if v_count <> 0 then
-    raise exception 'non-owner should not read other user lead, found %', v_count;
+    raise exception 'non-owner should not read owner or guest leads, found %', v_count;
   end if;
 end;
 $$;
@@ -235,17 +426,34 @@ select set_config('request.jwt.claim.sub', 'eeee0001-0001-4001-8001-000000000002
 do $$
 declare
   v_count integer;
+  v_guest_count integer;
+  v_auth_count integer;
   v_lead_id uuid;
 begin
   select count(*) into v_count
-  from public.sale_leads;
+  from public.sale_leads
+  where listing_id = 'eeee0001-0001-4001-8001-100000000001'::uuid;
+
+  select count(*) into v_guest_count
+  from public.sale_leads
+  where listing_id = 'eeee0001-0001-4001-8001-100000000001'::uuid
+    and user_id is null;
+
+  select count(*) into v_auth_count
+  from public.sale_leads
+  where listing_id = 'eeee0001-0001-4001-8001-100000000001'::uuid
+    and user_id = 'eeee0001-0001-4001-8001-000000000001'::uuid;
 
   select id into v_lead_id
   from public.sale_leads
+  where user_id = 'eeee0001-0001-4001-8001-000000000001'::uuid
   limit 1;
 
-  if v_count <> 1 then
-    raise exception 'admin should read one sale lead, found %', v_count;
+  if v_count <> 2 or v_guest_count <> 1 or v_auth_count <> 1 then
+    raise exception 'admin should read one guest and one authenticated lead, found total %, guest %, auth %',
+      v_count,
+      v_guest_count,
+      v_auth_count;
   end if;
 
   perform public.admin_update_sale_lead_status(v_lead_id, 'called', 'Telefon ile ulasildi');
@@ -269,7 +477,10 @@ do $$
 declare
   v_lead_id uuid;
 begin
-  select id into v_lead_id from public.sale_leads limit 1;
+  select id into v_lead_id
+  from public.sale_leads
+  where user_id = 'eeee0001-0001-4001-8001-000000000001'::uuid
+  limit 1;
 
   begin
     update public.sale_leads

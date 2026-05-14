@@ -161,6 +161,59 @@ test("admin workflow surfaces fail closed when profile lookup fails", async (t) 
   }
 });
 
+test("admin workflow surfaces reject unsupported request fields before RPC", async (t) => {
+  setupAdminWorkflowEnv(t);
+
+  const cases = [
+    {
+      name: "cancel",
+      request: createJsonRequest({
+        refundDecision: "manual_refund",
+        note: "customer withdrew by phone",
+        user_id: "55555555-5555-4555-8555-555555555555",
+      }),
+      handle: (request: Request) =>
+        handleAdminCancelReservationPost(
+          request,
+          createDependencies({ rpc: () => failRpc("cancel") }),
+          { reservationId: "11111111-1111-4111-8111-111111111111" },
+        ),
+    },
+    {
+      name: "confirm",
+      request: createJsonRequest({
+        note: "docs completed",
+        user_id: "55555555-5555-4555-8555-555555555555",
+      }),
+      handle: (request: Request) =>
+        handleAdminConfirmReservationPost(
+          request,
+          createDependencies({ rpc: () => failRpc("confirm") }),
+          { reservationId: "11111111-1111-4111-8111-111111111111" },
+        ),
+    },
+    {
+      name: "reopen",
+      request: createJsonRequest({
+        reason: "paperwork completed",
+        user_id: "55555555-5555-4555-8555-555555555555",
+      }),
+      handle: (request: Request) =>
+        handleAdminReopenListingPost(
+          request,
+          createDependencies({ rpc: () => failRpc("reopen") }),
+          { listingId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" },
+        ),
+    },
+  ];
+
+  for (const item of cases) {
+    const response = await item.handle(item.request);
+    assert.equal(response.status, 400, item.name);
+    assert.equal((await response.json()).error, "Unsupported admin workflow field: user_id", item.name);
+  }
+});
+
 test("admin workflow surfaces map SQLSTATE 22023 to invalid request without message coupling", async (t) => {
   setupAdminWorkflowEnv(t);
 
@@ -1419,6 +1472,10 @@ function createFailingDependencies(): AdminWorkflowRouteDependencies {
       throw new Error("Supabase client should not be created");
     },
   };
+}
+
+function failRpc(name: string): never {
+  throw new Error(`rpc should not run for ${name}`);
 }
 
 function createDependencies(options: {

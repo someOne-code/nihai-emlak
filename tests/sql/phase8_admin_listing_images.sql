@@ -12,6 +12,10 @@
 -- ----------------------------------------------------------------------------
 -- cleanup (idempotent)
 -- ----------------------------------------------------------------------------
+update public.listings
+set status = 'passive'::public.listing_status
+where id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid;
+
 delete from public.listing_images
 where id in (
   'eeeeeeee-ffff-4fff-8fff-fffffffff801'::uuid,
@@ -20,12 +24,61 @@ where id in (
 )
 or listing_id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid;
 
+delete from public.listings
+where id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid
+   or slug = 'phase-8-images-sale-passive';
+
+insert into public.listings (
+  id,
+  type,
+  status,
+  title,
+  slug,
+  city,
+  district,
+  price,
+  currency,
+  description,
+  room_count,
+  bathroom_count,
+  gross_area_m2
+)
+values (
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid,
+  'sale', 'passive',
+  'Phase 8 Images Sale Passive', 'phase-8-images-sale-passive',
+  'Istanbul', 'Kadikoy', 4500000, 'TRY',
+  'Satilik daire aciklamasi',
+  3,
+  2,
+  140
+);
+
 -- ----------------------------------------------------------------------------
 -- set admin context
 -- ----------------------------------------------------------------------------
 set role authenticated;
 select set_config('request.jwt.claim.sub', 'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb800', false);
 select set_config('request.jwt.claim.role', 'authenticated', false);
+
+-- ----------------------------------------------------------------------------
+-- 0) admin image RPCs remain authoritative after direct table DML is revoked
+-- ----------------------------------------------------------------------------
+do $$
+begin
+  if has_table_privilege('authenticated', 'public.listing_images', 'insert') then
+    raise exception 'authenticated role must not have direct listing_images INSERT privilege';
+  end if;
+
+  if not has_function_privilege(
+    'authenticated',
+    'public.admin_add_listing_image(uuid,text,text,boolean)',
+    'execute'
+  ) then
+    raise exception 'authenticated role must execute admin_add_listing_image RPC';
+  end if;
+end;
+$$;
 
 -- ----------------------------------------------------------------------------
 -- 1) admin_add_listing_image: happy path (non-primary)
@@ -57,13 +110,69 @@ end;
 $$;
 
 -- ----------------------------------------------------------------------------
+-- 1b) listing image records can preserve legacy image_url and store optimized variants
+-- ----------------------------------------------------------------------------
+reset role;
+do $$
+declare
+  v_image_id uuid;
+  v_image_url text;
+  v_card_image_url text;
+  v_detail_image_url text;
+  v_variant_metadata jsonb;
+begin
+  select id
+  into v_image_id
+  from public.listing_images
+  where listing_id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid
+    and image_url = 'https://example.com/image1.jpg'
+  limit 1;
+
+  update public.listing_images
+  set card_image_url = 'https://cdn.example.com/listings/card/image1.webp',
+      detail_image_url = 'https://cdn.example.com/listings/detail/image1.webp',
+      variant_metadata = jsonb_build_object(
+        'card', jsonb_build_object('width', 640, 'height', 480, 'format', 'webp'),
+        'detail', jsonb_build_object('width', 1600, 'height', 1200, 'format', 'webp')
+      )
+  where id = v_image_id;
+
+  select image_url, card_image_url, detail_image_url, variant_metadata
+  into v_image_url, v_card_image_url, v_detail_image_url, v_variant_metadata
+  from public.listing_images
+  where id = v_image_id;
+
+  if v_image_url <> 'https://example.com/image1.jpg' then
+    raise exception 'Legacy image_url fallback changed: %', v_image_url;
+  end if;
+
+  if v_card_image_url <> 'https://cdn.example.com/listings/card/image1.webp' then
+    raise exception 'Card variant URL mismatch: %', v_card_image_url;
+  end if;
+
+  if v_detail_image_url <> 'https://cdn.example.com/listings/detail/image1.webp' then
+    raise exception 'Detail variant URL mismatch: %', v_detail_image_url;
+  end if;
+
+  if v_variant_metadata #>> '{card,format}' <> 'webp'
+     or (v_variant_metadata #>> '{detail,width}')::integer <> 1600 then
+    raise exception 'Variant metadata mismatch: %', v_variant_metadata;
+  end if;
+end;
+$$;
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', 'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb800', false);
+select set_config('request.jwt.claim.role', 'authenticated', false);
+
+-- ----------------------------------------------------------------------------
 -- 2) admin_add_listing_image: add primary image (atomically demotes previous)
 -- ----------------------------------------------------------------------------
 do $$
 declare
   v_result jsonb;
   v_previous_primary_id uuid;
-  v_previous_is_primary boolean;
+  v_primary_count integer;
 begin
   -- First, add a primary image.
   v_result := public.admin_add_listing_image(
@@ -90,13 +199,13 @@ begin
   end if;
 
   -- Verify only one primary exists.
-  select count(*) into v_previous_is_primary
+  select count(*) into v_primary_count
   from public.listing_images
   where listing_id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid
     and is_primary = true;
 
-  if v_previous_is_primary::integer <> 1 then
-    raise exception 'There should be exactly 1 primary image, got %', v_previous_is_primary;
+  if v_primary_count <> 1 then
+    raise exception 'There should be exactly 1 primary image, got %', v_primary_count;
   end if;
 end;
 $$;
@@ -120,6 +229,39 @@ begin
         raise;
       end if;
   end;
+end;
+$$;
+
+-- ----------------------------------------------------------------------------
+-- 3b) admin_add_listing_image: rejects relative, malformed, and non-http URLs
+-- ----------------------------------------------------------------------------
+do $$
+declare
+  v_url text;
+begin
+  foreach v_url in array array[
+    '/relative/image.jpg',
+    'cdn.example.com/no-scheme.jpg',
+    'javascript:alert(1)',
+    'ftp://example.com/image.jpg',
+    'https://example.com/has space.jpg'
+  ]
+  loop
+    begin
+      perform public.admin_add_listing_image(
+        'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid,
+        v_url,
+        null,
+        false
+      );
+      raise exception 'Invalid image_url unexpectedly succeeded: %', v_url;
+    exception
+      when others then
+        if sqlstate <> '22023' then
+          raise;
+        end if;
+    end;
+  end loop;
 end;
 $$;
 
@@ -148,6 +290,13 @@ $$;
 -- ----------------------------------------------------------------------------
 -- 5) admin_reorder_listing_images: happy path
 -- ----------------------------------------------------------------------------
+reset role;
+delete from public.listing_images
+where listing_id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid;
+set role authenticated;
+select set_config('request.jwt.claim.sub', 'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb800', false);
+select set_config('request.jwt.claim.role', 'authenticated', false);
+
 do $$
 declare
   v_result jsonb;
@@ -155,10 +304,6 @@ declare
   v_img2_id uuid;
   v_img3_id uuid;
 begin
-  -- Clean up any existing images for this listing first.
-  delete from public.listing_images
-  where listing_id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid;
-
   -- Add three images.
   v_result := public.admin_add_listing_image(
     'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid,
@@ -257,16 +402,20 @@ $$;
 -- ----------------------------------------------------------------------------
 -- 8) admin_delete_listing_image: happy path
 -- ----------------------------------------------------------------------------
+reset role;
+delete from public.listing_images
+where listing_id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid;
+set role authenticated;
+select set_config('request.jwt.claim.sub', 'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb800', false);
+select set_config('request.jwt.claim.role', 'authenticated', false);
+
 do $$
 declare
   v_result jsonb;
   v_image_id uuid;
   v_count integer;
 begin
-  -- Clean up and add a fresh image.
-  delete from public.listing_images
-  where listing_id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid;
-
+  -- Add a fresh image.
   v_result := public.admin_add_listing_image(
     'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid,
     'https://example.com/to-delete.jpg',
@@ -293,6 +442,63 @@ begin
   if v_count <> 0 then
     raise exception 'Image should be deleted, but % rows remain', v_count;
   end if;
+end;
+$$;
+
+-- ----------------------------------------------------------------------------
+-- 8b) admin_delete_listing_image: active listings must keep at least one image
+-- ----------------------------------------------------------------------------
+reset role;
+delete from public.listing_images
+where listing_id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid;
+set role authenticated;
+select set_config('request.jwt.claim.sub', 'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb800', false);
+select set_config('request.jwt.claim.role', 'authenticated', false);
+
+do $$
+declare
+  v_result jsonb;
+  v_image_id uuid;
+begin
+  v_result := public.admin_add_listing_image(
+    'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid,
+    'https://example.com/active-only-image.jpg',
+    'Only active image',
+    true
+  );
+  v_image_id := (v_result ->> 'id')::uuid;
+
+  perform public.admin_set_listing_status(
+    'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid,
+    'active'::public.listing_status
+  );
+
+  begin
+    perform public.admin_delete_listing_image(
+      'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid,
+      v_image_id
+    );
+    raise exception 'Deleting the only image from an active listing unexpectedly succeeded';
+  exception
+    when insufficient_privilege then
+      null;
+    when sqlstate 'P0004' then
+      null;
+  end;
+
+  begin
+    delete from public.listing_images
+    where id = v_image_id;
+    raise exception 'Direct deletion of the only image from an active listing unexpectedly succeeded';
+  exception
+    when sqlstate '42501' then
+      null;
+  end;
+
+  perform public.admin_set_listing_status(
+    'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid,
+    'passive'::public.listing_status
+  );
 end;
 $$;
 

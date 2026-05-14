@@ -117,9 +117,7 @@ update public.profiles
 set role = 'admin'
 where id = '66666666-6666-4666-8666-666666666661'::uuid;
 
-set role authenticated;
-select set_config('request.jwt.claim.sub', '66666666-6666-4666-8666-666666666661', false);
-select set_config('request.jwt.claim.role', 'authenticated', false);
+reset role;
 
 insert into public.listings (
   id,
@@ -206,9 +204,7 @@ values
 	  4
 	);
 
-set role authenticated;
-select set_config('request.jwt.claim.sub', '66666666-6666-4666-8666-666666666661', false);
-select set_config('request.jwt.claim.role', 'authenticated', false);
+reset role;
 
 insert into public.listing_main_item_options (
   id,
@@ -287,9 +283,7 @@ values
 	  true
 	);
 
-set role authenticated;
-select set_config('request.jwt.claim.sub', '66666666-6666-4666-8666-666666666661', false);
-select set_config('request.jwt.claim.role', 'authenticated', false);
+reset role;
 
 insert into public.listing_service_options (
   id,
@@ -314,6 +308,8 @@ values
   true
 );
 
+set role authenticated;
+select set_config('request.jwt.claim.role', 'authenticated', false);
 select set_config('request.jwt.claim.sub', '66666666-6666-4666-8666-666666666662', false);
 
 -- TEST 1: fixed + listing multiplier + stay multiplier + service override produce authoritative quote

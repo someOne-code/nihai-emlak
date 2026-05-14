@@ -353,7 +353,7 @@ $$;
 reset role;
 
 -- ============================================================
--- TEST 9: Admin can INSERT payment_events (audit log)
+-- TEST 9: Admin cannot INSERT payment_events directly
 -- Scenario: Admin callback log eksikse, manuel bir event kaydı
 --           oluşturabilir (denetim izi).
 -- ============================================================
@@ -366,15 +366,31 @@ declare
   v_evt_id uuid := '77777777-ffff-ffff-ffff-ffffffffffff'::uuid;
   v_visible_count integer := 0;
   v_direct_read_blocked boolean := false;
+  v_direct_insert_blocked boolean := false;
 begin
-  insert into public.payment_events (id, payment_id, event_type, provider, payload)
-  values (
-    v_evt_id,
-    '55555555-eeee-eeee-eeee-eeeeeeeeeeee'::uuid,
-    'admin_manual_note',
-    'admin',
-    '{"note": "Manuel denetim girdisi"}'::jsonb
-  );
+  begin
+    insert into public.payment_events (id, payment_id, event_type, provider, payload)
+    values (
+      v_evt_id,
+      '55555555-eeee-eeee-eeee-eeeeeeeeeeee'::uuid,
+      'admin_manual_note',
+      'admin',
+      '{"note": "Manuel denetim girdisi"}'::jsonb
+    );
+  exception
+    when insufficient_privilege then
+      v_direct_insert_blocked := true;
+    when others then
+      if sqlstate = '42501' then
+        v_direct_insert_blocked := true;
+      else
+        raise;
+      end if;
+  end;
+
+  if not v_direct_insert_blocked then
+    raise exception 'Admin direct payment_events insert unexpectedly succeeded';
+  end if;
 
   begin
     select count(*) into v_visible_count
@@ -458,8 +474,8 @@ begin
   from public.payment_events
   where id = '77777777-ffff-ffff-ffff-ffffffffffff'::uuid;
 
-  if v_count <> 1 then
-    raise exception 'Admin payment_event insert should persist, got %', v_count;
+  if v_count <> 0 then
+    raise exception 'Admin direct payment_event insert should not persist, got %', v_count;
   end if;
 
   select count(*) into v_count

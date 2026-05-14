@@ -11,8 +11,10 @@ import {
   fetchAdminListingSnapshot,
   fetchAdminListingsList,
   reorderAdminListingImages,
+  resolveListingImageUploadUrl,
   setAdminListingStatus,
   updateAdminListing,
+  uploadListingImage,
 } from "../lib/admin-ui/listings-client.ts";
 
 const LISTING_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -25,6 +27,7 @@ type Capture = {
   body: unknown;
   credentials: RequestCredentials | undefined;
   cache: RequestCache | undefined;
+  signal: AbortSignal | null | undefined;
 };
 
 function recordingFetcher(responder: (input: Capture) => Response): {
@@ -40,12 +43,31 @@ function recordingFetcher(responder: (input: Capture) => Response): {
       body: init?.body ? safeJsonParse(String(init.body)) : null,
       credentials: init?.credentials,
       cache: init?.cache,
+      signal: init?.signal,
     };
     calls.push(capture);
     return responder(capture);
   };
 
   return { fetcher, calls };
+}
+
+function abortAwareFetcher(): (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> {
+  return async (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const signal = init?.signal;
+    assert.ok(signal instanceof AbortSignal);
+    return await new Promise<Response>((_resolve, reject) => {
+      if (signal.aborted) {
+        reject(new DOMException("Aborted", "AbortError"));
+        return;
+      }
+      signal.addEventListener(
+        "abort",
+        () => reject(new DOMException("Aborted", "AbortError")),
+        { once: true },
+      );
+    });
+  };
 }
 
 function jsonResponse(payload: unknown, status = 200): Response {
@@ -176,6 +198,102 @@ test("addAdminListingImage POSTs to the images sub-resource", async () => {
   });
 });
 
+test("uploadListingImage preserves optimized variant metadata from the upload response", async () => {
+  const variants = {
+    detail: {
+      url: "https://storage.example.com/content-media/listing-images/detail.webp",
+      path: "listing-images/detail.webp",
+      width: 1600,
+      height: 1200,
+      contentType: "image/webp",
+    },
+    thumbnail: {
+      url: "https://storage.example.com/content-media/listing-images/thumb.webp",
+      path: "listing-images/thumb.webp",
+      width: 480,
+      height: 360,
+      contentType: "image/webp",
+    },
+  };
+
+  const result = await uploadListingImage(
+    new File(["png-data"], "listing.png", { type: "image/png" }),
+    {
+      fetcher: async () =>
+        jsonResponse({
+          success: true,
+          data: {
+            url: "https://storage.example.com/content-media/listing-images/original.png",
+            path: "listing-images/original.png",
+            bucket: "content-media",
+            variants,
+          },
+        }),
+    },
+  );
+
+  assert.equal(result.url, "https://storage.example.com/content-media/listing-images/original.png");
+  assert.deepEqual(result.variants, variants);
+});
+
+test("resolveListingImageUploadUrl chooses canonical detail variant before legacy url", () => {
+  assert.equal(
+    resolveListingImageUploadUrl({
+      url: "https://storage.example.com/content-media/listing-images/original.png",
+      path: "listing-images/original.png",
+      bucket: "content-media",
+      variants: {
+        detail: {
+          url: "https://storage.example.com/content-media/listing-images/detail.webp",
+        },
+      },
+    }),
+    "https://storage.example.com/content-media/listing-images/detail.webp",
+  );
+
+  assert.equal(
+    resolveListingImageUploadUrl({
+      url: "https://storage.example.com/content-media/listing-images/original.png",
+      path: "listing-images/original.png",
+      bucket: "content-media",
+      variants: {
+        canonical: {
+          url: "https://storage.example.com/content-media/listing-images/canonical.webp",
+        },
+        detail: {
+          url: "https://storage.example.com/content-media/listing-images/detail.webp",
+        },
+      },
+    }),
+    "https://storage.example.com/content-media/listing-images/canonical.webp",
+  );
+
+  assert.equal(
+    resolveListingImageUploadUrl({
+      url: "https://storage.example.com/content-media/listing-images/original.png",
+      path: "listing-images/original.png",
+      bucket: "content-media",
+    }),
+    "https://storage.example.com/content-media/listing-images/original.png",
+  );
+});
+
+test("resolveListingImageUploadUrl falls back to optimized card variant before legacy url", () => {
+  assert.equal(
+    resolveListingImageUploadUrl({
+      url: "https://storage.example.com/content-media/listing-images/original.png",
+      path: "listing-images/original.png",
+      bucket: "content-media",
+      variants: {
+        card: {
+          url: "https://storage.example.com/content-media/listing-images/card.webp",
+        },
+      },
+    }),
+    "https://storage.example.com/content-media/listing-images/card.webp",
+  );
+});
+
 test("reorderAdminListingImages PATCHes the order endpoint with id list", async () => {
   const { fetcher, calls } = recordingFetcher(() =>
     jsonResponse({ success: true, data: [IMAGE_ID] }),
@@ -281,6 +399,22 @@ test("admin listings client treats non-JSON responses as invalid envelope", asyn
     (err: unknown) => {
       assert.ok(err instanceof AdminListingsClientError);
       assert.equal(err.message, "Invalid admin listings response");
+      return true;
+    },
+  );
+});
+
+test("admin listings client aborts timed out requests with typed timeout error", async () => {
+  await assert.rejects(
+    () =>
+      fetchAdminListingSnapshot(LISTING_ID, {
+        fetcher: abortAwareFetcher(),
+        requestTimeoutMs: 1,
+      }),
+    (err: unknown) => {
+      assert.ok(err instanceof AdminListingsClientError);
+      assert.equal(err.status, 408);
+      assert.match(err.message, /zaman aşımına uğradı/i);
       return true;
     },
   );

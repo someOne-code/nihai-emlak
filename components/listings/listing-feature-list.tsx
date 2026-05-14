@@ -1,21 +1,13 @@
-import { getListingBadgeLabel } from "@/lib/mappers/listing.mapper";
-import type { ApiListingListItem } from "@/types/listing";
+import { getListingDetailFeatureRows } from "@/lib/mappers/listing.mapper";
+import type { ApiListingDetail } from "@/types/listing";
 import { Check } from "lucide-react";
 
 export function ListingFeatureList({
   listing,
 }: {
-  listing: ApiListingListItem;
+  listing: ApiListingDetail;
 }) {
-  const features = [
-    { label: "İlan Tipi", value: getListingBadgeLabel(listing) },
-    { label: "Şehir", value: listing.city || "Belirtilmemiş" },
-    { label: "İlçe", value: listing.district || "Belirtilmemiş" },
-    { label: "Oda Sayısı", value: typeof listing.room_count === "number" ? listing.room_count : "Belirtilmemiş" },
-    { label: "Banyo Sayısı", value: typeof listing.bathroom_count === "number" ? listing.bathroom_count : "Belirtilmemiş" },
-    { label: "Brüt Alan", value: listing.gross_area_m2 ? `${listing.gross_area_m2} m²` : "Belirtilmemiş" },
-    { label: "Eşyalı", value: listing.is_furnished ? "Evet" : "Hayır" },
-  ];
+  const features = getListingDetailFeatureRows(listing);
 
   return (
     <div className="grid gap-y-4 gap-x-8 sm:grid-cols-2 md:grid-cols-3">

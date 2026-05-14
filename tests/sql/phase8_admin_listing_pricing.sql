@@ -213,14 +213,19 @@ $$;
 -- ----------------------------------------------------------------------------
 -- 6b) admin_configure_listing_main_item: missing row without is_enabled defaults true
 -- ----------------------------------------------------------------------------
+reset role;
+delete from public.listing_main_item_options
+where listing_id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid
+  and main_item_id = 'bbbbbbbb-cccc-4ccc-8ccc-ccccccccc801'::uuid;
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', 'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb800', false);
+select set_config('request.jwt.claim.role', 'authenticated', false);
+
 do $$
 declare
   v_result jsonb;
 begin
-  delete from public.listing_main_item_options
-  where listing_id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid
-    and main_item_id = 'bbbbbbbb-cccc-4ccc-8ccc-ccccccccc801'::uuid;
-
   v_result := public.admin_configure_listing_main_item(
     'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid,
     'phase8_main',
@@ -385,14 +390,19 @@ $$;
 -- ----------------------------------------------------------------------------
 -- 12b) admin_configure_listing_service: missing row without is_enabled defaults true
 -- ----------------------------------------------------------------------------
+reset role;
+delete from public.listing_service_options
+where listing_id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid
+  and service_id = 'dddddddd-eeee-4eee-8eee-eeeeeeeee801'::uuid;
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', 'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb800', false);
+select set_config('request.jwt.claim.role', 'authenticated', false);
+
 do $$
 declare
   v_result jsonb;
 begin
-  delete from public.listing_service_options
-  where listing_id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid
-    and service_id = 'dddddddd-eeee-4eee-8eee-eeeeeeeee801'::uuid;
-
   v_result := public.admin_configure_listing_service(
     'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid,
     'phase8_service',
@@ -474,14 +484,18 @@ $$;
 -- ----------------------------------------------------------------------------
 -- 14b) admin_configure_listing_service: rejects when no enabled main item (P0004)
 -- ----------------------------------------------------------------------------
+reset role;
+delete from public.listing_service_options
+where listing_id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid;
+delete from public.listing_main_item_options
+where listing_id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid;
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', 'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb800', false);
+select set_config('request.jwt.claim.role', 'authenticated', false);
+
 do $$
 begin
-  -- Temporarily remove the main item to verify the service guard.
-  delete from public.listing_service_options
-  where listing_id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid;
-  delete from public.listing_main_item_options
-  where listing_id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid;
-
   begin
     perform public.admin_configure_listing_service(
       'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid,
@@ -506,14 +520,18 @@ $$;
 -- ----------------------------------------------------------------------------
 -- 14c) admin_listing_is_checkout_ready: true with main item only (no service needed)
 -- ----------------------------------------------------------------------------
+reset role;
+delete from public.listing_service_options
+where listing_id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid;
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', 'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb800', false);
+select set_config('request.jwt.claim.role', 'authenticated', false);
+
 do $$
 declare
   v_ready boolean;
 begin
-  -- Ensure main item exists but no service options.
-  delete from public.listing_service_options
-  where listing_id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid;
-
   v_ready := public.admin_listing_is_checkout_ready(
     'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid
   );
@@ -527,13 +545,18 @@ $$;
 -- ----------------------------------------------------------------------------
 -- 14d) admin_listing_is_checkout_ready: false without main item
 -- ----------------------------------------------------------------------------
+reset role;
+delete from public.listing_main_item_options
+where listing_id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid;
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', 'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb800', false);
+select set_config('request.jwt.claim.role', 'authenticated', false);
+
 do $$
 declare
   v_ready boolean;
 begin
-  delete from public.listing_main_item_options
-  where listing_id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid;
-
   v_ready := public.admin_listing_is_checkout_ready(
     'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid
   );

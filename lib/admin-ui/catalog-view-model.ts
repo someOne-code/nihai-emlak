@@ -118,6 +118,14 @@ export function buildAdminCatalogMainItemRow(raw: Record<string, unknown>): Admi
   };
 }
 
+export function upsertAdminCatalogMainItemRow(
+  rows: AdminCatalogMainItemRow[],
+  raw: unknown,
+): AdminCatalogMainItemRow[] {
+  const nextRow = buildAdminCatalogMainItemRow(isRecord(raw) ? raw : {});
+  return upsertByIdentity(rows, nextRow).sort(compareMainItems);
+}
+
 export function buildAdminCatalogServiceRow(raw: Record<string, unknown>): AdminCatalogServiceRow {
   const isActive = asBoolean(raw.is_active);
   const basePrice = asNumber(raw.base_price);
@@ -136,9 +144,55 @@ export function buildAdminCatalogServiceRow(raw: Record<string, unknown>): Admin
   };
 }
 
+export function upsertAdminCatalogServiceRow(
+  rows: AdminCatalogServiceRow[],
+  raw: unknown,
+): AdminCatalogServiceRow[] {
+  const nextRow = buildAdminCatalogServiceRow(isRecord(raw) ? raw : {});
+  return upsertByIdentity(rows, nextRow).sort(compareServices);
+}
+
 // ---------------------------------------------------------------------------
 // Private helpers
 // ---------------------------------------------------------------------------
+
+function upsertByIdentity<T extends { id: string; code: string }>(
+  rows: T[],
+  nextRow: T,
+): T[] {
+  let replaced = false;
+  const nextRows = rows.map((row) => {
+    if (row.id === nextRow.id || row.code === nextRow.code) {
+      replaced = true;
+      return nextRow;
+    }
+    return row;
+  });
+
+  if (!replaced) {
+    nextRows.push(nextRow);
+  }
+
+  return nextRows;
+}
+
+function compareMainItems(
+  left: AdminCatalogMainItemRow,
+  right: AdminCatalogMainItemRow,
+): number {
+  const orderDiff = left.sortOrder - right.sortOrder;
+  if (orderDiff !== 0) {
+    return orderDiff;
+  }
+  return left.code.localeCompare(right.code);
+}
+
+function compareServices(
+  left: AdminCatalogServiceRow,
+  right: AdminCatalogServiceRow,
+): number {
+  return left.code.localeCompare(right.code);
+}
 
 function formatNumberLabel(prefix: string, value: number | null): string {
   if (value === null || !Number.isFinite(value)) {
@@ -163,4 +217,8 @@ function asNumber(value: unknown): number | null {
 
 function asBoolean(value: unknown): boolean {
   return value === true;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

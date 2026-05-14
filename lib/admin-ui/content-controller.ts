@@ -150,3 +150,94 @@ export async function loadContentDetailModel(
 
   return null;
 }
+
+export type ContentMutationRefreshResult =
+  | { type: "post"; model: PostsListViewModel; detail: PostDetail | null }
+  | { type: "category"; model: CategoriesListViewModel; detail: CategoryDetail | null }
+  | { type: "consultant"; model: ConsultantsListViewModel; detail: ConsultantDetail | null };
+
+export function refreshContentModelAfterMutation(
+  collection: "posts",
+  currentModel: PostsListViewModel,
+  mutationDocument: unknown,
+): Extract<ContentMutationRefreshResult, { type: "post" }>;
+export function refreshContentModelAfterMutation(
+  collection: "categories",
+  currentModel: CategoriesListViewModel,
+  mutationDocument: unknown,
+): Extract<ContentMutationRefreshResult, { type: "category" }>;
+export function refreshContentModelAfterMutation(
+  collection: "consultants",
+  currentModel: ConsultantsListViewModel,
+  mutationDocument: unknown,
+): Extract<ContentMutationRefreshResult, { type: "consultant" }>;
+export function refreshContentModelAfterMutation(
+  collection: "posts" | "categories" | "consultants",
+  currentModel: PostsListViewModel | CategoriesListViewModel | ConsultantsListViewModel,
+  mutationDocument: unknown,
+): ContentMutationRefreshResult {
+  if (collection === "posts") {
+    const detail = buildPostDetail(mutationDocument);
+    return {
+      type: "post",
+      model: replaceContentRow(
+        currentModel as PostsListViewModel,
+        detail?.id ?? null,
+        buildPostsListViewModel({ items: detail ? [mutationDocument] : [] }).rows[0],
+      ),
+      detail,
+    };
+  }
+
+  if (collection === "categories") {
+    const detail = buildCategoryDetail(mutationDocument);
+    return {
+      type: "category",
+      model: replaceContentRow(
+        currentModel as CategoriesListViewModel,
+        detail?.id ?? null,
+        buildCategoriesListViewModel({ items: detail ? [mutationDocument] : [] }).rows[0],
+      ),
+      detail,
+    };
+  }
+
+  const detail = buildConsultantDetail(mutationDocument);
+  return {
+    type: "consultant",
+    model: replaceContentRow(
+      currentModel as ConsultantsListViewModel,
+      detail?.id ?? null,
+      buildConsultantsListViewModel({ items: detail ? [mutationDocument] : [] }).rows[0],
+    ),
+    detail,
+  };
+}
+
+function replaceContentRow<
+  TModel extends { rows: Array<{ id: string }>; isEmpty: boolean },
+  TRow extends { id: string },
+>(model: TModel, id: string | null, replacement: TRow | undefined): TModel {
+  if (!id || !replacement) {
+    return model;
+  }
+
+  let replaced = false;
+  const rows = model.rows.map((row) => {
+    if (row.id !== id) {
+      return row;
+    }
+    replaced = true;
+    return replacement;
+  });
+
+  if (!replaced) {
+    return model;
+  }
+
+  return {
+    ...model,
+    rows,
+    isEmpty: rows.length === 0,
+  };
+}

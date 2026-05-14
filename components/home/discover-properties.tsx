@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 const propertyCategories = [
@@ -63,11 +64,12 @@ export function DiscoverProperties() {
               data-aos-delay={index * 100}
             >
               <span className="mb-6 flex h-[85px] w-[85px] items-center justify-center rounded-lg border-2 border-property bg-property-surface p-4 transition duration-500 group-hover:-translate-y-1 dark:border-[#224767]">
-                <img
+                <Image
                   src={category.image}
                   alt={`${category.label} kategorisi`}
                   width={52}
                   height={52}
+                  unoptimized
                 />
               </span>
               <span className="mb-1 block text-[22px] font-semibold leading-[1.2] text-property-midnight/80 transition group-hover:text-property-midnight dark:text-white/70 dark:group-hover:text-white">

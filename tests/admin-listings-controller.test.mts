@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   loadAdminListingsModel,
+  refreshAdminListingsModelAfterMutation,
   selectAdminListing,
 } from "../lib/admin-ui/listings-controller.ts";
 
@@ -50,6 +51,17 @@ function makeSnapshot(id: string) {
       currency: "TRY",
       room_count: null,
       bathroom_count: null,
+      heating_type: null,
+      fuel_type: null,
+      balcony_count: null,
+      has_elevator: null,
+      parking_type: null,
+      in_site: null,
+      building_age: null,
+      floor_count: null,
+      floor_number: null,
+      usage_status: null,
+      facade: null,
       gross_area_m2: null,
       is_furnished: false,
       created_at: null,
@@ -232,4 +244,59 @@ test("selectAdminListing returns null detail when listing id is not in list", as
 
   assert.equal(model.selectedListingId, LISTING_ID);
   assert.equal(model.detail, null);
+});
+
+test("refreshAdminListingsModelAfterMutation reuses mutation snapshot instead of refetching detail", async () => {
+  const calls: string[] = [];
+  const result = await refreshAdminListingsModelAfterMutation(
+    {
+      fetchAdminListingsList: async () => {
+        calls.push("list");
+        return makeList([{ id: LISTING_ID }]);
+      },
+      fetchAdminListingSnapshot: async (listingId: string) => {
+        calls.push(`snapshot:${listingId}`);
+        return makeSnapshot(listingId);
+      },
+    },
+    {
+      selectedListingId: LISTING_ID,
+      mutationSnapshot: makeSnapshot(LISTING_ID),
+    },
+  );
+
+  assert.deepEqual(calls, ["list"]);
+  assert.equal(result.model.selectedListingId, LISTING_ID);
+  assert.ok(result.model.detail);
+  assert.equal(result.model.detail.listing.id, LISTING_ID);
+  assert.equal(result.list.items.length, 1);
+});
+
+test("refreshAdminListingsModelAfterMutation can reuse cached list for same-listing snapshot", async () => {
+  const cachedList = makeList([{ id: LISTING_ID, title: "Eski baslik" }]);
+  const snapshot = makeSnapshot(LISTING_ID);
+  snapshot.listing.title = "Yeni baslik";
+  const calls: string[] = [];
+
+  const result = await refreshAdminListingsModelAfterMutation(
+    {
+      fetchAdminListingsList: async () => {
+        calls.push("list");
+        return makeList([{ id: LISTING_ID }]);
+      },
+      fetchAdminListingSnapshot: async (listingId: string) => {
+        calls.push(`snapshot:${listingId}`);
+        return makeSnapshot(listingId);
+      },
+    },
+    {
+      selectedListingId: LISTING_ID,
+      cachedList,
+      mutationSnapshot: snapshot,
+    },
+  );
+
+  assert.deepEqual(calls, []);
+  assert.equal(result.model.rows[0].title, "Yeni baslik");
+  assert.equal(result.model.detail?.listing.title, "Yeni baslik");
 });

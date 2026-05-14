@@ -18,6 +18,18 @@ test("CONSULTANTS_EMPTY_TEXT must be non-empty Turkish copy", async () => {
   assert.ok(CONSULTANTS_EMPTY_TEXT.length > 0, "must be non-empty");
 });
 
+test("consultant mutation refresh captures a non-null detail id before deferred detail reload", () => {
+  const source = readFileSync(
+    resolve(import.meta.dirname, "..", "components", "admin-consultants", "AdminConsultantsView.tsx"),
+    "utf-8",
+  );
+
+  assert.match(
+    source,
+    /if \(consultantId\) \{\s+const selectedConsultantId = consultantId;\s+await refreshContentViews\(\[\s+\(\) => loadList\(\),\s+\(\) => loadConsultantDetail\(selectedConsultantId\),\s+\]\);/s,
+  );
+});
+
 test("CONSULTANTS_FILTERED_EMPTY_TEXT must be non-empty", async () => {
   const { CONSULTANTS_FILTERED_EMPTY_TEXT } = await import(
     "../lib/admin-ui/content-consultants-ui-helpers.ts"

@@ -10,14 +10,15 @@ import {
 
 test("db security runner prefers the exact Supabase DB container name", () => {
   const container = resolveSupabaseDbContainerName({
+    projectId: "nihaiEmlak_1775004324",
     repoRoot: "C:\\Users\\umut\\MetaGPT\\workspace\\nihaiEmlak_windows_canonical",
     names: [
       "supabase_db_other_project",
-      "supabase_db_nihaiEmlak_windows_canonical",
+      "supabase_db_nihaiEmlak_1775004324",
     ],
   });
 
-  assert.equal(container, "supabase_db_nihaiEmlak_windows_canonical");
+  assert.equal(container, "supabase_db_nihaiEmlak_1775004324");
 });
 
 test("db security runner fails closed when the exact Supabase DB container is missing", () => {

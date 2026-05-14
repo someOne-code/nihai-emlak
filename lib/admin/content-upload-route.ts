@@ -45,7 +45,7 @@ type StoragePublicUrlResult = {
 type StorageFromBucket = {
   upload: (
     path: string,
-    file: Blob | ArrayBuffer,
+    file: Blob | ArrayBuffer | Uint8Array,
     options?: { contentType?: string; upsert?: boolean },
   ) => Promise<StorageUploadResult>;
   getPublicUrl: (path: string) => StoragePublicUrlResult;
@@ -73,11 +73,30 @@ type SupabaseClientWithStorage = {
   };
 };
 
+type ListingImageVariantName = "card" | "detail";
+
+type ListingImageVariantOutput = {
+  data: ArrayBuffer | Uint8Array;
+  width: number;
+  height: number;
+  mimeType: "image/webp";
+  format: "webp";
+};
+
+type ListingImageVariantProcessor = (
+  input: ArrayBuffer,
+  sourceMimeType: string,
+) => Promise<Record<ListingImageVariantName, ListingImageVariantOutput>>;
+
+type ContentUploadRouteDependencies = ContentAdminRouteDependencies & {
+  processListingImageVariants?: ListingImageVariantProcessor;
+};
+
 // ── Shared route handler ────────────────────────────────────────────────────
 
 async function handleContentImageUpload(
   request: Request,
-  dependencies: ContentAdminRouteDependencies,
+  dependencies: ContentUploadRouteDependencies,
   storagePathPrefix: string,
 ): Promise<Response> {
   const originCheck = validateContentAdminOrigin(request);
@@ -150,39 +169,34 @@ async function handleContentImageUpload(
     return jsonError("Dosya okunamadı.", 400);
   }
 
-  const STORAGE_TIMEOUT_MS = 15_000;
-  const uploadResult = await Promise.race([
-    bucket.upload(storagePath, fileBuffer, {
-      contentType: mimeType,
-      upsert: false,
-    }),
-    new Promise<{ error: { message: string } }>((resolve) =>
-      setTimeout(() => resolve({ error: { message: "Storage upload timed out" } }), STORAGE_TIMEOUT_MS),
-    ),
-  ]);
+  const uploadResult = await uploadStorageObjectWithTimeout(
+    bucket,
+    storagePath,
+    fileBuffer,
+    mimeType,
+  );
 
   if (uploadResult.error) {
-    // Do NOT leak raw Supabase error to client
-    const msg = uploadResult.error.message ?? "";
-    console.error("[content-upload] Storage upload error:", msg);
-
-    // Provide a more specific hint if bucket is missing
-    const isBucketError =
-      msg.toLowerCase().includes("bucket") ||
-      msg.toLowerCase().includes("not found") ||
-      msg.toLowerCase().includes("does not exist");
-    if (isBucketError) {
-      console.error(
-        `[content-upload] Bucket "${CONTENT_MEDIA_BUCKET}" may not exist. ` +
-        `Create it in Supabase Dashboard or run "supabase db reset" for local dev.`,
-      );
-    }
-
+    logStorageUploadError(uploadResult.error.message);
     return jsonError("Görsel yüklenirken bir hata oluştu. Lütfen tekrar deneyin.", 500);
   }
 
   // 7. Get public URL
   const { data: publicUrlData } = bucket.getPublicUrl(storagePath);
+
+  const variantData = storagePathPrefix === "listing-images"
+    ? await uploadListingImageVariants({
+        bucket,
+        originalPath: storagePath,
+        originalBuffer: fileBuffer,
+        sourceMimeType: mimeType,
+        processor: dependencies.processListingImageVariants ?? processListingImageVariants,
+      })
+    : null;
+
+  if (variantData && !variantData.ok) {
+    return jsonError("Görsel yüklenirken bir hata oluştu. Lütfen tekrar deneyin.", 500);
+  }
 
   return jsonResponse(
     {
@@ -191,6 +205,7 @@ async function handleContentImageUpload(
         url: publicUrlData.publicUrl,
         path: storagePath,
         bucket: CONTENT_MEDIA_BUCKET,
+        ...(variantData?.ok ? { variants: variantData.variants } : {}),
       },
     },
     200,
@@ -198,6 +213,126 @@ async function handleContentImageUpload(
 }
 
 // ── Public handlers ─────────────────────────────────────────────────────────
+
+async function uploadStorageObjectWithTimeout(
+  bucket: StorageFromBucket,
+  path: string,
+  body: Blob | ArrayBuffer | Uint8Array,
+  contentType: string,
+): Promise<StorageUploadResult> {
+  const STORAGE_TIMEOUT_MS = 15_000;
+  return Promise.race([
+    bucket.upload(path, body, {
+      contentType,
+      upsert: false,
+    }),
+    new Promise<{ error: { message: string } }>((resolve) =>
+      setTimeout(() => resolve({ error: { message: "Storage upload timed out" } }), STORAGE_TIMEOUT_MS),
+    ),
+  ]);
+}
+
+function logStorageUploadError(message: string | undefined): void {
+  // Do NOT leak raw Supabase error to client.
+  const msg = message ?? "";
+  console.error("[content-upload] Storage upload error:", msg);
+
+  const isBucketError =
+    msg.toLowerCase().includes("bucket") ||
+    msg.toLowerCase().includes("not found") ||
+    msg.toLowerCase().includes("does not exist");
+  if (isBucketError) {
+    console.error(
+      `[content-upload] Bucket "${CONTENT_MEDIA_BUCKET}" may not exist. ` +
+      `Create it in Supabase Dashboard or run "supabase db reset" for local dev.`,
+    );
+  }
+}
+
+async function uploadListingImageVariants(input: {
+  bucket: StorageFromBucket;
+  originalPath: string;
+  originalBuffer: ArrayBuffer;
+  sourceMimeType: string;
+  processor: ListingImageVariantProcessor;
+}): Promise<
+  | { ok: true; variants: Record<ListingImageVariantName, Record<string, string | number>> }
+  | { ok: false }
+> {
+  let processed: Record<ListingImageVariantName, ListingImageVariantOutput>;
+  try {
+    processed = await input.processor(input.originalBuffer, input.sourceMimeType);
+  } catch (error) {
+    console.error("[content-upload] Listing image variant processing error:", error);
+    return { ok: false };
+  }
+
+  const variants = {} as Record<ListingImageVariantName, Record<string, string | number>>;
+  for (const name of ["card", "detail"] as const) {
+    const variant = processed[name];
+    const variantPath = buildListingVariantPath(input.originalPath, name);
+    const uploadResult = await uploadStorageObjectWithTimeout(
+      input.bucket,
+      variantPath,
+      variant.data,
+      variant.mimeType,
+    );
+
+    if (uploadResult.error) {
+      logStorageUploadError(uploadResult.error.message);
+      return { ok: false };
+    }
+
+    const { data: publicUrlData } = input.bucket.getPublicUrl(variantPath);
+    variants[name] = {
+      url: publicUrlData.publicUrl,
+      path: variantPath,
+      bucket: CONTENT_MEDIA_BUCKET,
+      role: name,
+      width: variant.width,
+      height: variant.height,
+      mimeType: variant.mimeType,
+      format: variant.format,
+    };
+  }
+
+  return { ok: true, variants };
+}
+
+function buildListingVariantPath(originalPath: string, variantName: ListingImageVariantName): string {
+  const extensionStart = originalPath.lastIndexOf(".");
+  const basePath = extensionStart > originalPath.lastIndexOf("/")
+    ? originalPath.slice(0, extensionStart)
+    : originalPath;
+  return `${basePath}-${variantName}.webp`;
+}
+
+async function processListingImageVariants(
+  input: ArrayBuffer,
+): Promise<Record<ListingImageVariantName, ListingImageVariantOutput>> {
+  const sharp = (await import("sharp")).default;
+
+  async function buildVariant(width: number, quality: number): Promise<ListingImageVariantOutput> {
+    const { data, info } = await sharp(Buffer.from(input))
+      .rotate()
+      .resize({ width, withoutEnlargement: true })
+      .webp({ quality })
+      .toBuffer({ resolveWithObject: true });
+
+    return {
+      data,
+      width: info.width,
+      height: info.height,
+      mimeType: "image/webp",
+      format: "webp",
+    };
+  }
+
+  return {
+    card: await buildVariant(480, 82),
+    detail: await buildVariant(1280, 84),
+  };
+}
 
 function validateUploadContentLengthEnvelope(
   request: Request,
@@ -248,21 +383,21 @@ function validateUploadContentTypeEnvelope(
 
 export async function handleBlogCoverUpload(
   request: Request,
-  dependencies: ContentAdminRouteDependencies,
+  dependencies: ContentUploadRouteDependencies,
 ): Promise<Response> {
   return handleContentImageUpload(request, dependencies, "blog-covers");
 }
 
 export async function handleConsultantPhotoUpload(
   request: Request,
-  dependencies: ContentAdminRouteDependencies,
+  dependencies: ContentUploadRouteDependencies,
 ): Promise<Response> {
   return handleContentImageUpload(request, dependencies, "consultants/photos");
 }
 
 export async function handleListingImageUpload(
   request: Request,
-  dependencies: ContentAdminRouteDependencies,
+  dependencies: ContentUploadRouteDependencies,
 ): Promise<Response> {
   return handleContentImageUpload(request, dependencies, "listing-images");
 }

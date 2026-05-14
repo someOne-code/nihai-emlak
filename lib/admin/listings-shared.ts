@@ -207,7 +207,7 @@ function translateP0004(raw: string | null): string {
     return `Yayına alınamıyor: eksik alanlar — ${labels.join(", ")}`;
   }
 
-  return raw;
+  return "İlan yayına alınamıyor";
 }
 
 function isUuid(value: string): boolean {

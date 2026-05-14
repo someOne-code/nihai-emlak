@@ -8,7 +8,7 @@ export type SaleLeadStatus =
 export type RawSaleLead = {
   id: string;
   listing_id: string;
-  user_id: string;
+  user_id: string | null;
   contact_name: string | null;
   contact_email: string | null;
   contact_phone: string | null;
@@ -34,7 +34,7 @@ export type RawSaleLead = {
 export type SaleLeadsOverviewRow = {
   leadId: string;
   listingId: string;
-  userId: string;
+  userId: string | null;
   listingTitle: string;
   locationLabel: string | null;
   contactName: string | null;
@@ -95,7 +95,7 @@ function buildOverviewRow(raw: RawSaleLead): SaleLeadsOverviewRow {
   return {
     leadId: raw.id,
     listingId: raw.listing_id,
-    userId: raw.user_id,
+    userId: raw.user_id ?? null,
     listingTitle: nonEmptyString(raw.listings?.title) ?? "Bilinmeyen Ilan",
     locationLabel: locationParts.length > 0 ? locationParts.join(" / ") : "Konum yok",
     contactName: nonEmptyString(raw.contact_name) ?? nonEmptyString(raw.profiles?.full_name),

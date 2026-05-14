@@ -23,6 +23,7 @@ import {
   shouldStartInitialLoad,
 } from "@/lib/admin-ui/initial-load-guard";
 import {
+  applySaleLeadStatusMutation,
   loadSaleLeadsModel,
   updateSaleLeadStatusFromController,
 } from "@/lib/admin-ui/sale-leads-controller";
@@ -137,9 +138,11 @@ export default function SaleLeadsView() {
         return;
       }
 
-      await loadData();
+      setRows((current) =>
+        applySaleLeadStatusMutation(current, result.lead, status),
+      );
     },
-    [loadData],
+    [],
   );
 
   const filteredRows = useMemo(

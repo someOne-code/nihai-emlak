@@ -73,6 +73,38 @@ RPC args:
 
 - `p_listing_id`
 
+Detail response includes the public list shape plus:
+
+- `description`
+- `heating_type`
+- `fuel_type`
+- `balcony_count`
+- `has_elevator`
+- `parking_type`
+- `in_site`
+- `building_age`
+- `floor_count`
+- `floor_number`
+- `usage_status`
+- `facade`
+- `images`
+- `updated_at`
+
+## Public Listing Image Performance Budget
+
+This is a lightweight CI-cheap contract for the image-heavy customer UX on
+`/listings` and `/listings/:listingId`; the meaningful content target is under 2 seconds on a normal production connection.
+
+- Public listing cards and detail galleries use `next/image` with explicit
+  `sizes` so Next.js can serve optimized variants instead of full originals.
+- Listing image read models may expose optimized variants such as card/detail
+  URLs; public consumers fall back to the original image URL when a variant is
+  absent.
+- Above-fold listing detail imagery may be prioritized, but below-fold cards, thumbnails, and secondary gallery images stay lazy.
+- CI should keep this as static contract coverage in `npm run test:public-site`.
+  Do not add Lighthouse or another heavy browser audit dependency unless a
+  later performance task explicitly budgets for it.
+
 ### `GET /api/public/listings/:listingId/services`
 
 Path:

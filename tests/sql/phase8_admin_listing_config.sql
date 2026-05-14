@@ -13,16 +13,28 @@
 --   rent_passive_with_main_item_and_service (checkout-ready): cccccccc-dddd-4ddd-8ddd-ddddddddd802
 --   rent_passive_without_main_item (not ready):   cccccccc-dddd-4ddd-8ddd-ddddddddd803
 --   rent_passive_with_main_item_no_service (not ready): cccccccc-dddd-4ddd-8ddd-ddddddddd804
+--   rent_direct_active_without_main_item guard target: cccccccc-dddd-4ddd-8ddd-ddddddddd805
 
 -- ----------------------------------------------------------------------------
 -- cleanup (idempotent)
 -- ----------------------------------------------------------------------------
+update public.listings
+set status = 'passive'::public.listing_status
+where id in (
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid,
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd802'::uuid,
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd803'::uuid,
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd804'::uuid,
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd805'::uuid
+);
+
 delete from public.listing_images
 where listing_id in (
   'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid,
   'cccccccc-dddd-4ddd-8ddd-ddddddddd802'::uuid,
   'cccccccc-dddd-4ddd-8ddd-ddddddddd803'::uuid,
-  'cccccccc-dddd-4ddd-8ddd-ddddddddd804'::uuid
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd804'::uuid,
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd805'::uuid
 );
 
 delete from public.listing_service_options
@@ -30,7 +42,8 @@ where listing_id in (
   'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid,
   'cccccccc-dddd-4ddd-8ddd-ddddddddd802'::uuid,
   'cccccccc-dddd-4ddd-8ddd-ddddddddd803'::uuid,
-  'cccccccc-dddd-4ddd-8ddd-ddddddddd804'::uuid
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd804'::uuid,
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd805'::uuid
 );
 
 delete from public.listing_main_item_options
@@ -38,7 +51,8 @@ where listing_id in (
   'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid,
   'cccccccc-dddd-4ddd-8ddd-ddddddddd802'::uuid,
   'cccccccc-dddd-4ddd-8ddd-ddddddddd803'::uuid,
-  'cccccccc-dddd-4ddd-8ddd-ddddddddd804'::uuid
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd804'::uuid,
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd805'::uuid
 );
 
 delete from public.listings
@@ -46,13 +60,15 @@ where id in (
   'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid,
   'cccccccc-dddd-4ddd-8ddd-ddddddddd802'::uuid,
   'cccccccc-dddd-4ddd-8ddd-ddddddddd803'::uuid,
-  'cccccccc-dddd-4ddd-8ddd-ddddddddd804'::uuid
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd804'::uuid,
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd805'::uuid
 )
 or slug in (
   'phase-8-sale-passive',
   'phase-8-rent-with-main',
   'phase-8-rent-without-main',
   'phase-8-rent-main-no-service',
+  'phase-8-direct-active-without-main',
   'phase-8-create-sale',
   'phase-8-create-rent-active',
   'phase-8-create-duplicate'
@@ -139,7 +155,19 @@ values (
 );
 
 insert into public.listings (
-  id, type, status, title, slug, city, district, price, currency, description
+  id,
+  type,
+  status,
+  title,
+  slug,
+  city,
+  district,
+  price,
+  currency,
+  description,
+  room_count,
+  bathroom_count,
+  gross_area_m2
 )
 values
 (
@@ -147,28 +175,40 @@ values
   'sale', 'passive',
   'Phase 8 Sale Passive', 'phase-8-sale-passive',
   'Istanbul', 'Kadikoy', 4500000, 'TRY',
-  'Satilik daire aciklamasi'
+  'Satilik daire aciklamasi',
+  3,
+  2,
+  140
 ),
 (
   'cccccccc-dddd-4ddd-8ddd-ddddddddd802'::uuid,
   'rent', 'passive',
   'Phase 8 Rent With Main', 'phase-8-rent-with-main',
   'Istanbul', 'Sisli', 42000, 'TRY',
-  'Kiralik daire aciklamasi'
+  'Kiralik daire aciklamasi',
+  2,
+  1,
+  90
 ),
 (
   'cccccccc-dddd-4ddd-8ddd-ddddddddd803'::uuid,
   'rent', 'passive',
   'Phase 8 Rent Without Main', 'phase-8-rent-without-main',
   'Istanbul', 'Besiktas', 39000, 'TRY',
-  'Kiralik daire aciklamasi 2'
+  'Kiralik daire aciklamasi 2',
+  2,
+  1,
+  85
 ),
 (
   'cccccccc-dddd-4ddd-8ddd-ddddddddd804'::uuid,
   'rent', 'passive',
   'Phase 8 Rent Main No Service', 'phase-8-rent-main-no-service',
   'Istanbul', 'Uskudar', 35000, 'TRY',
-  'Kiralik daire aciklamasi 3'
+  'Kiralik daire aciklamasi 3',
+  2,
+  1,
+  80
 );
 
 -- Seed images so publish guard is satisfied
@@ -332,7 +372,18 @@ begin
       'slug', 'phase-8-create-sale',
       'city', 'Ankara',
       'price', 1000000,
-      'currency', 'try'
+      'currency', 'try',
+      'heating_type', 'central',
+      'fuel_type', 'natural_gas',
+      'balcony_count', 2,
+      'has_elevator', true,
+      'parking_type', 'open_closed',
+      'in_site', false,
+      'building_age', 5,
+      'floor_count', 12,
+      'floor_number', '3. Kat',
+      'usage_status', 'empty',
+      'facade', 'Guney Bati'
     )
   );
 
@@ -344,6 +395,19 @@ begin
   end if;
   if (v_response #>> '{listing, status}') <> 'passive' then
     raise exception 'Status default should be passive, got %', v_response #>> '{listing, status}';
+  end if;
+  if (v_response #>> '{listing, heating_type}') <> 'central'
+     or (v_response #>> '{listing, fuel_type}') <> 'natural_gas'
+     or (v_response #>> '{listing, balcony_count}')::integer <> 2
+     or (v_response #>> '{listing, has_elevator}')::boolean is not true
+     or (v_response #>> '{listing, parking_type}') <> 'open_closed'
+     or (v_response #>> '{listing, in_site}')::boolean is not false
+     or (v_response #>> '{listing, building_age}')::integer <> 5
+     or (v_response #>> '{listing, floor_count}')::integer <> 12
+     or (v_response #>> '{listing, floor_number}') <> '3. Kat'
+     or (v_response #>> '{listing, usage_status}') <> 'empty'
+     or (v_response #>> '{listing, facade}') <> 'Guney Bati' then
+    raise exception 'Created listing housing detail fields mismatch: %', v_response -> 'listing';
   end if;
 end;
 $$;
@@ -472,6 +536,44 @@ begin
 end;
 $$;
 
+-- 11b) admin_update_listing updates nullable housing detail fields
+do $$
+declare
+  v_response jsonb;
+begin
+  v_response := public.admin_update_listing(
+    'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid,
+    jsonb_build_object(
+      'heating_type', 'floor_heating',
+      'fuel_type', 'electricity',
+      'balcony_count', 1,
+      'has_elevator', false,
+      'parking_type', 'closed',
+      'in_site', true,
+      'building_age', 0,
+      'floor_count', 8,
+      'floor_number', 'Bahce Kati',
+      'usage_status', 'owner_occupied',
+      'facade', 'Kuzey Dogu'
+    )
+  );
+
+  if (v_response #>> '{listing, heating_type}') <> 'floor_heating'
+     or (v_response #>> '{listing, fuel_type}') <> 'electricity'
+     or (v_response #>> '{listing, balcony_count}')::integer <> 1
+     or (v_response #>> '{listing, has_elevator}')::boolean is not false
+     or (v_response #>> '{listing, parking_type}') <> 'closed'
+     or (v_response #>> '{listing, in_site}')::boolean is not true
+     or (v_response #>> '{listing, building_age}')::integer <> 0
+     or (v_response #>> '{listing, floor_count}')::integer <> 8
+     or (v_response #>> '{listing, floor_number}') <> 'Bahce Kati'
+     or (v_response #>> '{listing, usage_status}') <> 'owner_occupied'
+     or (v_response #>> '{listing, facade}') <> 'Kuzey Dogu' then
+    raise exception 'Updated listing housing detail fields mismatch: %', v_response -> 'listing';
+  end if;
+end;
+$$;
+
 -- 12) admin_set_listing_status: rent without main item -> P0004
 do $$
 begin
@@ -482,6 +584,53 @@ begin
     );
     raise exception 'Activate rent listing without main item unexpectedly succeeded';
   exception
+    when sqlstate 'P0004' then
+      null;
+  end;
+end;
+$$;
+
+-- 12b) Direct table status update must not bypass rent checkout readiness.
+do $$
+begin
+  begin
+    update public.listings
+    set status = 'active'::public.listing_status
+    where id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd803'::uuid;
+    raise exception 'Direct activate rent listing without main item unexpectedly succeeded';
+  exception
+    when insufficient_privilege then
+      null;
+    when sqlstate 'P0004' then
+      null;
+  end;
+end;
+$$;
+
+-- 12c) Direct active inserts through the authenticated role must not create
+-- already-published rent listings that bypass checkout readiness.
+do $$
+begin
+  begin
+    insert into public.listings (
+      id, type, status, title, slug, city, district, price, currency, description
+    )
+    values (
+      'cccccccc-dddd-4ddd-8ddd-ddddddddd805'::uuid,
+      'rent',
+      'active',
+      'Phase 8 Direct Active Without Main',
+      'phase-8-direct-active-without-main',
+      'Istanbul',
+      'Kadikoy',
+      41000,
+      'TRY',
+      'Direct active insert should fail closed'
+    );
+    raise exception 'Direct active rent insert without main item unexpectedly succeeded';
+  exception
+    when insufficient_privilege then
+      null;
     when sqlstate 'P0004' then
       null;
   end;
@@ -503,7 +652,80 @@ begin
 end;
 $$;
 
--- 13b) admin_set_listing_status: rent with main item but no service -> now succeeds
+-- 13a) Active rent listings must not lose their only enabled main item via RPC.
+do $$
+begin
+  begin
+    perform public.admin_configure_listing_main_item(
+      'cccccccc-dddd-4ddd-8ddd-ddddddddd802'::uuid,
+      'phase8_main',
+      jsonb_build_object('is_enabled', false)
+    );
+    raise exception 'Disabling the only active main item on an active rent listing unexpectedly succeeded';
+  exception
+    when insufficient_privilege then
+      null;
+    when sqlstate 'P0004' then
+      null;
+  end;
+end;
+$$;
+
+-- 13b) Direct table updates must not disable the only enabled main item
+-- for an active rent listing.
+do $$
+begin
+  begin
+    update public.listing_main_item_options
+    set is_enabled = false
+    where listing_id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd802'::uuid
+      and main_item_id = 'bbbbbbbb-cccc-4ccc-8ccc-ccccccccc801'::uuid;
+    raise exception 'Direct disabling of the only active main item unexpectedly succeeded';
+  exception
+    when insufficient_privilege then
+      null;
+    when sqlstate 'P0004' then
+      null;
+  end;
+end;
+$$;
+
+-- 13c) Direct table deletes must not remove the only enabled main item
+-- from an active rent listing.
+do $$
+begin
+  begin
+    delete from public.listing_main_item_options
+    where listing_id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd802'::uuid
+      and main_item_id = 'bbbbbbbb-cccc-4ccc-8ccc-ccccccccc801'::uuid;
+    raise exception 'Direct deletion of the only active main item unexpectedly succeeded';
+  exception
+    when insufficient_privilege then
+      null;
+    when sqlstate 'P0004' then
+      null;
+  end;
+end;
+$$;
+
+-- 13d) Catalog updates must not make already-active rent listings
+-- checkout-incomplete.
+do $$
+begin
+  begin
+    perform public.admin_update_main_item_catalog(
+      'phase8_main',
+      jsonb_build_object('is_active', false)
+    );
+    raise exception 'Deactivating a catalog item used by an active rent listing unexpectedly succeeded';
+  exception
+    when sqlstate 'P0004' then
+      null;
+  end;
+end;
+$$;
+
+-- 13e) admin_set_listing_status: rent with main item but no service -> now succeeds
 -- (after fix_checkout_ready_service_not_required, services are optional)
 do $$
 declare

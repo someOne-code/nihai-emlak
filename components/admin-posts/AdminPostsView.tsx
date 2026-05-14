@@ -20,6 +20,7 @@ import {
 import {
   loadPostsModel,
   loadContentDetailModel,
+  refreshContentModelAfterMutation,
 } from "@/lib/admin-ui/content-controller";
 import {
   createContentLoadGuard,
@@ -87,6 +88,15 @@ import PostsList from "./PostsList";
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 type FilterState = PostsUiFilterState;
+
+type PostMutationRefreshTarget =
+  | string
+  | null
+  | {
+      postId: string | null;
+      document?: unknown;
+      reuseList?: boolean;
+    };
 
 type CategoryOption = { id: string; title: string };
 
@@ -239,28 +249,41 @@ export default function AdminPostsView() {
   }, [refreshCategoryOptions]);
 
   const refreshAfterMutation = useCallback(
-    async (postId: string | null, message: string) => {
+    async (target: PostMutationRefreshTarget, message: string) => {
+      const refreshTarget = normalizePostMutationRefreshTarget(target);
       setActionSuccess(message);
       setActionError(null);
-      if (postId) {
-        setSelectedId(postId);
+      if (refreshTarget.postId) {
+        setSelectedId(refreshTarget.postId);
         setDetailLoading(true);
       }
 
       try {
+        const postId = refreshTarget.postId;
+        if (refreshTarget.reuseList && refreshTarget.document !== undefined) {
+          const result = refreshContentModelAfterMutation(
+            "posts",
+            viewModel,
+            refreshTarget.document,
+          );
+          setViewModel(result.model);
+          setDetail(result.detail);
+          return;
+        }
+
         await refreshContentViews([
           () => loadList(filters),
           ...(postId ? [() => loadPostDetail(postId)] : []),
         ]);
       } finally {
-        if (postId && mountedRef.current) setDetailLoading(false);
+        if (refreshTarget.postId && mountedRef.current) setDetailLoading(false);
       }
     },
-    [filters, loadList, loadPostDetail],
+    [filters, loadList, loadPostDetail, viewModel],
   );
 
   const runAction = useCallback(
-    async (successMsg: string, action: () => Promise<string | null>) => {
+    async (successMsg: string, action: () => Promise<PostMutationRefreshTarget>) => {
       setBusy(true);
       setActionError(null);
       setActionSuccess(null);
@@ -375,8 +398,8 @@ export default function AdminPostsView() {
                 categories={categories}
                 onSave={(payload) =>
                   runAction("Yazı güncellendi.", async () => {
-                    await updateAdminPost(detail.id, payload);
-                    return detail.id;
+                    const document = await updateAdminPost(detail.id, payload);
+                    return { postId: detail.id, document, reuseList: true };
                   })
                 }
                 onDelete={() =>
@@ -960,4 +983,16 @@ function formatDate(isoString: string): string {
   } catch {
     return isoString;
   }
+}
+
+function normalizePostMutationRefreshTarget(target: PostMutationRefreshTarget): {
+  postId: string | null;
+  document?: unknown;
+  reuseList?: boolean;
+} {
+  if (typeof target === "string" || target === null) {
+    return { postId: target };
+  }
+
+  return target;
 }

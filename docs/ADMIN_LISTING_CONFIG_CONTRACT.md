@@ -129,6 +129,14 @@ The matching DB/RPC contract names reserved for Phase 8 are:
 - `sort_order` for images and main item options MUST be a non-negative integer.
 - `override_amount` and `override_multiplier` for option config MUST
   be non-negative when provided.
+- Admin create/update may manage nullable housing detail fields:
+  `heating_type`, `fuel_type`, `balcony_count`, `has_elevator`,
+  `parking_type`, `in_site`, `building_age`, `floor_count`,
+  `floor_number`, `usage_status`, and `facade`.
+- `heating_type`, `fuel_type`, `parking_type`, and `usage_status` must
+  match their database enum values. Numeric housing detail fields
+  must be non-negative when provided. `facade` stays a simple nullable
+  text field.
 
 ## Sale vs Rent Rules
 
@@ -152,6 +160,10 @@ The matching DB/RPC contract names reserved for Phase 8 are:
   `sort_order` atomically.
 - Image add accepts only absolute `http:` and `https:` URLs. Empty,
   relative, malformed, `javascript:`, and non-HTTP(S) URLs return `400`.
+- `public.listing_images.image_url` remains the required original/fallback URL.
+  Optional optimized variants may be stored in `card_image_url`,
+  `detail_image_url`, and `variant_metadata`; consumers must fall back to
+  `image_url` when a variant URL is null.
 - Image DELETE requires a trusted `Origin` but does not require a JSON
   content type or request body.
 - Public read models MUST NOT expose admin-only image fields

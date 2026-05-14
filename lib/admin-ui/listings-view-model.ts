@@ -7,6 +7,32 @@
 
 export type AdminListingType = "rent" | "sale" | "unknown";
 export type AdminListingStatus = "active" | "passive" | "unknown";
+export type AdminListingHeatingType =
+  | "central"
+  | "combi"
+  | "floor_heating"
+  | "stove"
+  | "air_conditioning"
+  | "none"
+  | "other";
+export type AdminListingFuelType =
+  | "natural_gas"
+  | "electricity"
+  | "coal"
+  | "fuel_oil"
+  | "none"
+  | "other";
+export type AdminListingParkingType =
+  | "open"
+  | "closed"
+  | "open_closed"
+  | "none"
+  | "other";
+export type AdminListingUsageStatus =
+  | "empty"
+  | "tenant_occupied"
+  | "owner_occupied"
+  | "unknown";
 
 export type AdminListingsListInput = {
   items: unknown[];
@@ -48,6 +74,17 @@ export type AdminListingDetailListing = {
   currency: string | null;
   roomCount: number | null;
   bathroomCount: number | null;
+  heatingType: AdminListingHeatingType | null;
+  fuelType: AdminListingFuelType | null;
+  balconyCount: number | null;
+  hasElevator: boolean | null;
+  parkingType: AdminListingParkingType | null;
+  inSite: boolean | null;
+  buildingAge: number | null;
+  floorCount: number | null;
+  floorNumber: string | null;
+  usageStatus: AdminListingUsageStatus | null;
+  facade: string | null;
   grossAreaM2: number | null;
   isFurnished: boolean;
   createdAt: string | null;
@@ -490,6 +527,17 @@ function buildDetailListing(
     currency: asString(raw.currency),
     roomCount: asNumber(raw.room_count),
     bathroomCount: asNumber(raw.bathroom_count),
+    heatingType: normalizeHeatingType(asString(raw.heating_type)),
+    fuelType: normalizeFuelType(asString(raw.fuel_type)),
+    balconyCount: asNumber(raw.balcony_count),
+    hasElevator: asNullableBoolean(raw.has_elevator),
+    parkingType: normalizeParkingType(asString(raw.parking_type)),
+    inSite: asNullableBoolean(raw.in_site),
+    buildingAge: asNumber(raw.building_age),
+    floorCount: asNumber(raw.floor_count),
+    floorNumber: asString(raw.floor_number),
+    usageStatus: normalizeUsageStatus(asString(raw.usage_status)),
+    facade: asString(raw.facade),
     grossAreaM2: asNumber(raw.gross_area_m2),
     isFurnished: asBoolean(raw.is_furnished),
     createdAt: asString(raw.created_at),
@@ -618,6 +666,60 @@ function normalizeStatus(value: string | null): AdminListingStatus {
   return "unknown";
 }
 
+function normalizeHeatingType(value: string | null): AdminListingHeatingType | null {
+  if (
+    value === "central" ||
+    value === "combi" ||
+    value === "floor_heating" ||
+    value === "stove" ||
+    value === "air_conditioning" ||
+    value === "none" ||
+    value === "other"
+  ) {
+    return value;
+  }
+  return null;
+}
+
+function normalizeFuelType(value: string | null): AdminListingFuelType | null {
+  if (
+    value === "natural_gas" ||
+    value === "electricity" ||
+    value === "coal" ||
+    value === "fuel_oil" ||
+    value === "none" ||
+    value === "other"
+  ) {
+    return value;
+  }
+  return null;
+}
+
+function normalizeParkingType(value: string | null): AdminListingParkingType | null {
+  if (
+    value === "open" ||
+    value === "closed" ||
+    value === "open_closed" ||
+    value === "none" ||
+    value === "other"
+  ) {
+    return value;
+  }
+  return null;
+}
+
+function normalizeUsageStatus(value: string | null): AdminListingUsageStatus | null {
+  if (
+    value === "empty" ||
+    value === "tenant_occupied" ||
+    value === "owner_occupied" ||
+    value === "unknown"
+  ) {
+    return value;
+  }
+  return null;
+}
+
 function formatAmount(amount: number | null, currency: string | null): string {
   if (amount === null) {
     return "Belirtilmedi";
@@ -649,4 +751,11 @@ function asNumber(value: unknown): number | null {
 
 function asBoolean(value: unknown): boolean {
   return value === true;
+}
+
+function asNullableBoolean(value: unknown): boolean | null {
+  if (value === true || value === false) {
+    return value;
+  }
+  return null;
 }

@@ -210,6 +210,7 @@ export async function handleCategoriesCreatePost(
     const doc = await payload.create({
       collection: "blog_categories",
       data: parsed.value,
+      overrideAccess: true,
     });
     return jsonResponse(
       { success: true, data: toCategoryDTO(doc as unknown as PayloadCategoryDoc) },
@@ -235,7 +236,11 @@ export async function handleCategoryGet(
   const payload = await getPayload({ config: configPromise });
 
   try {
-    const doc = await payload.findByID({ collection: "blog_categories", id });
+    const doc = await payload.findByID({
+      collection: "blog_categories",
+      id,
+      overrideAccess: true,
+    });
     const linkedPosts = await payload.find(buildCategoryLinkedPostsFindArgs(id));
     return jsonResponse(
       {
@@ -277,6 +282,7 @@ export async function handleCategoryUpdate(
       collection: "blog_categories",
       id,
       data: parsed.value,
+      overrideAccess: true,
     });
     return jsonResponse(
       { success: true, data: toCategoryDTO(doc as unknown as PayloadCategoryDoc) },
@@ -306,7 +312,11 @@ export async function handleCategoryDelete(
   const payload = await getPayload({ config: configPromise });
 
   try {
-    await payload.delete({ collection: "blog_categories", id });
+    await payload.delete({
+      collection: "blog_categories",
+      id,
+      overrideAccess: true,
+    });
     return jsonResponse({ success: true }, 200);
   } catch {
     return jsonError("Category not found", 404);

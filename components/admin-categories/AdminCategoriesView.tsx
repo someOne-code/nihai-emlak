@@ -16,6 +16,7 @@ import {
 import {
   loadCategoriesModel,
   loadContentDetailModel,
+  refreshContentModelAfterMutation,
 } from "@/lib/admin-ui/content-controller";
 import {
   createContentLoadGuard,
@@ -73,6 +74,15 @@ const INITIAL_VM: CategoriesListViewModel = {
   totalPages: 0,
   isEmpty: true,
 };
+
+type CategoryMutationRefreshTarget =
+  | string
+  | null
+  | {
+      categoryId: string | null;
+      document?: unknown;
+      reuseList?: boolean;
+    };
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
@@ -161,28 +171,41 @@ export default function AdminCategoriesView() {
   }, [loadCategoryDetail]);
 
   const refreshAfterMutation = useCallback(
-    async (categoryId: string | null, message: string) => {
+    async (target: CategoryMutationRefreshTarget, message: string) => {
+      const refreshTarget = normalizeCategoryMutationRefreshTarget(target);
       setActionSuccess(message);
       setActionError(null);
-      if (categoryId) {
-        setSelectedId(categoryId);
+      if (refreshTarget.categoryId) {
+        setSelectedId(refreshTarget.categoryId);
         setDetailLoading(true);
       }
 
       try {
+        const categoryId = refreshTarget.categoryId;
+        if (refreshTarget.reuseList && refreshTarget.document !== undefined) {
+          const result = refreshContentModelAfterMutation(
+            "categories",
+            viewModel,
+            refreshTarget.document,
+          );
+          setViewModel(result.model);
+          setDetail(result.detail);
+          return;
+        }
+
         await refreshContentViews([
           () => loadList(),
           ...(categoryId ? [() => loadCategoryDetail(categoryId)] : []),
         ]);
       } finally {
-        if (categoryId && mountedRef.current) setDetailLoading(false);
+        if (refreshTarget.categoryId && mountedRef.current) setDetailLoading(false);
       }
     },
-    [loadList, loadCategoryDetail],
+    [loadList, loadCategoryDetail, viewModel],
   );
 
   const runAction = useCallback(
-    async (successMsg: string, action: () => Promise<string | null>) => {
+    async (successMsg: string, action: () => Promise<CategoryMutationRefreshTarget>) => {
       setBusy(true);
       setActionError(null);
       setActionSuccess(null);
@@ -312,8 +335,8 @@ export default function AdminCategoriesView() {
               busy={busy || detailLoading}
               onSave={(payload) =>
                 runAction("Kategori güncellendi.", async () => {
-                  await updateAdminCategory(detail.id, payload);
-                  return detail.id;
+                  const document = await updateAdminCategory(detail.id, payload);
+                  return { categoryId: detail.id, document, reuseList: true };
                 })
               }
               onDelete={() =>
@@ -642,4 +665,16 @@ function EditCategoryPanel({
       </form>
     </div>
   );
+}
+
+function normalizeCategoryMutationRefreshTarget(target: CategoryMutationRefreshTarget): {
+  categoryId: string | null;
+  document?: unknown;
+  reuseList?: boolean;
+} {
+  if (typeof target === "string" || target === null) {
+    return { categoryId: target };
+  }
+
+  return target;
 }

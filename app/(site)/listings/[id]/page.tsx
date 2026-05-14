@@ -2,6 +2,7 @@ import { type Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
+import { cache } from "react";
 import { ArrowLeft } from "lucide-react";
 
 import { ListingActionBox } from "@/components/listings/listing-action-box";
@@ -12,16 +13,29 @@ import { ListingDetailGallery } from "@/components/listings/listing-detail-galle
 import { ListingLocationSection } from "@/components/listings/listing-location-section";
 import { PublicFooter } from "@/components/site/public-footer";
 import { PublicHeader } from "@/components/site/public-header";
-import { getPublicListingDetail } from "@/lib/api/listings";
+import { getPublicListingDetailForServerPage } from "@/lib/read-models/public-listings";
+import { createClient } from "@/lib/supabase/server";
 
 type ListingDetailPageProps = {
   params: Promise<{ id: string }>;
 };
 
+const getCachedPublicListingDetail = cache(getPublicListingDetailForServerPage);
+
+const resolveIsAuthenticated = cache(async (): Promise<boolean> => {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase.auth.getUser();
+    return !error && Boolean(data.user);
+  } catch {
+    return false;
+  }
+});
+
 export async function generateMetadata({ params }: ListingDetailPageProps): Promise<Metadata> {
   try {
     const { id } = await params;
-    const listing = await getPublicListingDetail(id);
+    const listing = await getCachedPublicListingDetail(id);
     return {
       title: `${listing.title} | Nihai Emlak`,
       description: listing.summary || listing.description?.slice(0, 160) || "İlan detayı.",
@@ -39,8 +53,9 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
   const { id } = await params;
 
   try {
-    const listing = await getPublicListingDetail(id);
-    const actionBox = await ListingActionBox({ listing });
+    const listing = await getCachedPublicListingDetail(id);
+    const isAuthenticated = await resolveIsAuthenticated();
+    const actionBox = ListingActionBox({ listing, isAuthenticated });
 
     return (
       <>
@@ -100,10 +115,16 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
 
               {/* Sağ Kolon */}
               <div className="flex flex-col gap-6">
-                <div className="sticky top-28 flex flex-col gap-6" data-aos="fade-left" data-aos-delay="200">
-                  {actionBox}
-                  <ListingContactBox listingId={listing.id} />
-                </div>
+                {listing.type === "rent" ? (
+                  <div className="sticky top-28 flex flex-col gap-6" data-aos="fade-left" data-aos-delay="200">
+                    {actionBox}
+                    <ListingContactBox listingId={listing.id} isAuthenticated={isAuthenticated} />
+                  </div>
+                ) : (
+                  <div data-aos="fade-left" data-aos-delay="200">
+                    {actionBox}
+                  </div>
+                )}
               </div>
             </div>
           </div>

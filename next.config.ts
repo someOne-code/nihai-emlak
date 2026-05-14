@@ -1,8 +1,31 @@
 import { withPayload } from "@payloadcms/next/withPayload";
 import type { NextConfig } from "next";
 
+const supabaseImageRemotePatterns = (() => {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!supabaseUrl) return [];
+
+  try {
+    const url = new URL(supabaseUrl);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return [];
+
+    return [
+      {
+        protocol: url.protocol.slice(0, -1) as "http" | "https",
+        hostname: url.hostname,
+        pathname: "/storage/v1/object/public/**",
+      },
+    ];
+  } catch {
+    return [];
+  }
+})();
+
 const nextConfig: NextConfig = {
   cacheComponents: true,
+  images: {
+    remotePatterns: supabaseImageRemotePatterns,
+  },
   async headers() {
     return [
       {

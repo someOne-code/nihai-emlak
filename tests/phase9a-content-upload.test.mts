@@ -678,6 +678,7 @@ test("handleListingImageUpload returns success with listing-images path prefix a
       getPublicUrlResult: { data: { publicUrl: "https://storage.example.com/content-media/listing-images/123-abc-listing-photo.png" } },
       onUpload: (path: string) => { uploadedPath = path; },
     }),
+    processListingImageVariants: mockListingVariantProcessor,
   });
 
   assert.equal(response.status, 200);
@@ -690,6 +691,125 @@ test("handleListingImageUpload returns success with listing-images path prefix a
   assert.ok((data.path as string).startsWith("listing-images/"), `storage path must start with listing-images/: got ${String(data.path)}`);
   assert.ok((data.url as string).includes("/content-media/listing-images/"), `public URL must include content-media/listing-images path: got ${String(data.url)}`);
   assert.ok(uploadedPath.startsWith("listing-images/"), `upload path must start with listing-images/: got ${uploadedPath}`);
+});
+
+test("handleListingImageUpload uploads card and detail WebP variants", async (t) => {
+  setupContentAdminEnv(t);
+  const { handleListingImageUpload, CONTENT_MEDIA_BUCKET } = await import(
+    "../lib/admin/content-upload-route.ts"
+  );
+
+  const formData = new FormData();
+  formData.append("file", new Blob(["png-data"], { type: "image/png" }), "Listing Photo.png");
+
+  const request = new Request("http://localhost:3000/api/admin/content/uploads/listing-image", {
+    method: "POST",
+    headers: {
+      origin: "http://localhost:3000",
+      "content-length": String(MAX_UPLOAD_ENVELOPE_BYTES),
+    },
+    body: formData,
+  });
+
+  const uploadedPaths: string[] = [];
+  const uploadedContentTypes: string[] = [];
+  const response = await handleListingImageUpload(request, {
+    createServerSupabaseClient: mockAdminSupabaseClient({
+      onUpload: (path: string, _body: unknown, options?: { contentType?: string }) => {
+        uploadedPaths.push(path);
+        uploadedContentTypes.push(String(options?.contentType ?? ""));
+      },
+      getPublicUrlForPath: (path: string) => ({
+        data: { publicUrl: `https://storage.example.com/content-media/${path}` },
+      }),
+    }),
+    processListingImageVariants: async () => ({
+      card: {
+        data: new Uint8Array([1, 2, 3]).buffer,
+        width: 480,
+        height: 320,
+        mimeType: "image/webp",
+        format: "webp",
+      },
+      detail: {
+        data: new Uint8Array([4, 5, 6]).buffer,
+        width: 1280,
+        height: 853,
+        mimeType: "image/webp",
+        format: "webp",
+      },
+    }),
+  });
+
+  assert.equal(response.status, 200);
+  const body = await response.json() as Record<string, unknown>;
+  assert.equal(body.success, true);
+
+  const data = body.data as Record<string, unknown>;
+  assert.equal(data.bucket, CONTENT_MEDIA_BUCKET);
+  assert.ok(typeof data.url === "string", "original url must remain for compatibility");
+  assert.ok(typeof data.path === "string", "original path must remain for compatibility");
+  assert.ok((data.path as string).startsWith("listing-images/"));
+
+  const variants = data.variants as Record<string, Record<string, unknown>>;
+  assert.ok(variants && typeof variants === "object", "response must include variants");
+  assert.deepEqual(Object.keys(variants).sort(), ["card", "detail"]);
+
+  assert.equal(variants.card.bucket, CONTENT_MEDIA_BUCKET);
+  assert.equal(variants.card.format, "webp");
+  assert.equal(variants.card.mimeType, "image/webp");
+  assert.equal(variants.card.role, "card");
+  assert.equal(variants.card.width, 480);
+  assert.equal(variants.card.height, 320);
+  assert.ok(String(variants.card.path).startsWith("listing-images/"));
+  assert.ok(String(variants.card.path).endsWith("-card.webp"));
+  assert.ok(String(variants.card.url).includes(String(variants.card.path)));
+
+  assert.equal(variants.detail.bucket, CONTENT_MEDIA_BUCKET);
+  assert.equal(variants.detail.format, "webp");
+  assert.equal(variants.detail.mimeType, "image/webp");
+  assert.equal(variants.detail.role, "detail");
+  assert.equal(variants.detail.width, 1280);
+  assert.equal(variants.detail.height, 853);
+  assert.ok(String(variants.detail.path).startsWith("listing-images/"));
+  assert.ok(String(variants.detail.path).endsWith("-detail.webp"));
+  assert.ok(String(variants.detail.url).includes(String(variants.detail.path)));
+
+  assert.equal(uploadedPaths.length, 3, "original plus card/detail variants must be uploaded");
+  assert.ok(uploadedPaths[0].startsWith("listing-images/"));
+  assert.ok(uploadedPaths[1].endsWith("-card.webp"));
+  assert.ok(uploadedPaths[2].endsWith("-detail.webp"));
+  assert.deepEqual(uploadedContentTypes, ["image/png", "image/webp", "image/webp"]);
+});
+
+test("handleListingImageUpload rejects oversized file", async (t) => {
+  setupContentAdminEnv(t);
+  const { handleListingImageUpload } = await import(
+    "../lib/admin/content-upload-route.ts"
+  );
+
+  const oversizedBlob = new Blob([new ArrayBuffer(6 * 1024 * 1024)], { type: "image/png" });
+  const formData = new FormData();
+  formData.append("file", oversizedBlob, "big-listing.png");
+
+  const request = new Request("http://localhost:3000/api/admin/content/uploads/listing-image", {
+    method: "POST",
+    headers: {
+      origin: "http://localhost:3000",
+      "content-length": String(MAX_UPLOAD_ENVELOPE_BYTES),
+    },
+    body: formData,
+  });
+
+  const response = await handleListingImageUpload(request, {
+    createServerSupabaseClient: mockAdminSupabaseClient(),
+  });
+
+  assert.equal(response.status, 400);
+  const body = await response.json() as Record<string, unknown>;
+  assert.equal(body.success, false);
+  assert.ok(typeof body.error === "string");
+  assert.ok((body.error as string).length > 0);
 });
 
 // ── Client helper ───────────────────────────────────────────────────────────
@@ -929,7 +1049,8 @@ test("uploadConsultantPhoto sends FormData to consultant-photo endpoint", async 
 function mockAdminSupabaseClient(opts?: {
   uploadResult?: { error: { message: string } | null };
   getPublicUrlResult?: { data: { publicUrl: string } };
-  onUpload?: (path: string) => void;
+  getPublicUrlForPath?: (path: string) => { data: { publicUrl: string } };
+  onUpload?: (path: string, body: unknown, options?: { contentType?: string; upsert?: boolean }) => void;
 }) {
   const uploadResult = opts?.uploadResult ?? { error: null };
   const getPublicUrlResult = opts?.getPublicUrlResult ?? {
@@ -950,12 +1071,30 @@ function mockAdminSupabaseClient(opts?: {
     storage: {
       from: (/* _bucket */) => ({
         upload: async (path: string, ...args: unknown[]) => {
-          void args;
-          opts?.onUpload?.(path);
+          opts?.onUpload?.(path, args[0], args[1] as { contentType?: string; upsert?: boolean } | undefined);
           return uploadResult;
         },
-        getPublicUrl: () => getPublicUrlResult,
+        getPublicUrl: (path: string) => opts?.getPublicUrlForPath?.(path) ?? getPublicUrlResult,
       }),
     },
   });
+}
+
+async function mockListingVariantProcessor() {
+  return {
+    card: {
+      data: new Uint8Array([1, 2, 3]).buffer,
+      width: 480,
+      height: 320,
+      mimeType: "image/webp" as const,
+      format: "webp" as const,
+    },
+    detail: {
+      data: new Uint8Array([4, 5, 6]).buffer,
+      width: 1280,
+      height: 853,
+      mimeType: "image/webp" as const,
+      format: "webp" as const,
+    },
+  };
 }

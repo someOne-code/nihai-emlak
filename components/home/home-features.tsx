@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 const features = [
   {
     title: "Güvenilir İlanlar",
@@ -23,7 +25,7 @@ export function HomeFeatures() {
         <div className="flex flex-col items-center justify-between gap-12 lg:flex-row lg:gap-0">
           <div className="w-full flex-1">
             <div className="relative" data-aos="fade-right">
-              <img
+              <Image
                 src="/property-nextjs-pro/images/features/features_iimage.jpg"
                 alt="Modern yaşam alanı"
                 width={640}
@@ -37,7 +39,7 @@ export function HomeFeatures() {
                 data-aos-delay="100"
               >
                 <div className="flex items-center gap-4">
-                  <img
+                  <Image
                     src="/property-nextjs-pro/images/properties/prop-4.jpg"
                     alt="Öne çıkan konut"
                     width={92}
@@ -74,7 +76,7 @@ export function HomeFeatures() {
                     data-aos-delay="100"
                   >
                     <div className="flex h-[110px] w-[110px] shrink-0 items-center justify-center rounded-full bg-[#2F73F2]/20 p-4">
-                      <img src={feature.image} alt="" width={78} height={78} />
+                      <Image src={feature.image} alt="" width={78} height={78} unoptimized />
                     </div>
                     <div>
                       <h3 className="mb-2 text-2xl font-semibold text-property-midnight dark:text-white">

@@ -405,6 +405,23 @@ test("admin listings create rejects empty body", async (t) => {
   assert.equal((await response.json()).error, "Invalid JSON request body");
 });
 
+test("admin listings create rejects unsupported fields before RPC", async (t) => {
+  setupAdminListingEnv(t);
+
+  const response = await handleAdminListingsCreatePost(
+    createJsonRequest({
+      method: "POST",
+      body: { ...validCreateBody(), user_id: ADMIN_ID },
+    }),
+    createDependencies({
+      rpc: () => failRpc("admin_create_listing"),
+    }),
+  );
+
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).error, "Unsupported admin listing field: user_id");
+});
+
 test("admin listings create maps 23505 to 409 slug conflict", async (t) => {
   setupAdminListingEnv(t);
 
@@ -532,6 +549,19 @@ test("admin listings update rejects status mixed with other fields", async (t) =
   assert.equal((await response.json()).error, "Admin listing status must be patched on its own");
 });
 
+test("admin listings update rejects unsupported fields before RPC", async (t) => {
+  setupAdminListingEnv(t);
+
+  const response = await handleAdminListingsUpdatePatch(
+    createJsonRequest({ method: "PATCH", body: { title: "new", user_id: ADMIN_ID } }),
+    createDependencies({ rpc: () => failRpc("admin_update_listing") }),
+    { listingId: LISTING_ID },
+  );
+
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).error, "Unsupported admin listing field: user_id");
+});
+
 test("admin listings update rejects unknown status value", async (t) => {
   setupAdminListingEnv(t);
 
@@ -643,6 +673,24 @@ test("admin listings status transition maps P0004 to 422 rent invariant", async 
 
   assert.equal(response.status, 422);
   assert.equal((await response.json()).error, "Kiral\u0131k ilan i\u00e7in ana \u00f6deme kalemi gerekli");
+});
+
+test("admin listings status transition does not leak unknown P0004 internals", async (t) => {
+  setupAdminListingEnv(t);
+
+  const response = await handleAdminListingsUpdatePatch(
+    createJsonRequest({ method: "PATCH", body: { status: "active" } }),
+    createDependencies({
+      rpc: () => ({
+        data: null,
+        error: { code: "P0004", message: "active listing must keep at least one image" },
+      }),
+    }),
+    { listingId: LISTING_ID },
+  );
+
+  assert.equal(response.status, 422);
+  assert.equal((await response.json()).error, "İlan yayına alınamıyor");
 });
 
 // ----------------------------------------------------------------------------

@@ -174,6 +174,7 @@ export async function handleConsultantsCreatePost(
     const doc = await payload.create({
       collection: "consultants",
       data: parsed.value,
+      overrideAccess: true,
     });
     return jsonResponse(
       { success: true, data: toConsultantDTO(doc as unknown as PayloadConsultantDoc) },
@@ -199,7 +200,11 @@ export async function handleConsultantGet(
   const payload = await getPayload({ config: configPromise });
 
   try {
-    const doc = await payload.findByID({ collection: "consultants", id });
+    const doc = await payload.findByID({
+      collection: "consultants",
+      id,
+      overrideAccess: true,
+    });
     return jsonResponse(
       { success: true, data: toConsultantDTO(doc as unknown as PayloadConsultantDoc) },
       200,
@@ -233,6 +238,7 @@ export async function handleConsultantUpdate(
       collection: "consultants",
       id,
       data: parsed.value,
+      overrideAccess: true,
     });
     return jsonResponse(
       { success: true, data: toConsultantDTO(doc as unknown as PayloadConsultantDoc) },
@@ -262,7 +268,11 @@ export async function handleConsultantDelete(
   const payload = await getPayload({ config: configPromise });
 
   try {
-    await payload.delete({ collection: "consultants", id });
+    await payload.delete({
+      collection: "consultants",
+      id,
+      overrideAccess: true,
+    });
     return jsonResponse({ success: true }, 200);
   } catch {
     return jsonError("Consultant not found", 404);

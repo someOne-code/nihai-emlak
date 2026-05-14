@@ -115,9 +115,7 @@ update public.profiles
 set role = 'admin'
 where id = '66666666-7777-4777-8777-777777777761'::uuid;
 
-set role authenticated;
-select set_config('request.jwt.claim.sub', '66666666-7777-4777-8777-777777777761', false);
-select set_config('request.jwt.claim.role', 'authenticated', false);
+reset role;
 
 insert into public.listings (
   id,
@@ -205,9 +203,7 @@ values
 	  4
 	);
 
-set role authenticated;
-select set_config('request.jwt.claim.sub', '66666666-7777-4777-8777-777777777761', false);
-select set_config('request.jwt.claim.role', 'authenticated', false);
+reset role;
 
 insert into public.listing_main_item_options (
   id,
@@ -268,9 +264,7 @@ values (
 	  true
 	);
 
-set role authenticated;
-select set_config('request.jwt.claim.sub', '66666666-7777-4777-8777-777777777761', false);
-select set_config('request.jwt.claim.role', 'authenticated', false);
+reset role;
 
 insert into public.listing_service_options (
   id,
@@ -295,6 +289,8 @@ values
   true
 );
 
+set role authenticated;
+select set_config('request.jwt.claim.role', 'authenticated', false);
 select set_config('request.jwt.claim.sub', '66666666-7777-4777-8777-777777777762', false);
 
 -- TEST 1: valid checkout creates reservation, order, order_items and pending Isbank payment atomically

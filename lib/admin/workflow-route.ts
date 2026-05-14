@@ -486,6 +486,11 @@ async function parseAdminCancelBody(
   }
 
   const value = payloadResult.value as Record<string, unknown>;
+  const fieldsResult = validateAdminWorkflowFields(value, new Set(["refundDecision", "note"]));
+  if (!fieldsResult.ok) {
+    return fieldsResult;
+  }
+
   const refundDecision = asNonEmptyString(value.refundDecision);
   if (refundDecision !== "manual_refund" && refundDecision !== "no_refund") {
     return {
@@ -545,6 +550,11 @@ async function parseAdminReasonBody(
   }
 
   const body = payloadResult.value as Record<string, unknown>;
+  const fieldsResult = validateAdminWorkflowFields(body, new Set(["reason", "note"]));
+  if (!fieldsResult.ok) {
+    return fieldsResult;
+  }
+
   const reason = asNonEmptyString(body.reason);
   const noteResult = parseOptionalAdminWorkflowNote(body.note);
 
@@ -605,6 +615,11 @@ async function parseAdminNoteOnlyBody(
   }
 
   const body = payloadResult.value as Record<string, unknown>;
+  const fieldsResult = validateAdminWorkflowFields(body, new Set(["note"]));
+  if (!fieldsResult.ok) {
+    return fieldsResult;
+  }
+
   const noteResult = parseOptionalAdminWorkflowNote(body.note);
   if (!noteResult.ok) {
     return {
@@ -661,6 +676,11 @@ async function parseAdminDocumentBody(
   }
 
   const body = payloadResult.value as Record<string, unknown>;
+  const fieldsResult = validateAdminWorkflowFields(body, new Set(["status", "note"]));
+  if (!fieldsResult.ok) {
+    return fieldsResult;
+  }
+
   const status = asNonEmptyString(body.status);
   if (!status || !(status in DOCUMENT_STATUS_RPC_MAP)) {
     return {
@@ -711,6 +731,11 @@ async function parseAdminFinanceOpsBody(
   }
 
   const body = payloadResult.value as Record<string, unknown>;
+  const fieldsResult = validateAdminWorkflowFields(body, new Set(["status", "note"]));
+  if (!fieldsResult.ok) {
+    return fieldsResult;
+  }
+
   const status = asNonEmptyString(body.status);
   if (!status || !(status in FINANCE_STATUS_RPC_MAP)) {
     return {
@@ -736,6 +761,23 @@ async function parseAdminFinanceOpsBody(
       note: noteResult.value,
     },
   };
+}
+
+function validateAdminWorkflowFields(
+  body: Record<string, unknown>,
+  allowedFields: Set<string>,
+): { ok: true } | { ok: false; status: number; error: string } {
+  for (const field of Object.keys(body)) {
+    if (!allowedFields.has(field)) {
+      return {
+        ok: false,
+        status: 400,
+        error: `Unsupported admin workflow field: ${field}`,
+      };
+    }
+  }
+
+  return { ok: true };
 }
 
 async function auditAdminWorkflowInvariantRejection(
