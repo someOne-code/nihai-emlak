@@ -62,11 +62,7 @@ export async function handleSaleLeadCreatePost(
   }
 
   const supabase = (await dependencies.createServerSupabaseClient()) as SupabaseClient;
-  const userResult = await supabase.auth.getUser();
-  if (userResult.error || !userResult.data.user) {
-    return jsonError("Authentication required", 401);
-  }
-
+  await supabase.auth.getUser().catch(() => null);
   const rpcResult = await supabase.rpc("create_sale_lead", parsedPayload.args);
   if (rpcResult.error) {
     const mapped = mapCreateSaleLeadRpcError(rpcResult.error);
@@ -121,6 +117,9 @@ function parseCreateSaleLeadPayload(
   }
 
   const contactPhone = normalizeOptionalText(value.contact_phone, 40);
+  if (!contactEmail && !contactPhone) {
+    return { ok: false, error: "contact_email or contact_phone is required" };
+  }
 
   return {
     ok: true,
@@ -142,7 +141,7 @@ function mapCreateSaleLeadRpcError(error: SupabaseError): { status: number; erro
     return { status: 401, error: "Authentication required" };
   }
   if (code === "P0001" || message.includes("listing is not sale")) {
-    return { status: 409, error: "Sale leads are only available for sale listings" };
+    return { status: 422, error: "Sale leads are only available for sale listings" };
   }
   if (code === "P0002") {
     return { status: 404, error: "Listing not found" };

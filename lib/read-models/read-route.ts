@@ -135,7 +135,11 @@ async function listPublicListingsFromTables(
       "id,type,status,title,slug,summary,city,district,price,currency,room_count,bathroom_count,gross_area_m2,is_furnished,created_at",
     ) as unknown as PublicReadQueryBuilder;
 
-  listingsQuery = listingsQuery.eq("status", "active");
+  listingsQuery = listingsQuery
+    .eq("status", "active")
+    .gte("room_count", 0)
+    .gte("bathroom_count", 0)
+    .gte("gross_area_m2", 1);
   if (query.type) {
     listingsQuery = listingsQuery.eq("type", query.type);
   }

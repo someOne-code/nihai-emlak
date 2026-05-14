@@ -51,6 +51,13 @@ where id::text like '11111111-2222-4222-8222-222222222%';
 delete from public.reservations
 where id::text like 'eeeeeeee-ffff-4fff-8fff-fffffffff%';
 
+update public.listings
+set status = 'passive'::public.listing_status
+where id in (
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd101'::uuid,
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd102'::uuid
+);
+
 delete from public.listing_main_item_options
 where listing_id in (
   'cccccccc-dddd-4ddd-8ddd-ddddddddd101'::uuid,

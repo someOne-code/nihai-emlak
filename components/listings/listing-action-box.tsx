@@ -13,5 +13,5 @@ export function ListingActionBox({
     return <RentPaymentPreviewBox listing={listing} isAuthenticated={isAuthenticated} />;
   }
 
-  return <SaleLeadPreviewBox listing={listing} isAuthenticated={isAuthenticated} />;
+  return <SaleLeadPreviewBox listing={listing} />;
 }

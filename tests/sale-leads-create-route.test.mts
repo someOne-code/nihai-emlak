@@ -55,18 +55,56 @@ test("sale lead create rejects untrusted origins before auth", async (t) => {
   assert.equal(response.status, 403);
 });
 
-test("sale lead create rejects unauthenticated requests", async (t) => {
+test("sale lead create returns 201 for a guest sale listing payload", async (t) => {
   setupSaleLeadEnv(t);
+  const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
+  let authReads = 0;
 
   const response = await handleSaleLeadCreatePost(
     createJsonRequest(validPayload),
-    createDependencies({ userId: null }),
+    createDependencies({
+      userId: null,
+      onGetUser: () => {
+        authReads += 1;
+      },
+      rpc: (name, args) => {
+        calls.push({ name, args });
+        return {
+          data: {
+            result: "created",
+            lead_id: "22222222-2222-4222-8222-222222222222",
+            listing_id: VALID_LISTING_ID,
+            status: "new",
+          },
+          error: null,
+        };
+      },
+    }),
   );
 
-  assert.equal(response.status, 401);
+  assert.equal(response.status, 201);
+  assert.equal(authReads, 1);
+  assert.deepEqual(calls, [
+    {
+      name: "create_sale_lead",
+      args: {
+        p_listing_id: VALID_LISTING_ID,
+        p_contact_name: "Ada User",
+        p_contact_email: "ada@example.com",
+        p_contact_phone: "+90 555 111 22 33",
+        p_message: "Bu ilanla ilgileniyorum",
+      },
+    },
+  ]);
   assert.deepEqual(await response.json(), {
-    success: false,
-    error: "Authentication required",
+    success: true,
+    data: {
+      lead: {
+        id: "22222222-2222-4222-8222-222222222222",
+        listingId: VALID_LISTING_ID,
+        status: "new",
+      },
+    },
   });
 });
 
@@ -85,7 +123,83 @@ test("sale lead create rejects invalid payloads", async (t) => {
   assert.equal(response.status, 400);
 });
 
-test("sale lead create returns 201 for a valid sale listing payload", async (t) => {
+test("sale lead create rejects missing contact name", async (t) => {
+  setupSaleLeadEnv(t);
+
+  const response = await handleSaleLeadCreatePost(
+    createJsonRequest({ ...validPayload, contact_name: " " }),
+    createDependencies({
+      rpc: () => {
+        throw new Error("rpc should not be called without contact_name");
+      },
+    }),
+  );
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), {
+    success: false,
+    error: "contact_name must be between 2 and 120 characters",
+  });
+});
+
+test("sale lead create rejects short messages", async (t) => {
+  setupSaleLeadEnv(t);
+
+  const response = await handleSaleLeadCreatePost(
+    createJsonRequest({ ...validPayload, message: "abcd" }),
+    createDependencies({
+      rpc: () => {
+        throw new Error("rpc should not be called with a short message");
+      },
+    }),
+  );
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), {
+    success: false,
+    error: "message must be between 5 and 2000 characters",
+  });
+});
+
+test("sale lead create rejects invalid email addresses", async (t) => {
+  setupSaleLeadEnv(t);
+
+  const response = await handleSaleLeadCreatePost(
+    createJsonRequest({ ...validPayload, contact_email: "not-an-email" }),
+    createDependencies({
+      rpc: () => {
+        throw new Error("rpc should not be called with an invalid email");
+      },
+    }),
+  );
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), {
+    success: false,
+    error: "contact_email must be a valid email address",
+  });
+});
+
+test("sale lead create rejects payloads without email or phone", async (t) => {
+  setupSaleLeadEnv(t);
+
+  const response = await handleSaleLeadCreatePost(
+    createJsonRequest({ ...validPayload, contact_email: " ", contact_phone: "" }),
+    createDependencies({
+      rpc: () => {
+        throw new Error("rpc should not be called when contact details are missing");
+      },
+    }),
+  );
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), {
+    success: false,
+    error: "contact_email or contact_phone is required",
+  });
+});
+
+test("sale lead create returns 201 for an authenticated sale listing payload", async (t) => {
   setupSaleLeadEnv(t);
   const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
 
@@ -132,7 +246,7 @@ test("sale lead create returns 201 for a valid sale listing payload", async (t) 
   });
 });
 
-test("sale lead create rejects rent listings with 409", async (t) => {
+test("sale lead create rejects rent listings with 422", async (t) => {
   setupSaleLeadEnv(t);
 
   const response = await handleSaleLeadCreatePost(
@@ -145,10 +259,50 @@ test("sale lead create rejects rent listings with 409", async (t) => {
     }),
   );
 
-  assert.equal(response.status, 409);
+  assert.equal(response.status, 422);
   assert.deepEqual(await response.json(), {
     success: false,
     error: "Sale leads are only available for sale listings",
+  });
+});
+
+test("sale lead create maps missing listings to 404", async (t) => {
+  setupSaleLeadEnv(t);
+
+  const response = await handleSaleLeadCreatePost(
+    createJsonRequest(validPayload),
+    createDependencies({
+      rpc: () => ({
+        data: null,
+        error: { code: "P0002", message: "listing not found" },
+      }),
+    }),
+  );
+
+  assert.equal(response.status, 404);
+  assert.deepEqual(await response.json(), {
+    success: false,
+    error: "Listing not found",
+  });
+});
+
+test("sale lead create maps inactive listings to invalid request", async (t) => {
+  setupSaleLeadEnv(t);
+
+  const response = await handleSaleLeadCreatePost(
+    createJsonRequest(validPayload),
+    createDependencies({
+      rpc: () => ({
+        data: null,
+        error: { code: "22023", message: "listing is not active" },
+      }),
+    }),
+  );
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), {
+    success: false,
+    error: "Invalid sale lead create request",
   });
 });
 
@@ -173,6 +327,7 @@ function createFailingDependencies(): SaleLeadCreateRouteDependencies {
 
 function createDependencies(options: {
   userId?: string | null;
+  onGetUser?: () => void;
   rpc?: (
     name: "create_sale_lead",
     args: Record<string, unknown>,
@@ -181,12 +336,15 @@ function createDependencies(options: {
   return {
     createServerSupabaseClient: async () => ({
       auth: {
-        getUser: async () => ({
-          data: {
-            user: options.userId === null ? null : { id: options.userId ?? USER_ID },
-          },
-          error: null,
-        }),
+        getUser: async () => {
+          options.onGetUser?.();
+          return {
+            data: {
+              user: options.userId === null ? null : { id: options.userId ?? USER_ID },
+            },
+            error: null,
+          };
+        },
       },
       rpc: async (name: "create_sale_lead", args: Record<string, unknown>) =>
         options.rpc?.(name, args) ?? {

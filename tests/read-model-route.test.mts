@@ -380,6 +380,67 @@ test("public listings route table fallback maps active listing rows to public li
   });
 });
 
+test("public listings route table fallback hides active rows missing card facts", async () => {
+  const response = await handlePublicListingsGet(
+    new Request("http://localhost:3000/api/public/listings?limit=6"),
+    createDependencies({
+      rpc: () => ({
+        data: null,
+        error: {
+          code: "PGRST202",
+          message: "function public.list_public_listings was not found",
+        },
+      }),
+      tableRead: {
+        listings: [
+          {
+            id: "11111111-1111-4111-8111-111111111111",
+            type: "rent",
+            status: "active",
+            title: "Complete card facts",
+            slug: "complete-card-facts",
+            summary: null,
+            city: "Kayseri",
+            district: "Talas",
+            price: 35000,
+            currency: "TRY",
+            room_count: 3,
+            bathroom_count: 2,
+            gross_area_m2: 145,
+            is_furnished: true,
+            created_at: "2026-05-01T00:00:00.000Z",
+          },
+          {
+            id: "33333333-3333-4333-8333-333333333333",
+            type: "sale",
+            status: "active",
+            title: "Missing visible card facts",
+            slug: "missing-visible-card-facts",
+            summary: null,
+            city: "Istanbul",
+            district: "Kadikoy",
+            price: 600000,
+            currency: "TRY",
+            room_count: null,
+            bathroom_count: null,
+            gross_area_m2: null,
+            is_furnished: false,
+            created_at: "2026-05-02T00:00:00.000Z",
+          },
+        ],
+        images: [],
+      },
+    }),
+  );
+
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.deepEqual(
+    payload.data.items.map((item: { id: string }) => item.id),
+    ["11111111-1111-4111-8111-111111111111"],
+  );
+});
+
 test("public listings route table fallback applies supported listing filters", async () => {
   const response = await handlePublicListingsGet(
     new Request("http://localhost:3000/api/public/listings?city=kayseri&district=talas&min_price=30000&max_price=40000&min_rooms=2&min_bathrooms=2&min_area=120&max_area=160&is_furnished=true&limit=6"),
@@ -1103,7 +1164,10 @@ function createListingsQuery(
       return query;
     },
     gte: (column: string, value: number) => {
-      filters.push((row) => Number(readMockField(row, column)) >= value);
+      filters.push((row) => {
+        const raw = readMockField(row, column);
+        return raw !== null && raw !== undefined && Number(raw) >= value;
+      });
       return query;
     },
     lte: (column: string, value: number) => {

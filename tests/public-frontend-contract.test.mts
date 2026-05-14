@@ -297,6 +297,47 @@ test("sale lead helper builds the snake_case backend payload", () => {
   );
 });
 
+test("sale listing detail exposes one guest sale lead surface without auth redirect", () => {
+  const pageSource = readFileSync(
+    resolve("app/(site)/listings/[id]/page.tsx"),
+    "utf8",
+  );
+  const actionBoxSource = readFileSync(
+    resolve("components/sale/sale-lead-preview-box.tsx"),
+    "utf8",
+  );
+  const formSource = readFileSync(
+    resolve("components/sale/sale-lead-form.tsx"),
+    "utf8",
+  );
+  const rentActionSource = readFileSync(
+    resolve("components/rent/rent-payment-preview-box.tsx"),
+    "utf8",
+  );
+
+  assert.doesNotMatch(pageSource, /import\s+\{\s*SaleLeadForm\s*\}/);
+  assert.match(pageSource, /listing\.type\s*===\s*"rent"[\s\S]*<ListingContactBox/);
+  assert.doesNotMatch(pageSource, /listing\.type\s*===\s*"sale"[\s\S]*<ListingContactBox/);
+  assert.doesNotMatch(pageSource, /listing\.type\s*===\s*"sale"[\s\S]*<SaleLeadForm/);
+  assert.doesNotMatch(rentActionSource, /SaleLeadForm|sale-lead-form/);
+
+  assert.match(actionBoxSource, /import\s+\{\s*SaleLeadForm\s*\}/);
+  assert.match(actionBoxSource, /data-aos="fade-up"/);
+  assert.match(actionBoxSource, /data-aos-delay="100"/);
+  assert.match(actionBoxSource, /<SaleLeadForm\s+listing=\{listing\}/);
+  assert.doesNotMatch(actionBoxSource, /href="#sale-lead-form"|href="#listing-contact"/);
+  assert.doesNotMatch(actionBoxSource, /getLoginRedirectUrl|Giri[sş] Yap/);
+
+  assert.match(formSource, /id="sale-lead-form"/);
+  assert.doesNotMatch(formSource, /rounded-xl[\s\S]*bg-white[\s\S]*p-8/);
+  assert.match(formSource, /createSaleLead/);
+  assert.match(formSource, /useEffect\s*\(/);
+  assert.match(formSource, /disabled=\{\s*!isHydrated\s*\|\|\s*isSubmitting\s*\}/);
+  assert.match(formSource, /contactEmail[\s\S]*contactPhone|contactPhone[\s\S]*contactEmail/);
+  assert.match(formSource, /!\s*(?:input\.)?contactEmail\s*&&\s*!\s*(?:input\.)?contactPhone/);
+  assert.doesNotMatch(formSource, /getLoginRedirectUrl|\/auth\/login|if\s*\(\s*!isAuthenticated\s*\)/);
+});
+
 test("listing detail action components receive auth state from the page boundary", () => {
   const actionBoxSource = readFileSync(
     resolve("components/listings/listing-action-box.tsx"),

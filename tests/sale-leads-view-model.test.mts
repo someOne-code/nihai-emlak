@@ -39,6 +39,24 @@ test("buildSaleLeadsViewModel falls back safely for missing joined data", () => 
   assert.equal(model.rows[0].conversationHref, null);
 });
 
+test("buildSaleLeadsViewModel maps guest sale leads with nullable user identity", () => {
+  const model = buildSaleLeadsViewModel({
+    leads: [
+      rawLead({
+        user_id: null,
+        contact_name: "Guest Buyer",
+        contact_email: "guest@example.com",
+        profiles: null,
+      }),
+    ],
+  });
+
+  assert.equal(model.rows.length, 1);
+  assert.equal(model.rows[0].userId, null);
+  assert.equal(model.rows[0].contactName, "Guest Buyer");
+  assert.equal(model.rows[0].contactEmail, "guest@example.com");
+});
+
 function rawLead(overrides: Partial<RawSaleLead> = {}): RawSaleLead {
   return {
     id: "22222222-2222-4222-8222-222222222222",

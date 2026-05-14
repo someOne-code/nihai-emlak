@@ -1,4 +1,141 @@
-drop function if exists public.list_public_listings(public.listing_type, text, integer, integer);
+-- Require the facts shown on public listing cards before a listing can be
+-- published. Public read models also hide any legacy active rows that are
+-- missing those facts.
+
+create or replace function public.admin_listing_publish_missing(
+  p_listing_id uuid
+)
+returns text[]
+language plpgsql
+security invoker
+set search_path = ''
+stable
+as $$
+declare
+  v_listing public.listings%rowtype;
+  v_missing text[] := '{}';
+begin
+  select * into v_listing
+  from public.listings
+  where id = p_listing_id;
+
+  if not found then
+    return array['listing_not_found'];
+  end if;
+
+  if nullif(btrim(coalesce(v_listing.description, '')), '') is null then
+    v_missing := array_append(v_missing, 'description');
+  end if;
+
+  if nullif(btrim(coalesce(v_listing.district, '')), '') is null then
+    v_missing := array_append(v_missing, 'district');
+  end if;
+
+  if v_listing.room_count is null then
+    v_missing := array_append(v_missing, 'room_count');
+  end if;
+
+  if v_listing.bathroom_count is null then
+    v_missing := array_append(v_missing, 'bathroom_count');
+  end if;
+
+  if v_listing.gross_area_m2 is null or v_listing.gross_area_m2 <= 0 then
+    v_missing := array_append(v_missing, 'gross_area_m2');
+  end if;
+
+  if not exists (
+    select 1
+    from public.listing_images
+    where listing_id = p_listing_id
+  ) then
+    v_missing := array_append(v_missing, 'image');
+  end if;
+
+  return v_missing;
+end;
+$$;
+
+update public.listings
+set status = 'passive'::public.listing_status
+where status = 'active'::public.listing_status
+  and (
+    room_count is null
+    or bathroom_count is null
+    or gross_area_m2 is null
+    or gross_area_m2 <= 0
+  );
+
+create or replace function public.enforce_listing_publish_ready()
+returns trigger
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v_missing text[] := '{}';
+begin
+  if new.status <> 'active'::public.listing_status then
+    return new;
+  end if;
+
+  if tg_op = 'INSERT' then
+    if current_user = 'postgres' then
+      return new;
+    end if;
+
+    raise exception 'active listing insert must use admin_set_listing_status'
+      using errcode = 'P0004';
+  end if;
+
+  if nullif(btrim(coalesce(new.description, '')), '') is null then
+    v_missing := array_append(v_missing, 'description');
+  end if;
+
+  if nullif(btrim(coalesce(new.district, '')), '') is null then
+    v_missing := array_append(v_missing, 'district');
+  end if;
+
+  if new.room_count is null then
+    v_missing := array_append(v_missing, 'room_count');
+  end if;
+
+  if new.bathroom_count is null then
+    v_missing := array_append(v_missing, 'bathroom_count');
+  end if;
+
+  if new.gross_area_m2 is null or new.gross_area_m2 <= 0 then
+    v_missing := array_append(v_missing, 'gross_area_m2');
+  end if;
+
+  if tg_op = 'UPDATE' and not exists (
+    select 1
+    from public.listing_images
+    where listing_id = new.id
+  ) then
+    v_missing := array_append(v_missing, 'image');
+  end if;
+
+  if array_length(v_missing, 1) is not null then
+    raise exception 'publish-guard: %', array_to_string(v_missing, ', ')
+      using errcode = 'P0004';
+  end if;
+
+  if new.type = 'rent'::public.listing_type
+     and not public.admin_listing_is_checkout_ready(new.id) then
+    raise exception 'checkout-not-ready'
+      using errcode = 'P0004';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_listings_enforce_publish_ready on public.listings;
+create trigger trg_listings_enforce_publish_ready
+before insert or update of status, description, district, room_count, bathroom_count, gross_area_m2
+on public.listings
+for each row
+execute function public.enforce_listing_publish_ready();
 
 create or replace function public.list_public_listings(
   p_type public.listing_type default null,
@@ -56,6 +193,8 @@ begin
         'gross_area_m2', l.gross_area_m2,
         'is_furnished', l.is_furnished,
         'primary_image_url', img.image_url,
+        'primary_image_card_url', img.card_image_url,
+        'primary_image_detail_url', img.detail_image_url,
         'created_at', l.created_at
       )
       order by l.created_at desc, l.id
@@ -67,6 +206,10 @@ begin
     select *
     from public.listings
     where status = 'active'
+      and room_count is not null
+      and bathroom_count is not null
+      and gross_area_m2 is not null
+      and gross_area_m2 > 0
       and (p_type is null or type = p_type)
       and (nullif(btrim(p_city), '') is null or city ilike '%' || btrim(p_city) || '%')
       and (nullif(btrim(p_district), '') is null or district ilike '%' || btrim(p_district) || '%')
@@ -82,7 +225,7 @@ begin
     offset p_offset
   ) as l
   left join lateral (
-    select li.image_url
+    select li.image_url, li.card_image_url, li.detail_image_url
     from public.listing_images as li
     where li.listing_id = l.id
     order by li.is_primary desc, li.sort_order, li.created_at, li.id
@@ -112,6 +255,10 @@ as $$
       l.gross_area_m2
     from public.listings as l
     where l.status = 'active'
+      and l.room_count is not null
+      and l.bathroom_count is not null
+      and l.gross_area_m2 is not null
+      and l.gross_area_m2 > 0
   ),
   city_options as (
     select coalesce(

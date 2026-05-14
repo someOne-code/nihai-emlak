@@ -7,6 +7,7 @@ import {
   handleAdminSaleLeadsPost,
   type AdminSaleLeadsRouteDependencies,
 } from "../lib/admin/sale-leads-route.ts";
+import type { RawSaleLead } from "../lib/admin-ui/sale-leads-view-model.ts";
 
 const ADMIN_USER_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const VALID_LEAD_ID = "22222222-2222-4222-8222-222222222222";
@@ -58,6 +59,43 @@ test("admin sale leads GET returns sale leads for admin", async () => {
   assert.equal(body.success, true);
   assert.equal(body.data.leads.length, 1);
   assert.equal(body.data.leads[0].id, VALID_LEAD_ID);
+});
+
+test("admin sale leads GET returns guest sale leads without filtering them out", async () => {
+  const guestLead: RawSaleLead = {
+    id: VALID_LEAD_ID,
+    listing_id: "11111111-1111-4111-8111-111111111111",
+    user_id: null,
+    contact_name: "Guest Buyer",
+    contact_email: "guest@example.com",
+    contact_phone: "+905551112233",
+    message: "Misafir alici olarak detay almak istiyorum",
+    status: "new",
+    updated_at: "2026-05-05T10:00:00Z",
+    created_at: "2026-05-05T09:00:00Z",
+    chatwoot_conversation_id: null,
+    listings: {
+      id: "11111111-1111-4111-8111-111111111111",
+      title: "Moda Residence",
+      city: "Istanbul",
+      district: "Kadikoy",
+      type: "sale",
+    },
+    profiles: null,
+  };
+
+  const response = await handleAdminSaleLeadsGet(
+    new Request("http://localhost:3000/api/admin/sale-leads"),
+    createDependencies({ selectData: [guestLead] }),
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.success, true);
+  assert.equal(body.data.leads.length, 1);
+  assert.equal(body.data.leads[0].id, VALID_LEAD_ID);
+  assert.equal(body.data.leads[0].user_id, null);
+  assert.equal(body.data.leads[0].profiles, null);
 });
 
 test("admin sale leads GET applies status search and pagination before reading rows", async () => {
