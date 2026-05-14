@@ -58,6 +58,16 @@ where id in (
   'eeeeeeee-aaaa-4aaa-8aaa-aaaaaaaaa304'::uuid,
   'eeeeeeee-aaaa-4aaa-8aaa-aaaaaaaaa305'::uuid
 );
+
+update public.listings
+set status = 'passive'
+where id in (
+  'cccccccc-aaaa-4aaa-8aaa-aaaaaaaaa301'::uuid,
+  'cccccccc-aaaa-4aaa-8aaa-aaaaaaaaa302'::uuid,
+  'cccccccc-aaaa-4aaa-8aaa-aaaaaaaaa303'::uuid,
+  'cccccccc-aaaa-4aaa-8aaa-aaaaaaaaa304'::uuid
+);
+
 delete from public.listings
 where id in (
   'cccccccc-aaaa-4aaa-8aaa-aaaaaaaaa301'::uuid,
@@ -70,10 +80,10 @@ where id in (
 
 insert into public.listings (id, type, status, title, slug, summary, description, city, district, price, currency)
 values
-  ('cccccccc-aaaa-4aaa-8aaa-aaaaaaaaa301'::uuid, 'rent', 'active', 'Expire Test Listing A', 'expire-test-a', 'test', 'test', 'Istanbul', 'Kadikoy', 40000, 'TRY'),
-  ('cccccccc-aaaa-4aaa-8aaa-aaaaaaaaa302'::uuid, 'rent', 'active', 'Expire Test Listing B', 'expire-test-b', 'test', 'test', 'Istanbul', 'Besiktas', 45000, 'TRY'),
-  ('cccccccc-aaaa-4aaa-8aaa-aaaaaaaaa303'::uuid, 'rent', 'active', 'Expire Test Listing C', 'expire-test-c', 'test', 'test', 'Istanbul', 'Sisli', 42000, 'TRY'),
-  ('cccccccc-aaaa-4aaa-8aaa-aaaaaaaaa304'::uuid, 'rent', 'active', 'Expire Test Listing D', 'expire-test-d', 'test', 'test', 'Istanbul', 'Uskudar', 38000, 'TRY');
+  ('cccccccc-aaaa-4aaa-8aaa-aaaaaaaaa301'::uuid, 'rent', 'passive', 'Expire Test Listing A', 'expire-test-a', 'test', 'test', 'Istanbul', 'Kadikoy', 40000, 'TRY'),
+  ('cccccccc-aaaa-4aaa-8aaa-aaaaaaaaa302'::uuid, 'rent', 'passive', 'Expire Test Listing B', 'expire-test-b', 'test', 'test', 'Istanbul', 'Besiktas', 45000, 'TRY'),
+  ('cccccccc-aaaa-4aaa-8aaa-aaaaaaaaa303'::uuid, 'rent', 'passive', 'Expire Test Listing C', 'expire-test-c', 'test', 'test', 'Istanbul', 'Sisli', 42000, 'TRY'),
+  ('cccccccc-aaaa-4aaa-8aaa-aaaaaaaaa304'::uuid, 'rent', 'passive', 'Expire Test Listing D', 'expire-test-d', 'test', 'test', 'Istanbul', 'Uskudar', 38000, 'TRY');
 
 -- Reservation 301: STALE pending, NO order → SHOULD expire
 insert into public.reservations (id, listing_id, user_id, move_in_date, stay_months, guest_count, status, created_at, updated_at)

@@ -155,7 +155,19 @@ values (
 );
 
 insert into public.listings (
-  id, type, status, title, slug, city, district, price, currency, description
+  id,
+  type,
+  status,
+  title,
+  slug,
+  city,
+  district,
+  price,
+  currency,
+  description,
+  room_count,
+  bathroom_count,
+  gross_area_m2
 )
 values
 (
@@ -163,28 +175,40 @@ values
   'sale', 'passive',
   'Phase 8 Sale Passive', 'phase-8-sale-passive',
   'Istanbul', 'Kadikoy', 4500000, 'TRY',
-  'Satilik daire aciklamasi'
+  'Satilik daire aciklamasi',
+  3,
+  2,
+  140
 ),
 (
   'cccccccc-dddd-4ddd-8ddd-ddddddddd802'::uuid,
   'rent', 'passive',
   'Phase 8 Rent With Main', 'phase-8-rent-with-main',
   'Istanbul', 'Sisli', 42000, 'TRY',
-  'Kiralik daire aciklamasi'
+  'Kiralik daire aciklamasi',
+  2,
+  1,
+  90
 ),
 (
   'cccccccc-dddd-4ddd-8ddd-ddddddddd803'::uuid,
   'rent', 'passive',
   'Phase 8 Rent Without Main', 'phase-8-rent-without-main',
   'Istanbul', 'Besiktas', 39000, 'TRY',
-  'Kiralik daire aciklamasi 2'
+  'Kiralik daire aciklamasi 2',
+  2,
+  1,
+  85
 ),
 (
   'cccccccc-dddd-4ddd-8ddd-ddddddddd804'::uuid,
   'rent', 'passive',
   'Phase 8 Rent Main No Service', 'phase-8-rent-main-no-service',
   'Istanbul', 'Uskudar', 35000, 'TRY',
-  'Kiralik daire aciklamasi 3'
+  'Kiralik daire aciklamasi 3',
+  2,
+  1,
+  80
 );
 
 -- Seed images so publish guard is satisfied

@@ -29,14 +29,29 @@ where id = 'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid
    or slug = 'phase-8-images-sale-passive';
 
 insert into public.listings (
-  id, type, status, title, slug, city, district, price, currency, description
+  id,
+  type,
+  status,
+  title,
+  slug,
+  city,
+  district,
+  price,
+  currency,
+  description,
+  room_count,
+  bathroom_count,
+  gross_area_m2
 )
 values (
   'cccccccc-dddd-4ddd-8ddd-ddddddddd801'::uuid,
   'sale', 'passive',
   'Phase 8 Images Sale Passive', 'phase-8-images-sale-passive',
   'Istanbul', 'Kadikoy', 4500000, 'TRY',
-  'Satilik daire aciklamasi'
+  'Satilik daire aciklamasi',
+  3,
+  2,
+  140
 );
 
 -- ----------------------------------------------------------------------------

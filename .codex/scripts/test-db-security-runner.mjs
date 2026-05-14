@@ -21,13 +21,24 @@ const EXCLUDES = [
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
-export function resolveSupabaseDbContainerName({ repoRoot, names }) {
-  const expected = `supabase_db_${path.basename(repoRoot)}`;
+export function resolveSupabaseDbContainerName({ projectId, repoRoot, names }) {
+  const expected = `supabase_db_${projectId ?? resolveSupabaseProjectId(repoRoot)}`;
   if (names.includes(expected)) {
     return expected;
   }
 
   return null;
+}
+
+function resolveSupabaseProjectId(repoRoot) {
+  const configPath = path.join(repoRoot, "supabase", "config.toml");
+  try {
+    const source = readFileSync(configPath, "utf8");
+    const match = source.match(/^\s*project_id\s*=\s*"([^"]+)"\s*$/m);
+    return match?.[1] || path.basename(repoRoot);
+  } catch {
+    return path.basename(repoRoot);
+  }
 }
 
 export function buildSqlLogPath({ repoRoot, sqlPath }) {

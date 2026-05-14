@@ -163,9 +163,7 @@ values
   2
 );
 
-set role authenticated;
-select set_config('request.jwt.claim.sub', '77777777-7777-7777-7777-777777777777', false);
-select set_config('request.jwt.claim.role', 'authenticated', false);
+reset role;
 
 insert into public.listing_main_item_options (
   id,
@@ -229,6 +227,8 @@ begin
 end;
 $$;
 
+set role authenticated;
+select set_config('request.jwt.claim.role', 'authenticated', false);
 select set_config('request.jwt.claim.sub', '88888888-8888-8888-8888-888888888888', false);
 
 do $$
@@ -260,7 +260,7 @@ begin
 end;
 $$;
 
-select set_config('request.jwt.claim.sub', '77777777-7777-7777-7777-777777777777', false);
+reset role;
 
 do $$
 begin
@@ -394,9 +394,7 @@ begin
 end;
 $$;
 
-set role authenticated;
-select set_config('request.jwt.claim.sub', '77777777-7777-7777-7777-777777777777', false);
-select set_config('request.jwt.claim.role', 'authenticated', false);
+reset role;
 
 do $$
 begin

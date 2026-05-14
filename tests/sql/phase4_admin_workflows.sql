@@ -77,6 +77,31 @@ where id in (
   'eeeeeeee-ffff-4fff-8fff-fffffffff004'::uuid
 );
 
+update public.listings
+set status = 'passive'::public.listing_status
+where id in (
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd001'::uuid,
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd002'::uuid,
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd003'::uuid,
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd004'::uuid
+);
+
+delete from public.listing_main_item_options
+where listing_id in (
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd001'::uuid,
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd002'::uuid,
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd003'::uuid,
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd004'::uuid
+);
+
+delete from public.listing_images
+where listing_id in (
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd001'::uuid,
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd002'::uuid,
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd003'::uuid,
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd004'::uuid
+);
+
 delete from public.listings
 where id in (
   'cccccccc-dddd-4ddd-8ddd-ddddddddd001'::uuid,
@@ -84,6 +109,9 @@ where id in (
   'cccccccc-dddd-4ddd-8ddd-ddddddddd003'::uuid,
   'cccccccc-dddd-4ddd-8ddd-ddddddddd004'::uuid
 );
+
+delete from public.main_item_catalog
+where id = 'bbbbbbbb-dddd-4ddd-8ddd-ddddddddd901'::uuid;
 
 delete from auth.users
 where id in (
@@ -154,9 +182,14 @@ insert into public.listings (
   status,
   title,
   slug,
+  description,
   city,
+  district,
   price,
-  currency
+  currency,
+  room_count,
+  bathroom_count,
+  gross_area_m2
 )
 values
 (
@@ -165,9 +198,14 @@ values
   'active',
   'Admin Cancel Pending Listing',
   'admin-cancel-pending-listing',
+  'Admin workflow ready listing',
   'Istanbul',
+  'Kadikoy',
   25000,
-  'TRY'
+  'TRY',
+  2,
+  1,
+  90
 ),
 (
   'cccccccc-dddd-4ddd-8ddd-ddddddddd002'::uuid,
@@ -175,9 +213,14 @@ values
   'passive',
   'Admin Cancel Success Listing',
   'admin-cancel-success-listing',
+  'Admin workflow ready listing',
   'Istanbul',
+  'Kadikoy',
   30000,
-  'TRY'
+  'TRY',
+  2,
+  1,
+  95
 ),
 (
   'cccccccc-dddd-4ddd-8ddd-ddddddddd003'::uuid,
@@ -185,9 +228,14 @@ values
   'active',
   'Admin Confirm Repair Listing',
   'admin-confirm-repair-listing',
+  'Admin workflow ready listing',
   'Istanbul',
+  'Kadikoy',
   28000,
-  'TRY'
+  'TRY',
+  2,
+  1,
+  88
 ),
 (
   'cccccccc-dddd-4ddd-8ddd-ddddddddd004'::uuid,
@@ -195,9 +243,102 @@ values
   'passive',
   'Admin Reopen Blocked Listing',
   'admin-reopen-blocked-listing',
+  'Admin workflow ready listing',
   'Istanbul',
+  'Kadikoy',
   32000,
-  'TRY'
+  'TRY',
+  2,
+  1,
+  100
+);
+
+insert into public.listing_images (
+  listing_id,
+  image_url,
+  alt_text,
+  sort_order,
+  is_primary
+)
+values
+(
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd001'::uuid,
+  'https://example.com/admin-workflow-001.jpg',
+  'Admin workflow listing 001',
+  0,
+  true
+),
+(
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd002'::uuid,
+  'https://example.com/admin-workflow-002.jpg',
+  'Admin workflow listing 002',
+  0,
+  true
+),
+(
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd003'::uuid,
+  'https://example.com/admin-workflow-003.jpg',
+  'Admin workflow listing 003',
+  0,
+  true
+),
+(
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd004'::uuid,
+  'https://example.com/admin-workflow-004.jpg',
+  'Admin workflow listing 004',
+  0,
+  true
+);
+
+insert into public.main_item_catalog (
+  id,
+  code,
+  label,
+  pricing_strategy,
+  default_multiplier,
+  is_active,
+  sort_order
+)
+values (
+  'bbbbbbbb-dddd-4ddd-8ddd-ddddddddd901'::uuid,
+  'admin_workflow_deposit',
+  'Admin Workflow Deposit',
+  'listing_price_multiplier',
+  1,
+  true,
+  10
+);
+
+insert into public.listing_main_item_options (
+  listing_id,
+  main_item_id,
+  is_enabled,
+  sort_order
+)
+values
+(
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd001'::uuid,
+  'bbbbbbbb-dddd-4ddd-8ddd-ddddddddd901'::uuid,
+  true,
+  10
+),
+(
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd002'::uuid,
+  'bbbbbbbb-dddd-4ddd-8ddd-ddddddddd901'::uuid,
+  true,
+  10
+),
+(
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd003'::uuid,
+  'bbbbbbbb-dddd-4ddd-8ddd-ddddddddd901'::uuid,
+  true,
+  10
+),
+(
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd004'::uuid,
+  'bbbbbbbb-dddd-4ddd-8ddd-ddddddddd901'::uuid,
+  true,
+  10
 );
 
 insert into public.reservations (
@@ -1676,6 +1817,31 @@ where id in (
   'eeeeeeee-ffff-4fff-8fff-fffffffff004'::uuid
 );
 
+update public.listings
+set status = 'passive'::public.listing_status
+where id in (
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd001'::uuid,
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd002'::uuid,
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd003'::uuid,
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd004'::uuid
+);
+
+delete from public.listing_main_item_options
+where listing_id in (
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd001'::uuid,
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd002'::uuid,
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd003'::uuid,
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd004'::uuid
+);
+
+delete from public.listing_images
+where listing_id in (
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd001'::uuid,
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd002'::uuid,
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd003'::uuid,
+  'cccccccc-dddd-4ddd-8ddd-ddddddddd004'::uuid
+);
+
 delete from public.listings
 where id in (
   'cccccccc-dddd-4ddd-8ddd-ddddddddd001'::uuid,
@@ -1683,6 +1849,9 @@ where id in (
   'cccccccc-dddd-4ddd-8ddd-ddddddddd003'::uuid,
   'cccccccc-dddd-4ddd-8ddd-ddddddddd004'::uuid
 );
+
+delete from public.main_item_catalog
+where id = 'bbbbbbbb-dddd-4ddd-8ddd-ddddddddd901'::uuid;
 
 delete from auth.users
 where id in (

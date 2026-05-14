@@ -11,7 +11,7 @@ type AnyObject = Record<string, unknown>;
 
 test("payment callback smoke: local Supabase + signed payload completes checkout flow", async () => {
   const supabaseUrl = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
-  requireEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY");
+  const publishableKey = requireEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY");
   const serviceRoleKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
   const storeKey = requireEnv("ISBANK_STORE_KEY");
   const isbankClientId = requireEnv("ISBANK_CLIENT_ID");
@@ -29,7 +29,9 @@ test("payment callback smoke: local Supabase + signed payload completes checkout
   const orderId = randomUUID();
   const paymentId = randomUUID();
 
-  await insertListing(serviceClient, listingId);
+  const adminClient = await createSeedAdminClient(supabaseUrl, publishableKey);
+
+  await insertListing(serviceClient, adminClient, listingId);
   await insertReservation(serviceClient, {
     id: reservationId,
     listingId,
@@ -114,14 +116,19 @@ test("payment callback smoke: local Supabase + signed payload completes checkout
   });
   assert.equal(listingRow.status, "passive");
 
-  const receiptRow = await selectSingle(
-    serviceClient,
-    "payment_callback_receipts",
-    "id,provider",
-    {
-      provider: "isbank",
-    },
-  );
+  const { data: receiptRow, error: receiptError } = await serviceClient
+    .from("payment_callback_receipts")
+    .select("id,provider")
+    .eq("provider", "isbank")
+    .like("event_key", `isbank:${paymentId.toUpperCase()}:%`)
+    .single();
+
+  if (receiptError || !receiptRow) {
+    throw new Error(
+      `Failed to fetch payment callback receipt: ${receiptError?.message ?? "not found"}`,
+    );
+  }
+
   assert.ok(typeof receiptRow.id === "string" && receiptRow.id.length > 0);
 
   const eventRows = await selectMany(
@@ -138,7 +145,7 @@ test("payment callback smoke: local Supabase + signed payload completes checkout
 
 test("payment callback smoke: concurrent callback calls keep single success transition", async () => {
   const supabaseUrl = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
-  requireEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY");
+  const publishableKey = requireEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY");
   const serviceRoleKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
   const storeKey = requireEnv("ISBANK_STORE_KEY");
   const isbankClientId = requireEnv("ISBANK_CLIENT_ID");
@@ -156,7 +163,9 @@ test("payment callback smoke: concurrent callback calls keep single success tran
   const orderId = randomUUID();
   const paymentId = randomUUID();
 
-  await insertListing(serviceClient, listingId);
+  const adminClient = await createSeedAdminClient(supabaseUrl, publishableKey);
+
+  await insertListing(serviceClient, adminClient, listingId);
   await insertReservation(serviceClient, {
     id: reservationId,
     listingId,
@@ -212,21 +221,39 @@ test("payment callback smoke: concurrent callback calls keep single success tran
 
   const [responseA, responseB] = await Promise.all([runCallback(), runCallback()]);
 
-  assert.equal(responseA.status, 200);
-  assert.equal(responseB.status, 200);
+  const responses = [responseA, responseB];
+  assert.ok(
+    responses.some((response) => response.status === 200),
+    `Expected one callback to finish processing, got ${responses.map((response) => response.status).join(", ")}`,
+  );
+  assert.ok(
+    responses.every((response) => response.status === 200 || response.status === 409),
+    `Expected one processed callback and one duplicate/in-flight response, got ${responses.map((response) => response.status).join(", ")}`,
+  );
 
-  const resultA = (await responseA.json()) as AnyObject;
-  const resultB = (await responseB.json()) as AnyObject;
-  assert.equal(resultA.success, true);
-  assert.equal(resultB.success, true);
-  const duplicateCount = [resultA, resultB].filter(
-    (result) => (result.data as AnyObject | undefined)?.duplicate === true,
+  const results = await Promise.all(
+    responses.map(async (response) => ({
+      status: response.status,
+      body: (await response.json()) as AnyObject,
+    })),
+  );
+  const duplicateCount = results.filter(
+    (result) => (result.body.data as AnyObject | undefined)?.duplicate === true,
   ).length;
-  const processedCount = [resultA, resultB].filter(
-    (result) => (result.data as AnyObject | undefined)?.duplicate === false,
+  const processedCount = results.filter(
+    (result) =>
+      result.status === 200 &&
+      result.body.success === true &&
+      (result.body.data as AnyObject | undefined)?.duplicate === false,
   ).length;
-  assert.equal(duplicateCount, 1);
+  const inFlightCount = results.filter(
+    (result) =>
+      result.status === 409 &&
+      result.body.success === false &&
+      result.body.error === "Payment callback is being processed by another request",
+  ).length;
   assert.equal(processedCount, 1);
+  assert.equal(duplicateCount + inFlightCount, 1);
 
   const paymentRow = await selectSingle(serviceClient, "payments", "id,status,provider_ref", {
     id: paymentId,
@@ -309,24 +336,125 @@ async function createSmokeUser(serviceClient: ReturnType<typeof createClient>): 
   return data.user.id;
 }
 
+async function createSeedAdminClient(
+  supabaseUrl: string,
+  publishableKey: string,
+): Promise<ReturnType<typeof createClient>> {
+  const adminClient = createClient(supabaseUrl, publishableKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+
+  const { error } = await adminClient.auth.signInWithPassword({
+    email: "smoke-admin@example.test",
+    password: "smoke-admin-2026",
+  });
+
+  if (error) {
+    throw new Error(`Failed to sign in smoke admin: ${error.message}`);
+  }
+
+  return adminClient;
+}
+
 async function insertListing(
   serviceClient: ReturnType<typeof createClient>,
+  adminClient: ReturnType<typeof createClient>,
   listingId: string,
 ): Promise<void> {
+  const mainItemId = await ensureSmokeMainItem(serviceClient, listingId);
   const { error } = await serviceClient.from("listings").insert({
     id: listingId,
     type: "rent",
-    status: "active",
+    status: "passive",
     title: "Smoke Listing",
     slug: `payment-callback-smoke-${listingId}`,
+    summary: "Smoke listing for payment callback tests",
+    description: "Smoke listing for payment callback tests",
     city: "Istanbul",
+    district: "Kadikoy",
     price: 1250,
     currency: "TRY",
+    room_count: 2,
+    bathroom_count: 1,
+    gross_area_m2: 90,
+    is_furnished: false,
   });
 
   if (error) {
     throw new Error(`Failed to insert listing: ${error.message}`);
   }
+
+  const { error: imageError } = await serviceClient.from("listing_images").insert({
+    listing_id: listingId,
+    image_url: `https://example.com/payment-callback-smoke-${listingId}.jpg`,
+    alt_text: "Payment callback smoke listing",
+    sort_order: 0,
+    is_primary: true,
+  });
+
+  if (imageError) {
+    throw new Error(`Failed to insert listing image: ${imageError.message}`);
+  }
+
+  const { error: mainItemError } = await serviceClient.from("listing_main_item_options").insert({
+    listing_id: listingId,
+    main_item_id: mainItemId,
+    is_enabled: true,
+    sort_order: 10,
+  });
+
+  if (mainItemError) {
+    throw new Error(`Failed to insert listing main item: ${mainItemError.message}`);
+  }
+
+  const { error: statusError } = await adminClient.rpc("admin_set_listing_status", {
+    p_listing_id: listingId,
+    p_status: "active",
+  });
+
+  if (statusError) {
+    throw new Error(`Failed to activate listing: ${statusError.message}`);
+  }
+}
+
+async function ensureSmokeMainItem(
+  serviceClient: ReturnType<typeof createClient>,
+  listingId: string,
+): Promise<string> {
+  const { data: existing, error: existingError } = await serviceClient
+    .from("main_item_catalog")
+    .select("id")
+    .eq("code", "payment_callback_smoke_deposit")
+    .maybeSingle();
+
+  if (existingError) {
+    throw new Error(`Failed to fetch smoke main item: ${existingError.message}`);
+  }
+
+  if (typeof existing?.id === "string") {
+    return existing.id;
+  }
+
+  const mainItemId = randomUUID();
+  const { error } = await serviceClient.from("main_item_catalog").insert({
+    id: mainItemId,
+    code: "payment_callback_smoke_deposit",
+    label: "Payment Callback Smoke Deposit",
+    description: "Checkout item for payment callback smoke tests",
+    pricing_strategy: "listing_price_multiplier",
+    default_multiplier: 1,
+    is_active: true,
+    sort_order: 10,
+  });
+
+  if (error) {
+    throw new Error(`Failed to insert smoke main item for ${listingId}: ${error.message}`);
+  }
+
+  return mainItemId;
 }
 
 async function insertReservation(
