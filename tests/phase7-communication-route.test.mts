@@ -185,6 +185,43 @@ test("conversation open returns existing ready mapping without Chatwoot calls", 
   });
 });
 
+test("conversation open accepts Supabase RPC table-function single-row arrays", async (t) => {
+  setupCommunicationEnv(t);
+
+  const response = await handleListingConversationPost(
+    createJsonRequest({}),
+    createDependencies({
+      chatwootClient: createFailingChatwootClient(),
+      rpc: () => ({
+        data: [
+          {
+            result: "ready",
+            conversation_id: MAPPING_ID,
+            listing_id: LISTING_ID,
+            status: "ready",
+            chatwoot_source_id: CHATWOOT_SOURCE_ID,
+            chatwoot_conversation_id: CHATWOOT_CONVERSATION_ID,
+            failure_reason: null,
+          },
+        ],
+        error: null,
+      }),
+    }),
+    { listingId: LISTING_ID },
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    success: true,
+    data: {
+      conversation_id: MAPPING_ID,
+      listing_id: LISTING_ID,
+      chatwoot_conversation_id: CHATWOOT_CONVERSATION_ID,
+      status: "ready",
+    },
+  });
+});
+
 test("conversation open provisions a new Chatwoot conversation and optional initial message", async (t) => {
   setupCommunicationEnv(t);
   const rpcCalls: RpcCall[] = [];
