@@ -700,6 +700,98 @@ test("messages POST creates incoming message and returns sanitized summary", asy
   });
 });
 
+test("messages POST then GET exposes the created public message for the owning user", async (t) => {
+  setupCommunicationEnv(t);
+  const chatwootMessages: unknown[] = [];
+  const fromCalls: FromCall[] = [];
+
+  const dependencies = createDependencies({
+    maybeSingle: (call) => {
+      fromCalls.push(call);
+      return {
+        data: readyMappingRow(),
+        error: null,
+      };
+    },
+    chatwootClient: {
+      listMessages: async () => ({
+        ok: true,
+        value: chatwootMessages,
+      }),
+      createIncomingMessage: async (input: Record<string, unknown>) => {
+        const message = {
+          id: 777,
+          content: input.content,
+          message_type: 0,
+          created_at: 1714457500,
+          private: false,
+        };
+        chatwootMessages.push(message);
+        return {
+          ok: true,
+          value: message,
+        };
+      },
+    },
+  });
+
+  const postResponse = await handleConversationMessagesPost(
+    createMessagesJsonRequest({ content: "Merhaba, bu ilan hakkinda bilgi almak istiyorum." }),
+    dependencies,
+    { conversationId: MAPPING_ID },
+  );
+  const getResponse = await handleConversationMessagesGet(
+    new Request(`http://localhost:3000/api/communications/conversations/${MAPPING_ID}/messages`),
+    dependencies,
+    { conversationId: MAPPING_ID },
+  );
+
+  assert.equal(postResponse.status, 201);
+  assert.deepEqual(await postResponse.json(), {
+    success: true,
+    data: {
+      conversation_id: MAPPING_ID,
+      message: {
+        id: "777",
+        content: "Merhaba, bu ilan hakkinda bilgi almak istiyorum.",
+        message_type: "incoming",
+        created_at: 1714457500,
+        private: false,
+      },
+    },
+  });
+  assert.equal(getResponse.status, 200);
+  assert.deepEqual(await getResponse.json(), {
+    success: true,
+    data: {
+      conversation_id: MAPPING_ID,
+      pagination: {
+        limit: 20,
+        offset: 0,
+      },
+      messages: [
+        {
+          id: "777",
+          content: "Merhaba, bu ilan hakkinda bilgi almak istiyorum.",
+          message_type: "incoming",
+          created_at: 1714457500,
+          private: false,
+        },
+      ],
+    },
+  });
+  assert.deepEqual(fromCalls.map((call) => call.filter), [
+    [
+      { column: "id", value: MAPPING_ID },
+      { column: "user_id", value: USER_ID },
+    ],
+    [
+      { column: "id", value: MAPPING_ID },
+      { column: "user_id", value: USER_ID },
+    ],
+  ]);
+});
+
 function createMessagesJsonRequest(
   payload: unknown,
   origin: string | null = "http://localhost:3000",

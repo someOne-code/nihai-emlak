@@ -121,8 +121,9 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
                     <ListingContactBox listingId={listing.id} isAuthenticated={isAuthenticated} />
                   </div>
                 ) : (
-                  <div data-aos="fade-left" data-aos-delay="200">
+                  <div className="flex flex-col gap-6" data-aos="fade-left" data-aos-delay="200">
                     {actionBox}
+                    <ListingContactBox listingId={listing.id} isAuthenticated={isAuthenticated} />
                   </div>
                 )}
               </div>
