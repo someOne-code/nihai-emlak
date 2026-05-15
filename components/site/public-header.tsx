@@ -26,6 +26,7 @@ export function PublicHeader() {
   const [navbarOpen, setNavbarOpen] = useState(false);
   const [sticky, setSticky] = useState(false);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
+  const usesDarkBlogChrome = !sticky && pathUrl === "/blog";
 
   useEffect(() => {
     function handleScroll() {
@@ -63,14 +64,18 @@ export function PublicHeader() {
     <>
       <header
         className={`fixed top-0 z-50 h-24 w-full bg-transparent py-1 transition-all ${
-          sticky ? "bg-white shadow-lg dark:bg-[#0e1624] dark:shadow-[rgba(145,158,171,0.2)_0px_0px_2px_0px,rgba(145,158,171,0.12)_0px_12px_24px_-4px]" : "shadow-none"
+          sticky
+            ? "bg-white shadow-lg dark:bg-[#0e1624] dark:shadow-[rgba(145,158,171,0.2)_0px_0px_2px_0px,rgba(145,158,171,0.12)_0px_12px_24px_-4px]"
+            : usesDarkBlogChrome
+              ? "border-b border-white/10 bg-[#102D47]"
+              : "shadow-none"
         }`}
       >
         <div className="container mx-auto flex items-center justify-between px-4 py-6 md:max-w-screen-md lg:max-w-screen-xl">
-          <Logo />
+          <Logo forceLight={usesDarkBlogChrome} />
           <nav className="hidden flex-grow items-center justify-center gap-6 lg:flex">
             {headerData.map((item) => (
-              <HeaderLink key={item.href} item={item} />
+              <HeaderLink key={item.href} item={item} forceLight={usesDarkBlogChrome} />
             ))}
           </nav>
           <div className="flex items-center gap-4">
@@ -88,7 +93,7 @@ export function PublicHeader() {
               </svg>
               <svg
                 viewBox="0 0 23 23"
-                className={`size-8 text-[#102D47] dark:hidden ${!sticky && pathUrl === "/" ? "text-white" : ""}`}
+                className={`size-8 text-[#102D47] dark:hidden ${!sticky && (pathUrl === "/" || pathUrl === "/blog") ? "text-white" : ""}`}
               >
                 <path d="M16.6111 15.855C17.591 15.1394 18.3151 14.1979 18.7723 13.1623C16.4824 13.4065 14.1342 12.4631 12.6795 10.4711C11.2248 8.47905 11.0409 5.95516 11.9705 3.84818C10.8449 3.9685 9.72768 4.37162 8.74781 5.08719C5.7759 7.25747 5.12529 11.4308 7.29558 14.4028C9.46586 17.3747 13.6392 18.0253 16.6111 15.855Z" />
               </svg>
@@ -96,7 +101,11 @@ export function PublicHeader() {
 
             <Link
               href="/auth/login"
-              className="hidden rounded-lg border border-[#2F73F2] bg-transparent px-4 py-2 text-[#2F73F2] hover:bg-blue-600 hover:text-white lg:block"
+              className={`hidden rounded-lg border px-4 py-2 transition lg:block ${
+                usesDarkBlogChrome
+                  ? "border-white/40 bg-transparent text-white hover:border-[#2F73F2] hover:bg-[#2F73F2]"
+                  : "border-[#2F73F2] bg-transparent text-[#2F73F2] hover:bg-blue-600 hover:text-white"
+              }`}
             >
               Giriş Yap
             </Link>
@@ -113,9 +122,9 @@ export function PublicHeader() {
               aria-label="Mobil menüyü aç/kapat"
               type="button"
             >
-              <span className="block h-0.5 w-6 bg-black dark:bg-white" />
-              <span className="mt-1.5 block h-0.5 w-6 bg-black dark:bg-white" />
-              <span className="mt-1.5 block h-0.5 w-6 bg-black dark:bg-white" />
+              <span className={`block h-0.5 w-6 ${usesDarkBlogChrome ? "bg-white" : "bg-black dark:bg-white"}`} />
+              <span className={`mt-1.5 block h-0.5 w-6 ${usesDarkBlogChrome ? "bg-white" : "bg-black dark:bg-white"}`} />
+              <span className={`mt-1.5 block h-0.5 w-6 ${usesDarkBlogChrome ? "bg-white" : "bg-black dark:bg-white"}`} />
             </button>
           </div>
         </div>
@@ -162,7 +171,7 @@ export function PublicHeader() {
   );
 }
 
-function Logo() {
+function Logo({ forceLight = false }: { forceLight?: boolean }) {
   return (
     <Link href="/">
       <Image
@@ -170,7 +179,7 @@ function Logo() {
         alt="logo"
         width={160}
         height={50}
-        className="dark:hidden"
+        className={forceLight ? "hidden" : "dark:hidden"}
         unoptimized
       />
       <Image
@@ -178,14 +187,14 @@ function Logo() {
         alt="logo"
         width={160}
         height={50}
-        className="hidden dark:block"
+        className={forceLight ? "block" : "hidden dark:block"}
         unoptimized
       />
     </Link>
   );
 }
 
-function HeaderLink({ item }: { item: HeaderItem }) {
+function HeaderLink({ item, forceLight = false }: { item: HeaderItem; forceLight?: boolean }) {
   const [submenuOpen, setSubmenuOpen] = useState(false);
   const path = usePathname();
   const isActive = path === item.href || path.startsWith(`/${item.label.toLowerCase()}`);
@@ -198,8 +207,8 @@ function HeaderLink({ item }: { item: HeaderItem }) {
     >
       <Link
         href={item.href}
-        className={`flex py-3 text-base font-normal hover:text-[#2F73F2] dark:text-white dark:hover:text-[#2F73F2] ${
-          isActive ? "text-[#2F73F2]" : "text-[#102D47]"
+        className={`flex py-3 text-base font-normal hover:text-[#2F73F2] dark:hover:text-[#2F73F2] ${
+          isActive ? "text-[#2F73F2]" : forceLight ? "text-white/80" : "text-[#102D47] dark:text-white"
         }`}
       >
         {item.label}
