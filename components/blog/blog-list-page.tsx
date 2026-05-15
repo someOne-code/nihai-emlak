@@ -7,16 +7,14 @@ import { useMemo, useState } from "react";
 
 import type { BlogListPost } from "@/types/blog";
 
-const BLOG_CATEGORIES = [
-  "Tümü",
+const ALL_CATEGORIES_LABEL = "Tümü";
+const DEFAULT_BLOG_CATEGORY_ORDER = [
   "Yatırım",
   "Bölge Rehberi",
   "Alıcı Rehberi",
   "Hukuk & Vergi",
   "Piyasa Analizi",
 ] as const;
-
-type BlogCategory = (typeof BLOG_CATEGORIES)[number];
 
 function formatPublishedDate(value: string | null): string {
   if (!value) return "Güncel";
@@ -32,20 +30,36 @@ function formatPublishedDate(value: string | null): string {
 }
 
 export function BlogListPage({ posts }: { posts: BlogListPost[] }) {
-  const [activeCategory, setActiveCategory] = useState<BlogCategory>("Tümü");
+  const [activeCategory, setActiveCategory] = useState(ALL_CATEGORIES_LABEL);
+
+  const categoryOptions = useMemo(() => {
+    const postCategoryLabels = new Set(posts.map((post) => post.categoryLabel));
+    const orderedLabels = DEFAULT_BLOG_CATEGORY_ORDER.filter((label) =>
+      postCategoryLabels.has(label),
+    );
+    const defaultLabels = new Set<string>(DEFAULT_BLOG_CATEGORY_ORDER);
+    const extraLabels = Array.from(postCategoryLabels)
+      .filter((label) => !defaultLabels.has(label))
+      .sort((a, b) => a.localeCompare(b, "tr"));
+
+    return [ALL_CATEGORIES_LABEL, ...orderedLabels, ...extraLabels];
+  }, [posts]);
 
   const filteredPosts = useMemo(
     () =>
-      activeCategory === "Tümü"
+      activeCategory === ALL_CATEGORIES_LABEL
         ? posts
         : posts.filter((post) => post.categoryLabel === activeCategory),
     [activeCategory, posts],
   );
 
-  const featuredPost = filteredPosts[0] ?? posts[0] ?? null;
+  const hasFilteredPosts = filteredPosts.length > 0;
+  const isAllCategoriesActive = activeCategory === ALL_CATEGORIES_LABEL;
+  const featuredPost = isAllCategoriesActive && hasFilteredPosts ? filteredPosts[0] : null;
   const gridPosts = featuredPost
     ? filteredPosts.filter((post) => post.slug !== featuredPost.slug)
     : filteredPosts;
+  const hasGridPosts = gridPosts.length > 0;
 
   return (
     <main>
@@ -76,7 +90,7 @@ export function BlogListPage({ posts }: { posts: BlogListPost[] }) {
             className="mt-12 flex flex-wrap items-center gap-3"
             aria-label="Blog kategorileri"
           >
-            {BLOG_CATEGORIES.map((category) => {
+            {categoryOptions.map((category) => {
               const isActive = activeCategory === category;
 
               return (
@@ -97,7 +111,7 @@ export function BlogListPage({ posts }: { posts: BlogListPost[] }) {
             })}
           </div>
 
-          {gridPosts.length > 0 ? (
+          {hasGridPosts ? (
             <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:gap-8 xl:grid-cols-3 2xl:grid-cols-4">
               {gridPosts.map((post) => (
                 <div key={post.slug}>
@@ -105,23 +119,27 @@ export function BlogListPage({ posts }: { posts: BlogListPost[] }) {
                 </div>
               ))}
             </div>
-          ) : (
+          ) : null}
+
+          {!hasFilteredPosts ? (
             <div className="mt-8 rounded-lg bg-property-surface p-8 text-center shadow-property">
               <p className="text-base leading-7 text-property-gray">
                 Bu kategoride yayın hazırlanıyor. Tüm içeriklere dönmek için filtreyi sıfırlayın.
               </p>
             </div>
-          )}
+          ) : null}
 
-          <div className="mt-12 flex justify-center">
-            <button
-              type="button"
-              disabled
-              className="rounded-lg border border-[#2F73F2]/30 bg-property-surface px-6 py-3 text-base font-semibold text-[#2F73F2] opacity-80 shadow-[0_8px_24px_rgba(16,45,71,0.08)]"
-            >
-              Daha Fazla Yükle
-            </button>
-          </div>
+          {hasFilteredPosts ? (
+            <div className="mt-12 flex justify-center">
+              <button
+                type="button"
+                disabled
+                className="rounded-lg border border-[#2F73F2]/30 bg-property-surface px-6 py-3 text-base font-semibold text-[#2F73F2] opacity-80 shadow-[0_8px_24px_rgba(16,45,71,0.08)]"
+              >
+                Daha Fazla Yükle
+              </button>
+            </div>
+          ) : null}
         </div>
       </section>
     </main>

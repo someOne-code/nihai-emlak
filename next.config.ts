@@ -22,7 +22,6 @@ const supabaseImageRemotePatterns = (() => {
 })();
 
 const nextConfig: NextConfig = {
-  allowedDevOrigins: ["127.0.0.1"],
   cacheComponents: true,
   images: {
     remotePatterns: supabaseImageRemotePatterns,

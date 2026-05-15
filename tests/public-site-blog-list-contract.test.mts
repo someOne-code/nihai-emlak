@@ -31,8 +31,17 @@ test("blog list component exposes the requested categories and interactive acces
   assert.match(source, /useState/);
   assert.match(source, /aria-pressed=\{activeCategory === category\}/);
   assert.match(source, /onClick=\{\(\) => setActiveCategory\(category\)\}/);
-  assert.match(source, /activeCategory === "Tümü"/);
+  assert.match(source, /activeCategory === ALL_CATEGORIES_LABEL/);
   assert.match(source, /filteredPosts/);
+});
+
+test("blog list filters are derived from published backend post categories", () => {
+  const source = readProjectFile("components/blog/blog-list-page.tsx");
+
+  assert.match(source, /const categoryOptions = useMemo/);
+  assert.match(source, /new Set\(posts\.map\(\(post\) => post\.categoryLabel\)\)/);
+  assert.match(source, /\{categoryOptions\.map\(\(category\) => \{/);
+  assert.doesNotMatch(source, /BLOG_CATEGORIES\.map\(\(category\) => \{/);
 });
 
 test("blog list cards match the reference anatomy while preserving site image and motion conventions", () => {
@@ -70,4 +79,63 @@ test("blog list data has render-ready fallback posts with categories, read times
   assert.match(source, /coverImageUrl: "\/property-nextjs-pro\/images\//);
   assert.doesNotMatch(source, /authorName|avatarUrl|author: \{/);
   assert.doesNotMatch(source, /service_role|overrideAccess: true/);
+});
+
+test("blog category filters do not show the empty state when the selected category has one featured post", () => {
+  const source = readProjectFile("components/blog/blog-list-page.tsx");
+
+  assert.match(source, /const hasFilteredPosts = filteredPosts\.length > 0;/);
+  assert.match(source, /const isAllCategoriesActive = activeCategory === ALL_CATEGORIES_LABEL;/);
+  assert.match(source, /const hasGridPosts = gridPosts\.length > 0;/);
+  assert.match(source, /\{hasGridPosts \? \(/);
+  assert.match(source, /\{!hasFilteredPosts \? \(/);
+  assert.doesNotMatch(source, /gridPosts\.length > 0 \?[\s\S]*Bu kategoride yay/);
+});
+
+test("blog featured card is only shown on the all categories view", () => {
+  const source = readProjectFile("components/blog/blog-list-page.tsx");
+
+  assert.match(
+    source,
+    /const featuredPost = isAllCategoriesActive && hasFilteredPosts \? filteredPosts\[0\] : null;/,
+  );
+  assert.match(source, /\{featuredPost \? <FeaturedBlogCard post=\{featuredPost\} \/> : null\}/);
+  assert.doesNotMatch(source, /const featuredPost = hasFilteredPosts \? filteredPosts\[0\] : null;/);
+});
+
+test("blog empty state does not keep list-only controls visible", () => {
+  const source = readProjectFile("components/blog/blog-list-page.tsx");
+
+  assert.match(source, /\{hasFilteredPosts \? \([\s\S]*Daha Fazla Y/);
+  assert.match(source, /\{!hasFilteredPosts \? \([\s\S]*Bu kategoride yay/);
+});
+
+test("blog fallback categories stay covered by the public filter tabs", () => {
+  const componentSource = readProjectFile("components/blog/blog-list-page.tsx");
+  const dataSource = readProjectFile("lib/api/blog.ts");
+
+  const filterBlock = componentSource.match(/const DEFAULT_BLOG_CATEGORY_ORDER = \[([\s\S]*?)\] as const;/)?.[1] ?? "";
+  const filterLabels = new Set(
+    Array.from(filterBlock.matchAll(/"([^"]+)"/g), (match) => match[1]).filter(
+      (label) => label !== "Tümü",
+    ),
+  );
+  const fallbackLabels = new Set(
+    Array.from(
+      (
+        dataSource.match(
+          /export const FALLBACK_BLOG_LIST_POSTS: BlogListPost\[] = \[([\s\S]*?)\];/,
+        )?.[1] ?? ""
+      ).matchAll(/categoryLabel: "([^"]+)"/g),
+      (match) => match[1],
+    ),
+  );
+
+  for (const label of fallbackLabels) {
+    assert.ok(filterLabels.has(label), `Missing blog filter for fallback category: ${label}`);
+  }
+
+  for (const label of filterLabels) {
+    assert.ok(fallbackLabels.has(label), `Missing fallback post for blog filter: ${label}`);
+  }
 });
