@@ -45,7 +45,8 @@ test("blog list cards match the reference anatomy while preserving site image an
   assert.match(source, /readTime/);
   assert.match(source, /Devamını oku/);
   assert.match(source, /ArrowRight/);
-  assert.match(source, /data-aos="fade-up"/);
+  assert.doesNotMatch(source, /data-aos=/);
+  assert.match(source, /bg-property-hero/);
   assert.match(source, /group-hover:scale-105/);
   assert.match(source, /hover:-translate-y-1/);
   assert.match(source, /grid-cols-1[\s\S]*md:grid-cols-2[\s\S]*xl:grid-cols-3[\s\S]*2xl:grid-cols-4/);

@@ -49,30 +49,32 @@ export function BlogListPage({ posts }: { posts: BlogListPost[] }) {
 
   return (
     <main>
-      <section className="bg-[#102D47] pb-24 pt-40 text-white dark:bg-[#0e1624] md:pb-28 md:pt-44">
+      <section className="relative overflow-x-hidden bg-property-hero bg-cover pb-20 pt-36 text-center">
         <div className="container mx-auto max-w-screen-xl px-4 text-center md:max-w-screen-md lg:max-w-screen-xl">
-          <h1 className="text-4xl font-bold leading-tight md:text-5xl" data-aos="fade-up">
+          <h1 className="text-[50px] font-bold capitalize leading-[1.2] text-[#102D47] dark:text-white">
             Blog &amp; İçerikler
           </h1>
-          <p
-            className="mx-auto mt-5 max-w-3xl text-base leading-7 text-white/70 md:text-lg"
-            data-aos="fade-up"
-            data-aos-delay="100"
-          >
+          <p className="mx-auto mb-10 mt-7 w-full max-w-2xl px-4 text-lg font-normal leading-8 text-[#668199] sm:px-0">
             Gayrimenkul yatırımı, bölge rehberleri, piyasa analizleri ve uzman görüşleri.
           </p>
-          <div className="mx-auto mt-8 h-1 w-16 rounded-full bg-[#2F73F2]" data-aos="fade-up" data-aos-delay="150" />
+          <nav className="mx-0 my-[0.9375rem] flex flex-wrap items-baseline justify-center" aria-label="Breadcrumb">
+            <Link href="/" className="flex items-center text-xl font-normal text-[#102D47] hover:underline after:relative after:mx-3 after:inline-block after:size-2 after:-rotate-45 after:border-b-2 after:border-r-2 after:border-[#102D47] after:content-[''] dark:text-white dark:after:border-white">
+              Ana Sayfa
+            </Link>
+            <Link href="/blog" className="mx-2.5 text-xl text-[#102D47] hover:underline dark:text-white" aria-current="page">
+              Blog
+            </Link>
+          </nav>
         </div>
       </section>
 
-      <section className="bg-property-light py-16 md:py-24">
+      <section className="bg-property-light py-14 md:py-20">
         <div className="container mx-auto max-w-screen-2xl px-4 md:max-w-screen-md lg:max-w-screen-xl 2xl:max-w-screen-2xl">
           {featuredPost ? <FeaturedBlogCard post={featuredPost} /> : null}
 
           <div
             className="mt-12 flex flex-wrap items-center gap-3"
             aria-label="Blog kategorileri"
-            data-aos="fade-up"
           >
             {BLOG_CATEGORIES.map((category) => {
               const isActive = activeCategory === category;
@@ -97,21 +99,21 @@ export function BlogListPage({ posts }: { posts: BlogListPost[] }) {
 
           {gridPosts.length > 0 ? (
             <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:gap-8 xl:grid-cols-3 2xl:grid-cols-4">
-              {gridPosts.map((post, index) => (
-                <div key={post.slug} data-aos="fade-up" data-aos-delay={(index % 4) * 80}>
+              {gridPosts.map((post) => (
+                <div key={post.slug}>
                   <BlogCard post={post} />
                 </div>
               ))}
             </div>
           ) : (
-            <div className="mt-8 rounded-lg bg-property-surface p-8 text-center shadow-property" data-aos="fade-up">
+            <div className="mt-8 rounded-lg bg-property-surface p-8 text-center shadow-property">
               <p className="text-base leading-7 text-property-gray">
                 Bu kategoride yayın hazırlanıyor. Tüm içeriklere dönmek için filtreyi sıfırlayın.
               </p>
             </div>
           )}
 
-          <div className="mt-12 flex justify-center" data-aos="fade-up">
+          <div className="mt-12 flex justify-center">
             <button
               type="button"
               disabled
@@ -128,7 +130,7 @@ export function BlogListPage({ posts }: { posts: BlogListPost[] }) {
 
 function FeaturedBlogCard({ post }: { post: BlogListPost }) {
   return (
-    <article data-aos="fade-up">
+    <article>
       <Link
         href={`/blog/${post.slug}`}
         className="group grid overflow-hidden rounded-lg bg-property-surface shadow-[0_14px_44px_rgba(16,45,71,0.10)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_24px_60px_rgba(16,45,71,0.16)] lg:grid-cols-2"
