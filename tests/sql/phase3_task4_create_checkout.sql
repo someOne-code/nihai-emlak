@@ -11,12 +11,14 @@ create extension if not exists dblink;
 -- deterministic listings
 -- valid listing:    77777777-7777-4777-8777-777777777761
 -- rollback listing: 77777777-7777-4777-8777-777777777762
+-- zero listing:     77777777-7777-4777-8777-777777777763
 
 -- deterministic main item ids
 -- deposit:          88888888-7777-4777-8777-777777777761
 -- first rent:       88888888-7777-4777-8777-777777777762
 -- dup label one:    88888888-7777-4777-8777-777777777763
 -- dup label two:    88888888-7777-4777-8777-777777777764
+-- zero amount:      88888888-7777-4777-8777-777777777765
 
 -- deterministic service ids
 -- cleaning:         99999999-7777-4777-8777-777777777761
@@ -41,7 +43,8 @@ where id in (
   'bbbbbbbb-7777-4777-8777-777777777761'::uuid,
   'bbbbbbbb-7777-4777-8777-777777777762'::uuid,
   'bbbbbbbb-7777-4777-8777-777777777763'::uuid,
-  'bbbbbbbb-7777-4777-8777-777777777764'::uuid
+  'bbbbbbbb-7777-4777-8777-777777777764'::uuid,
+  'bbbbbbbb-7777-4777-8777-777777777765'::uuid
 );
 
 delete from public.main_item_catalog
@@ -49,13 +52,15 @@ where id in (
   '88888888-7777-4777-8777-777777777761'::uuid,
   '88888888-7777-4777-8777-777777777762'::uuid,
   '88888888-7777-4777-8777-777777777763'::uuid,
-  '88888888-7777-4777-8777-777777777764'::uuid
+  '88888888-7777-4777-8777-777777777764'::uuid,
+  '88888888-7777-4777-8777-777777777765'::uuid
 );
 
 delete from public.listings
 where id in (
   '77777777-7777-4777-8777-777777777761'::uuid,
-  '77777777-7777-4777-8777-777777777762'::uuid
+  '77777777-7777-4777-8777-777777777762'::uuid,
+  '77777777-7777-4777-8777-777777777763'::uuid
 );
 
 insert into auth.users (
@@ -147,6 +152,16 @@ values
   'Istanbul',
   30000,
   'TRY'
+),
+(
+  '77777777-7777-4777-8777-777777777763'::uuid,
+  'rent',
+  'active',
+  'Phase3 Zero Total Listing',
+  'phase3-zero-total-listing',
+  'Istanbul',
+  1,
+  'TRY'
 );
 
 reset role;
@@ -201,6 +216,16 @@ values
   null,
   true,
 	  4
+),
+(
+  '88888888-7777-4777-8777-777777777765'::uuid,
+  'zero_t4',
+  'Sifir Tutar',
+  'fixed',
+  0,
+  null,
+  true,
+  5
 	);
 
 reset role;
@@ -245,6 +270,14 @@ values
   null,
   true,
   2
+),
+(
+  'bbbbbbbb-7777-4777-8777-777777777765'::uuid,
+  '77777777-7777-4777-8777-777777777763'::uuid,
+  '88888888-7777-4777-8777-777777777765'::uuid,
+  null,
+  true,
+  1
 );
 
 reset role;
@@ -725,6 +758,67 @@ where note = '__phase3_t4_other_unique__';
 set role authenticated;
 select set_config('request.jwt.claim.sub', '66666666-7777-4777-8777-777777777762', false);
 select set_config('request.jwt.claim.role', 'authenticated', false);
+
+-- TEST 1E: zero-total checkout is rejected before payment creation
+do $$
+declare
+  v_reservation_count integer;
+  v_order_count integer;
+  v_payment_count integer;
+begin
+  begin
+    perform public.create_checkout(
+      '77777777-7777-4777-8777-777777777763'::uuid,
+      current_date + 6,
+      1,
+      1,
+      array['zero_t4']::text[],
+      array[]::text[],
+      'zero total should fail',
+      'Zero Total User',
+      '+905551110000',
+      null,
+      'phone',
+      null,
+      null,
+      'ready',
+      null
+    );
+    raise exception 'TEST 1E FAILED: zero-total checkout should have been rejected';
+  exception
+    when others then
+      if SQLSTATE <> '22023'
+         or position('checkout total must be positive' in SQLERRM) = 0 then
+        raise exception 'TEST 1E FAILED: unexpected zero-total error [%] %', SQLSTATE, SQLERRM;
+      end if;
+  end;
+
+  select count(*)
+  into v_reservation_count
+  from public.reservations
+  where listing_id = '77777777-7777-4777-8777-777777777763'::uuid;
+
+  select count(*)
+  into v_order_count
+  from public.orders o
+  join public.reservations r
+    on r.id = o.reservation_id
+  where r.listing_id = '77777777-7777-4777-8777-777777777763'::uuid;
+
+  select count(*)
+  into v_payment_count
+  from public.payments p
+  join public.orders o
+    on o.id = p.order_id
+  join public.reservations r
+    on r.id = o.reservation_id
+  where r.listing_id = '77777777-7777-4777-8777-777777777763'::uuid;
+
+  if v_reservation_count <> 0 or v_order_count <> 0 or v_payment_count <> 0 then
+    raise exception 'TEST 1E FAILED: zero-total checkout left partial rows reservation=% order=% payment=%',
+      v_reservation_count, v_order_count, v_payment_count;
+  end if;
+end $$;
 
 -- TEST 2: authenticated users cannot bypass create_checkout with direct transactional inserts
 do $$

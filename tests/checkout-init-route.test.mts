@@ -557,6 +557,60 @@ test("checkout init rejects pending orders without an existing pending isbank pa
   assert.equal(payload.error, "Checkout init requires an existing pending payment");
 });
 
+test("checkout init rejects zero-amount pending payments before hosted checkout payload", async (t) => {
+  setupCheckoutInitEnv(t);
+
+  const orderId = "01010101-0101-4101-8101-010101010101";
+  const userId = "02020202-0202-4202-8202-020202020202";
+  const paymentId = "03030303-0303-4303-8303-030303030303";
+
+  const response = await handleCheckoutInitPost(
+    new Request("http://localhost:3000/api/checkout/init", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "http://localhost:3000",
+      },
+      body: JSON.stringify({ orderId }),
+    }),
+    createDependencies({
+      getOrder: () => ({
+        id: orderId,
+        total_amount: 0,
+        currency: "TRY",
+        status: "pending",
+      }),
+      getPendingPayment: () => ({
+        id: paymentId,
+        order_id: orderId,
+        amount: "0.00",
+        currency: "TRY",
+        status: "pending",
+        provider_ref: paymentId,
+      }),
+      getPaymentById: () => ({
+        id: paymentId,
+        order_id: orderId,
+        amount: "0.00",
+        currency: "TRY",
+        status: "pending",
+        provider_ref: paymentId,
+      }),
+      insertPayment: () => {
+        throw new Error("insert should not be called when pending payment exists");
+      },
+      userId,
+    }),
+  );
+
+  assert.equal(response.status, 409);
+
+  const payload = await response.json();
+  assert.equal(payload.success, false);
+  assert.equal(payload.error, "Checkout init requires a positive pending payment amount");
+  assert.equal("data" in payload, false);
+});
+
 test("checkout init does not recover missing pending payment by creating or racing a new one", async (t) => {
   setupCheckoutInitEnv(t);
 

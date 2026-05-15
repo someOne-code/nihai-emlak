@@ -262,6 +262,16 @@ export async function handleCheckoutInitPost(
 
   payment = reconciledPaymentResult.payment;
 
+  if (payment.amount <= 0) {
+    return Response.json(
+      {
+        success: false,
+        error: "Checkout init requires a positive pending payment amount",
+      },
+      { status: 409 },
+    );
+  }
+
   if (payment.providerRef !== payment.id) {
     return Response.json(
       {
