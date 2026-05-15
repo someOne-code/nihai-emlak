@@ -320,26 +320,35 @@ function parseConversationOpenBody(
 }
 
 function parseConversationClaimRow(value: unknown): ConversationClaimRow | null {
-  if (!isRecord(value)) {
+  const row = unwrapSingleRpcRow(value);
+  if (!isRecord(row)) {
     return null;
   }
 
-  const result = asClaimResult(value.result);
-  const conversationId = asUuid(value.conversation_id);
-  const listingId = asUuid(value.listing_id);
-  const status = asConversationStatus(value.status);
+  const result = asClaimResult(row.result);
+  const conversationId = asUuid(row.conversation_id);
+  const listingId = asUuid(row.listing_id);
+  const status = asConversationStatus(row.status);
   if (!result || !conversationId || !listingId || !status) {
     return null;
   }
 
   return {
-    chatwootConversationId: asNonEmptyString(value.chatwoot_conversation_id),
-    chatwootSourceId: asNonEmptyString(value.chatwoot_source_id),
+    chatwootConversationId: asNonEmptyString(row.chatwoot_conversation_id),
+    chatwootSourceId: asNonEmptyString(row.chatwoot_source_id),
     conversationId,
     listingId,
     result,
     status,
   };
+}
+
+function unwrapSingleRpcRow(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.length === 1 ? value[0] : null;
+  }
+
+  return value;
 }
 
 function parseCompletedConversationRow(
@@ -351,7 +360,12 @@ function parseCompletedConversationRow(
     providerSourceId: string;
   },
 ): ConversationClaimRow | null {
-  if (!isRecord(value)) {
+  const row = unwrapSingleRpcRow(value);
+  if (!isRecord(row)) {
+    if (Array.isArray(value)) {
+      return null;
+    }
+
     return {
       chatwootConversationId: fallback.providerConversationId,
       chatwootSourceId: fallback.providerSourceId,
@@ -362,12 +376,12 @@ function parseCompletedConversationRow(
     };
   }
 
-  const conversationId = asUuid(value.conversation_id) ?? fallback.conversationId;
-  const listingId = asUuid(value.listing_id) ?? fallback.listingId;
-  const chatwootSourceId = asNonEmptyString(value.chatwoot_source_id) ?? fallback.providerSourceId;
-  const chatwootConversationId = asNonEmptyString(value.chatwoot_conversation_id)
+  const conversationId = asUuid(row.conversation_id) ?? fallback.conversationId;
+  const listingId = asUuid(row.listing_id) ?? fallback.listingId;
+  const chatwootSourceId = asNonEmptyString(row.chatwoot_source_id) ?? fallback.providerSourceId;
+  const chatwootConversationId = asNonEmptyString(row.chatwoot_conversation_id)
     ?? fallback.providerConversationId;
-  const status = asConversationStatus(value.status) ?? "ready";
+  const status = asConversationStatus(row.status) ?? "ready";
 
   if (status !== "ready") {
     return null;
