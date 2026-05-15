@@ -17,6 +17,7 @@ test("blog detail route renders published posts through the public chrome", () =
   assert.match(page, /const post = await getPublishedBlogDetailPost\(slug\);/);
   assert.match(page, /if \(!post\) notFound\(\);/);
   assert.match(page, /<article/);
+  assert.match(page, /\{post\.readTime\} okuma/);
   assert.match(page, /Bloga D/);
   assert.doesNotMatch(page, /BlogPostPlaceholder|yakında|yakÄ±nda|Seçilen yazı|SeÃ§ilen yazÄ±/);
 });

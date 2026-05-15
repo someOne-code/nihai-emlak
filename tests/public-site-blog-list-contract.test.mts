@@ -52,6 +52,7 @@ test("blog list cards match the reference anatomy while preserving site image an
   assert.match(source, /<article/);
   assert.match(source, /<time/);
   assert.match(source, /readTime/);
+  assert.match(source, /\{post\.readTime\} okuma/);
   assert.match(source, /Devamını oku/);
   assert.match(source, /ArrowRight/);
   assert.doesNotMatch(source, /data-aos=/);

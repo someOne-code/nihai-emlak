@@ -115,7 +115,7 @@ function BlogDetailArticle({ post }: { post: BlogDetailPost }) {
               </time>
               <span className="inline-flex items-center gap-2">
                 <Clock3 aria-hidden="true" className="size-4" />
-                {post.readTime}
+                {post.readTime} okuma
               </span>
             </div>
             <h1 className="mt-5 text-4xl font-bold leading-tight text-[#102D47] dark:text-white md:text-5xl">
