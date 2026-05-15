@@ -6,14 +6,14 @@ export default function BlogLoading() {
     <>
       <PublicHeader />
       <main>
-        <section className="bg-[#102D47] pb-24 pt-40 text-white dark:bg-[#0e1624] md:pb-28 md:pt-44">
+        <section className="relative overflow-x-hidden bg-property-hero bg-cover pb-20 pt-36 text-center">
           <div className="container mx-auto max-w-screen-xl px-4 text-center md:max-w-screen-md lg:max-w-screen-xl">
-            <div className="mx-auto h-12 w-80 max-w-full animate-pulse rounded-lg bg-white/15" />
-            <div className="mx-auto mt-5 h-6 w-[36rem] max-w-full animate-pulse rounded-lg bg-white/10" />
-            <div className="mx-auto mt-8 h-1 w-16 rounded-full bg-[#2F73F2]" />
+            <div className="mx-auto h-12 w-80 max-w-full animate-pulse rounded-lg bg-[#dbe7f0] dark:bg-white/10" />
+            <div className="mx-auto mt-7 h-6 w-[36rem] max-w-full animate-pulse rounded-lg bg-[#dbe7f0] dark:bg-white/10" />
+            <div className="mx-auto mt-10 h-6 w-56 animate-pulse rounded-lg bg-[#dbe7f0] dark:bg-white/10" />
           </div>
         </section>
-        <section className="bg-property-light py-16 md:py-24">
+        <section className="bg-property-light py-14 md:py-20">
           <div className="container mx-auto max-w-screen-2xl px-4 md:max-w-screen-md lg:max-w-screen-xl 2xl:max-w-screen-2xl">
             <div className="grid overflow-hidden rounded-lg bg-property-surface shadow-[0_14px_44px_rgba(16,45,71,0.10)] lg:grid-cols-2">
               <div className="min-h-[320px] animate-pulse bg-[#dbe7f0] lg:min-h-[420px]" />

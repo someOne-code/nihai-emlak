@@ -44,7 +44,6 @@ export const FALLBACK_BLOG_LIST_POSTS: BlogListPost[] = [
     readTime: "6 dk",
     coverImageUrl: "/property-nextjs-pro/images/blog/blogdetail-1.jpg",
     coverImageAlt: "İstanbul silüeti ve Galata çevresi",
-    authorName: "Emlak Rehberi",
   },
   {
     title: "Ev Alırken Dikkat Edilmesi Gereken 10 Kritik Nokta",
@@ -56,7 +55,6 @@ export const FALLBACK_BLOG_LIST_POSTS: BlogListPost[] = [
     readTime: "8 dk",
     coverImageUrl: "/property-nextjs-pro/images/blog/blog-image.jpg",
     coverImageAlt: "Ev modeli ve anahtar",
-    authorName: "Emlak Rehberi",
   },
   {
     title: "Kadıköy'de Yaşam Rehberi: Mahalleler, Ulaşım ve Yaşam Kalitesi",
@@ -68,7 +66,6 @@ export const FALLBACK_BLOG_LIST_POSTS: BlogListPost[] = [
     readTime: "7 dk",
     coverImageUrl: "/property-nextjs-pro/images/properties/prop-11.jpg",
     coverImageAlt: "Modern şehir binaları",
-    authorName: "Emlak Rehberi",
   },
   {
     title: "Gayrimenkul Yatırımında Vergi Avantajları ve Yasal Düzenlemeler",
@@ -80,7 +77,6 @@ export const FALLBACK_BLOG_LIST_POSTS: BlogListPost[] = [
     readTime: "5 dk",
     coverImageUrl: "/property-nextjs-pro/images/properties/prop-12.jpg",
     coverImageAlt: "Sözleşme imzalayan kişi",
-    authorName: "Emlak Rehberi",
   },
   {
     title: "İstanbul Konut Piyasası 2024 Q1 Raporu",
@@ -92,7 +88,6 @@ export const FALLBACK_BLOG_LIST_POSTS: BlogListPost[] = [
     readTime: "6 dk",
     coverImageUrl: "/property-nextjs-pro/images/properties/prop-15.jpg",
     coverImageAlt: "Yüksek katlı iş merkezleri",
-    authorName: "Emlak Rehberi",
   },
   {
     title: "Yabancılar İçin Türkiye'de Gayrimenkul Satın Alma Rehberi",
@@ -104,7 +99,6 @@ export const FALLBACK_BLOG_LIST_POSTS: BlogListPost[] = [
     readTime: "9 dk",
     coverImageUrl: "/property-nextjs-pro/images/properties/prop-7.jpg",
     coverImageAlt: "İstanbul'da tarihi cami ve şehir manzarası",
-    authorName: "Emlak Rehberi",
   },
 ];
 
@@ -156,7 +150,6 @@ function mapPayloadPostToList(
   return {
     ...mapPayloadPostToPreview(doc, fallback),
     readTime: stringOrNull(doc.readTime) ?? fallback.readTime,
-    authorName: fallback.authorName,
   };
 }
 
