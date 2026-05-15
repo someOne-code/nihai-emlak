@@ -1,7 +1,7 @@
 import { getPayload } from "payload";
 
 import configPromise from "../../payload.config.ts";
-import type { BlogListPost, BlogPreviewPost } from "@/types/blog";
+import type { BlogDetailPost, BlogListPost, BlogPreviewPost } from "@/types/blog";
 
 export const FALLBACK_BLOG_PREVIEW_POSTS: BlogPreviewPost[] = [
   {
@@ -106,12 +106,15 @@ type PayloadBlogPostDoc = {
   title?: unknown;
   slug?: unknown;
   excerpt?: unknown;
+  content?: unknown;
   category?: { title?: unknown } | number | string | null;
   publishedAt?: unknown;
   createdAt?: unknown;
   coverImageUrl?: unknown;
   coverImageAlt?: unknown;
   readTime?: unknown;
+  seoTitle?: unknown;
+  seoDescription?: unknown;
 };
 
 function stringOrNull(value: unknown): string | null {
@@ -121,6 +124,22 @@ function stringOrNull(value: unknown): string | null {
 function localImageOrFallback(value: unknown, fallback: string): string {
   const image = stringOrNull(value);
   return image?.startsWith("/") ? image : fallback;
+}
+
+function calculateReadTime(content: string | null): string {
+  const wordCount = content?.trim().split(/\s+/).filter(Boolean).length ?? 0;
+  const minutes = Math.max(1, Math.ceil(wordCount / 180));
+  return `${minutes} dk`;
+}
+
+function normalizeBlogContentParagraphs(value: unknown): string[] {
+  const content = stringOrNull(value);
+  if (!content) return [];
+
+  return content
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.replace(/\s*\n\s*/g, " ").trim())
+    .filter(Boolean);
 }
 
 function mapPayloadPostToPreview(
@@ -149,7 +168,38 @@ function mapPayloadPostToList(
 ): BlogListPost {
   return {
     ...mapPayloadPostToPreview(doc, fallback),
-    readTime: stringOrNull(doc.readTime) ?? fallback.readTime,
+    readTime: stringOrNull(doc.readTime) ?? calculateReadTime(stringOrNull(doc.content)) ?? fallback.readTime,
+  };
+}
+
+function mapPayloadPostToDetail(doc: PayloadBlogPostDoc): BlogDetailPost | null {
+  const title = stringOrNull(doc.title);
+  const slug = stringOrNull(doc.slug);
+  const excerpt = stringOrNull(doc.excerpt);
+  const content = stringOrNull(doc.content);
+
+  if (!title || !slug || !excerpt || !content) return null;
+
+  const category =
+    doc.category && typeof doc.category === "object"
+      ? stringOrNull(doc.category.title)
+      : null;
+
+  return {
+    title,
+    slug,
+    excerpt,
+    categoryLabel: category ?? "Blog",
+    publishedAt: stringOrNull(doc.publishedAt) ?? stringOrNull(doc.createdAt),
+    coverImageUrl: localImageOrFallback(
+      doc.coverImageUrl,
+      "/property-nextjs-pro/images/blog/blogdetail-1.jpg",
+    ),
+    coverImageAlt: stringOrNull(doc.coverImageAlt) ?? title,
+    readTime: stringOrNull(doc.readTime) ?? calculateReadTime(content),
+    contentParagraphs: normalizeBlogContentParagraphs(doc.content),
+    seoTitle: stringOrNull(doc.seoTitle),
+    seoDescription: stringOrNull(doc.seoDescription),
   };
 }
 
@@ -208,5 +258,28 @@ export async function listPublishedBlogListPosts(): Promise<BlogListPost[]> {
     return posts.length > 0 ? posts : FALLBACK_BLOG_LIST_POSTS;
   } catch {
     return FALLBACK_BLOG_LIST_POSTS;
+  }
+}
+
+export async function getPublishedBlogDetailPost(slug: string): Promise<BlogDetailPost | null> {
+  try {
+    const payload = await getPayload({ config: configPromise });
+    const result = await payload.find({
+      collection: "blog_posts",
+      where: {
+        and: [
+          { slug: { equals: slug } },
+          { status: { equals: "published" } },
+        ],
+      },
+      limit: 1,
+      depth: 1,
+      overrideAccess: false,
+    });
+
+    const doc = result.docs[0] as unknown as PayloadBlogPostDoc | undefined;
+    return doc ? mapPayloadPostToDetail(doc) : null;
+  } catch {
+    return null;
   }
 }
