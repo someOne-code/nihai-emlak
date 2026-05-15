@@ -43,17 +43,17 @@ test("blog list cards match the reference anatomy while preserving site image an
   assert.match(source, /<article/);
   assert.match(source, /<time/);
   assert.match(source, /readTime/);
-  assert.match(source, /BookOpenText/);
-  assert.match(source, /authorName/);
+  assert.match(source, /Devamını oku/);
+  assert.match(source, /ArrowRight/);
   assert.match(source, /data-aos="fade-up"/);
   assert.match(source, /group-hover:scale-105/);
   assert.match(source, /hover:-translate-y-1/);
   assert.match(source, /grid-cols-1[\s\S]*md:grid-cols-2[\s\S]*xl:grid-cols-3[\s\S]*2xl:grid-cols-4/);
   assert.match(source, /Daha Fazla Y[üu]kle/);
-  assert.doesNotMatch(source, /\/consultants|Dan[ıi]şman Profili|consultant/i);
+  assert.doesNotMatch(source, /\/consultants|Dan[ıi]şman Profili|consultant|authorName|avatar/i);
 });
 
-test("blog list data has render-ready fallback posts with categories, read times, local covers, and site bylines", () => {
+test("blog list data has render-ready fallback posts with categories, read times, and local covers", () => {
   const source = readProjectFile("lib/api/blog.ts");
 
   assert.match(source, /FALLBACK_BLOG_LIST_POSTS/);
@@ -66,8 +66,7 @@ test("blog list data has render-ready fallback posts with categories, read times
   }
 
   assert.match(source, /readTime: "[0-9]+ dk"/);
-  assert.match(source, /authorName: "Emlak Rehberi"/);
-  assert.doesNotMatch(source, /avatarUrl: "\/property-nextjs-pro\/images\/hero\/hero-profile-/);
   assert.match(source, /coverImageUrl: "\/property-nextjs-pro\/images\//);
+  assert.doesNotMatch(source, /authorName|avatarUrl|author: \{/);
   assert.doesNotMatch(source, /service_role|overrideAccess: true/);
 });

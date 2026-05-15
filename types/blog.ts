@@ -10,5 +10,4 @@ export type BlogPreviewPost = {
 
 export type BlogListPost = BlogPreviewPost & {
   readTime: string;
-  authorName: string;
 };

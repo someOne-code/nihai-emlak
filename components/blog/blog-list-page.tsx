@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { BookOpenText, CalendarDays, Clock3 } from "lucide-react";
+import { ArrowRight, CalendarDays, Clock3 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import type { BlogListPost } from "@/types/blog";
@@ -145,7 +145,7 @@ function FeaturedBlogCard({ post }: { post: BlogListPost }) {
             {post.title}
           </h2>
           <p className="mt-4 text-base leading-7 text-property-gray md:text-lg">{post.excerpt}</p>
-          <Byline post={post} className="mt-7" />
+          <ReadMore className="mt-7" />
         </div>
       </Link>
     </article>
@@ -170,7 +170,7 @@ function BlogCard({ post }: { post: BlogListPost }) {
             {post.title}
           </h2>
           <p className="mt-4 line-clamp-4 text-base leading-7 text-property-gray">{post.excerpt}</p>
-          <Byline post={post} className="mt-auto pt-6" />
+          <ReadMore className="mt-auto pt-6" />
         </div>
       </Link>
     </article>
@@ -221,17 +221,11 @@ function BlogMeta({ post }: { post: BlogListPost }) {
   );
 }
 
-function Byline({
-  post,
-  className = "",
-}: {
-  post: BlogListPost;
-  className?: string;
-}) {
+function ReadMore({ className = "" }: { className?: string }) {
   return (
-    <div className={`flex items-center gap-2 text-sm font-medium text-property-gray ${className}`}>
-      <BookOpenText aria-hidden="true" className="size-4 text-[#2F73F2]" />
-      <span>{post.authorName}</span>
+    <div className={`inline-flex items-center gap-2 text-sm font-semibold text-[#2F73F2] ${className}`}>
+      <span>Devamını oku</span>
+      <ArrowRight aria-hidden="true" className="size-4 transition group-hover:translate-x-1" />
     </div>
   );
 }
