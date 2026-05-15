@@ -7,3 +7,8 @@ export type BlogPreviewPost = {
   coverImageUrl: string;
   coverImageAlt: string;
 };
+
+export type BlogListPost = BlogPreviewPost & {
+  readTime: string;
+  authorName: string;
+};
