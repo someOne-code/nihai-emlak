@@ -11,3 +11,9 @@ export type BlogPreviewPost = {
 export type BlogListPost = BlogPreviewPost & {
   readTime: string;
 };
+
+export type BlogDetailPost = BlogListPost & {
+  contentParagraphs: string[];
+  seoTitle: string | null;
+  seoDescription: string | null;
+};

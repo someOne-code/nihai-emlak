@@ -235,7 +235,7 @@ function BlogMeta({ post }: { post: BlogListPost }) {
       </time>
       <span className="inline-flex items-center gap-2">
         <Clock3 aria-hidden="true" className="size-4" />
-        {post.readTime}
+        {post.readTime} okuma
       </span>
     </div>
   );
