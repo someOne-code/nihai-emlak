@@ -1,6 +1,7 @@
 \set ON_ERROR_STOP on
 
-create extension if not exists dblink;
+create schema if not exists extensions;
+create extension if not exists dblink with schema extensions;
 
 -- Phase 3 / Task 4: create_checkout must atomically create reservation/order/items/payment.
 
@@ -1173,13 +1174,13 @@ declare
   v_payment_count integer;
   v_connection_name text := 'phase3_create_checkout_lock_holder';
 begin
-  perform dblink_connect(
+  perform extensions.dblink_connect(
     v_connection_name,
     'host=/var/run/postgresql dbname=postgres user=supabase_admin password=postgres'
   );
 
-  perform dblink_exec(v_connection_name, 'begin');
-  perform dblink_exec(
+  perform extensions.dblink_exec(v_connection_name, 'begin');
+  perform extensions.dblink_exec(
     v_connection_name,
     $dblink$
       update public.listings
@@ -1247,19 +1248,19 @@ begin
       v_reservation_count, v_order_count, v_payment_count;
   end if;
 
-  perform dblink_exec(v_connection_name, 'rollback');
-  perform dblink_disconnect(v_connection_name);
+  perform extensions.dblink_exec(v_connection_name, 'rollback');
+  perform extensions.dblink_disconnect(v_connection_name);
 exception
   when others then
     begin
-      perform dblink_exec(v_connection_name, 'rollback');
+      perform extensions.dblink_exec(v_connection_name, 'rollback');
     exception
       when others then
         null;
     end;
 
     begin
-      perform dblink_disconnect(v_connection_name);
+      perform extensions.dblink_disconnect(v_connection_name);
     exception
       when others then
         null;
@@ -1277,13 +1278,13 @@ declare
   v_payment_count integer;
   v_connection_name text := 'phase3_create_checkout_main_item_lock_holder';
 begin
-  perform dblink_connect(
+  perform extensions.dblink_connect(
     v_connection_name,
     'host=/var/run/postgresql dbname=postgres user=supabase_admin password=postgres'
   );
 
-  perform dblink_exec(v_connection_name, 'begin');
-  perform dblink_exec(
+  perform extensions.dblink_exec(v_connection_name, 'begin');
+  perform extensions.dblink_exec(
     v_connection_name,
     $dblink$
       update public.listing_main_item_options
@@ -1351,19 +1352,19 @@ begin
       v_reservation_count, v_order_count, v_payment_count;
   end if;
 
-  perform dblink_exec(v_connection_name, 'rollback');
-  perform dblink_disconnect(v_connection_name);
+  perform extensions.dblink_exec(v_connection_name, 'rollback');
+  perform extensions.dblink_disconnect(v_connection_name);
 exception
   when others then
     begin
-      perform dblink_exec(v_connection_name, 'rollback');
+      perform extensions.dblink_exec(v_connection_name, 'rollback');
     exception
       when others then
         null;
     end;
 
     begin
-      perform dblink_disconnect(v_connection_name);
+      perform extensions.dblink_disconnect(v_connection_name);
     exception
       when others then
         null;
