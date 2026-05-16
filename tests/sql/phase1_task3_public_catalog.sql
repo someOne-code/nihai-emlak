@@ -582,29 +582,56 @@ reset role;
 do $$
 declare
   v_table_name text;
-  v_policy_name text;
+  v_policy_prefix text;
+  v_admin_insert_policy_count integer;
+  v_admin_update_policy_count integer;
+  v_admin_delete_policy_count integer;
   v_admin_write_policy_count integer;
   v_extra_write_policy_count integer;
 begin
-  for v_table_name, v_policy_name in
+  for v_table_name, v_policy_prefix in
     values
-	      ('consultants', 'consultants_admin_manage'),
-	      ('listings', 'listings_admin_manage'),
-	      ('listing_images', 'listing_images_admin_manage'),
-	      ('listing_service_options', 'listing_service_options_admin_manage')
+	      ('consultants', 'consultants_admin'),
+	      ('listings', 'listings_admin'),
+	      ('listing_images', 'listing_images_admin'),
+	      ('listing_service_options', 'listing_service_options_admin')
 	  loop
     select count(*)
-    into v_admin_write_policy_count
+    into v_admin_insert_policy_count
     from pg_policies
     where schemaname = 'public'
       and tablename = v_table_name
-      and policyname = v_policy_name
-      and cmd = 'ALL'
+      and policyname = v_policy_prefix || '_insert'
+      and cmd = 'INSERT'
+      and coalesce(with_check, '') like '%is_admin()%';
+
+    select count(*)
+    into v_admin_update_policy_count
+    from pg_policies
+    where schemaname = 'public'
+      and tablename = v_table_name
+      and policyname = v_policy_prefix || '_update'
+      and cmd = 'UPDATE'
       and coalesce(qual, '') like '%is_admin()%'
       and coalesce(with_check, '') like '%is_admin()%';
 
-    if v_admin_write_policy_count <> 1 then
-      raise exception 'Expected exactly one admin-only write policy for %, got %', v_table_name, v_admin_write_policy_count;
+    select count(*)
+    into v_admin_delete_policy_count
+    from pg_policies
+    where schemaname = 'public'
+      and tablename = v_table_name
+      and policyname = v_policy_prefix || '_delete'
+      and cmd = 'DELETE'
+      and coalesce(qual, '') like '%is_admin()%';
+
+    if v_admin_insert_policy_count <> 1
+      or v_admin_update_policy_count <> 1
+      or v_admin_delete_policy_count <> 1 then
+      raise exception 'Expected admin-only insert/update/delete policies for %, got insert %, update %, delete %',
+        v_table_name,
+        v_admin_insert_policy_count,
+        v_admin_update_policy_count,
+        v_admin_delete_policy_count;
     end if;
 
     select count(*)
@@ -613,7 +640,11 @@ begin
     where schemaname = 'public'
       and tablename = v_table_name
       and cmd in ('INSERT', 'UPDATE', 'DELETE', 'ALL')
-      and policyname <> v_policy_name;
+      and policyname not in (
+        v_policy_prefix || '_insert',
+        v_policy_prefix || '_update',
+        v_policy_prefix || '_delete'
+      );
 
     if v_extra_write_policy_count <> 0 then
       raise exception 'Unexpected non-admin write policy found for %', v_table_name;
