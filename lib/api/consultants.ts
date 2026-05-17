@@ -14,6 +14,8 @@ type PayloadConsultantDoc = {
   email?: unknown;
   whatsappUrl?: unknown;
   linkedinUrl?: unknown;
+  isPublished?: unknown;
+  sortOrder?: unknown;
 };
 
 const PUBLIC_CONSULTANT_SELECT = {
@@ -27,22 +29,26 @@ const PUBLIC_CONSULTANT_SELECT = {
   email: true,
   whatsappUrl: true,
   linkedinUrl: true,
+  isPublished: true,
+  sortOrder: true,
 } as const;
 
 function stringOrNull(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
 
-function consultantPhotoOrNull(value: unknown): string | null {
+function numberOrZero(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function consultantPhotoOrNull(value: unknown, supabasePublicUrl = process.env.NEXT_PUBLIC_SUPABASE_URL): string | null {
   const image = stringOrNull(value);
   if (!image) return null;
   if (image.startsWith("/")) return image;
 
   try {
     const imageUrl = new URL(image);
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-      ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL)
-      : null;
+    const supabaseUrl = supabasePublicUrl ? new URL(supabasePublicUrl) : null;
 
     if (
       supabaseUrl
@@ -58,7 +64,10 @@ function consultantPhotoOrNull(value: unknown): string | null {
   return null;
 }
 
-function mapPayloadConsultantToPublic(doc: PayloadConsultantDoc): PublicConsultant | null {
+function mapPayloadConsultantToPublic(
+  doc: PayloadConsultantDoc,
+  supabasePublicUrl = process.env.NEXT_PUBLIC_SUPABASE_URL,
+): PublicConsultant | null {
   const fullName = stringOrNull(doc.fullName);
   const slug = stringOrNull(doc.slug);
   if (!fullName || !slug) return null;
@@ -68,13 +77,40 @@ function mapPayloadConsultantToPublic(doc: PayloadConsultantDoc): PublicConsulta
     fullName,
     slug,
     title: stringOrNull(doc.title),
-    photoUrl: consultantPhotoOrNull(doc.photoUrl),
+    photoUrl: consultantPhotoOrNull(doc.photoUrl, supabasePublicUrl),
     shortBio: stringOrNull(doc.shortBio),
     phone: stringOrNull(doc.phone),
     email: stringOrNull(doc.email),
     whatsappUrl: stringOrNull(doc.whatsappUrl),
     linkedinUrl: stringOrNull(doc.linkedinUrl),
   };
+}
+
+function compareConsultantDocs(left: PayloadConsultantDoc, right: PayloadConsultantDoc): number {
+  const orderDiff = numberOrZero(left.sortOrder) - numberOrZero(right.sortOrder);
+  if (orderDiff !== 0) return orderDiff;
+
+  return (stringOrNull(left.fullName) ?? "").localeCompare(stringOrNull(right.fullName) ?? "", "tr", {
+    sensitivity: "base",
+  });
+}
+
+function mapPublishedPayloadConsultants(
+  docs: PayloadConsultantDoc[],
+  supabasePublicUrl = process.env.NEXT_PUBLIC_SUPABASE_URL,
+): PublicConsultant[] {
+  return docs
+    .filter((doc) => doc.isPublished === true)
+    .toSorted(compareConsultantDocs)
+    .map((doc) => mapPayloadConsultantToPublic(doc, supabasePublicUrl))
+    .filter((consultant): consultant is PublicConsultant => consultant !== null);
+}
+
+export function mapPublishedPayloadConsultantsForTest(
+  docs: PayloadConsultantDoc[],
+  options: { supabasePublicUrl?: string | null } = {},
+): PublicConsultant[] {
+  return mapPublishedPayloadConsultants(docs, options.supabasePublicUrl ?? undefined);
 }
 
 export async function listPublishedConsultants(): Promise<PublicConsultant[]> {
@@ -92,9 +128,7 @@ export async function listPublishedConsultants(): Promise<PublicConsultant[]> {
       overrideAccess: false,
     });
 
-    return result.docs
-      .map((doc) => mapPayloadConsultantToPublic(doc as unknown as PayloadConsultantDoc))
-      .filter((consultant): consultant is PublicConsultant => consultant !== null);
+    return mapPublishedPayloadConsultants(result.docs as unknown as PayloadConsultantDoc[]);
   } catch {
     return [];
   }
