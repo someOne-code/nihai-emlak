@@ -49,6 +49,75 @@ update public.profiles
 set role = 'admin'
 where id = 'aaaaaaaa-bbbb-4bbb-8bbb-bbbbbbbbb800'::uuid;
 
+-- Payload consultant examples for local development only.
+-- Public helpers expose only is_published=true rows; the passive row verifies
+-- that draft consultants stay out of the public showcase.
+insert into payload.consultants (
+  full_name,
+  slug,
+  title,
+  photo_url,
+  short_bio,
+  phone,
+  email,
+  whatsapp_url,
+  linkedin_url,
+  is_published,
+  sort_order
+)
+values
+  (
+    'Elif Yilmaz',
+    'elif-yilmaz',
+    'Satis ve Kiralama Danismani',
+    '/property-nextjs-pro/images/hero/hero-profile-2.jpg',
+    'Istanbul merkezi bolgelerinde satilik ve kiralik sureclerde musteri odakli destek sunar.',
+    '+902120000001',
+    'elif.yilmaz@example.test',
+    'https://wa.me/902120000001',
+    'https://www.linkedin.com/',
+    true,
+    0
+  ),
+  (
+    'Murat Arslan',
+    'murat-arslan',
+    'Yatirim Danismani',
+    '/property-nextjs-pro/images/hero/hero-profile-1.jpg',
+    'Konut yatirimi, portfoy degerleme ve bolge karsilastirmalarinda seffaf danismanlik saglar.',
+    null,
+    'murat.arslan@example.test',
+    null,
+    'https://www.linkedin.com/',
+    true,
+    1
+  ),
+  (
+    'Pasif Danisman',
+    'pasif-danisman',
+    'Taslak Profil',
+    null,
+    'Bu yerel taslak kayit public danismanlar vitrininde gorunmemelidir.',
+    null,
+    null,
+    null,
+    null,
+    false,
+    99
+  )
+ON CONFLICT (slug) DO UPDATE
+set full_name = excluded.full_name,
+    title = excluded.title,
+    photo_url = excluded.photo_url,
+    short_bio = excluded.short_bio,
+    phone = excluded.phone,
+    email = excluded.email,
+    whatsapp_url = excluded.whatsapp_url,
+    linkedin_url = excluded.linkedin_url,
+    is_published = excluded.is_published,
+    sort_order = excluded.sort_order,
+    updated_at = now();
+
 -- Public demo listings for local development.
 -- These rows keep active-listing invariants intact: every listing has a
 -- description, district, image, and rent listings have an enabled main item.

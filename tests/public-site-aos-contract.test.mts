@@ -102,6 +102,23 @@ test("public listing server pages use direct server read helper instead of self-
   assert.match(listingDetailPage, /cache\(getPublicListingDetailForServerPage\)/);
 });
 
+test("public listing server helper has a development-only fallback when local Supabase is unavailable", () => {
+  const source = readProjectFile("lib/read-models/public-listings.ts");
+
+  assert.match(source, /DEV_FALLBACK_LISTINGS/);
+  assert.match(source, /DEV_FALLBACK_FILTERS/);
+  assert.match(source, /buildDevFallbackPublicListingsResponse/);
+  assert.match(source, /shouldUseDevFallbackPublicListings/);
+  assert.match(source, /process\.env\.NODE_ENV !== "production"/);
+  assert.match(source, /Kadikoy Merkezi Kiralik Daire/);
+  assert.match(source, /Besiktas Manzarali Satilik Daire/);
+  assert.match(source, /Sisli Site Icinde Kiralik Residence/);
+  assert.match(source, /return buildDevFallbackPublicListingsResponse\(\{\s*\.\.\.input,\s*limit,\s*offset,\s*\}\)/);
+  assert.match(source, /return DEV_FALLBACK_FILTERS/);
+  assert.match(source, /throw new Error\("Public listings read failed"\)/);
+  assert.match(source, /throw new Error\("Public listing filters read failed"\)/);
+});
+
 test("home discover properties section uses local static categories and copied public assets", () => {
   const discover = readProjectFile("components/home/discover-properties.tsx");
 

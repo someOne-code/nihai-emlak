@@ -1,3 +1,5 @@
+import net from "node:net";
+
 import { getPayload } from "payload";
 
 import configPromise from "../../payload.config.ts";
@@ -32,6 +34,33 @@ const PUBLIC_CONSULTANT_SELECT = {
   isPublished: true,
   sortOrder: true,
 } as const;
+
+const DEV_FALLBACK_CONSULTANTS: PublicConsultant[] = [
+  {
+    id: "local-elif-yilmaz",
+    fullName: "Elif Yilmaz",
+    slug: "elif-yilmaz",
+    title: "Satis ve Kiralama Danismani",
+    photoUrl: "/property-nextjs-pro/images/hero/hero-profile-2.jpg",
+    shortBio: "Istanbul'un merkezi bolgelerinde satilik ve kiralik sureclerde musteri odakli destek sunar.",
+    phone: "+902120000001",
+    email: "elif.yilmaz@example.test",
+    whatsappUrl: "https://wa.me/902120000001",
+    linkedinUrl: "https://www.linkedin.com/",
+  },
+  {
+    id: "local-murat-arslan",
+    fullName: "Murat Arslan",
+    slug: "murat-arslan",
+    title: "Yatirim Danismani",
+    photoUrl: "/property-nextjs-pro/images/hero/hero-profile-1.jpg",
+    shortBio: "Konut yatirimi, portfoy degerleme ve bolge karsilastirmalarinda seffaf danismanlik saglar.",
+    phone: null,
+    email: "murat.arslan@example.test",
+    whatsappUrl: null,
+    linkedinUrl: "https://www.linkedin.com/",
+  },
+];
 
 function stringOrNull(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
@@ -114,6 +143,10 @@ export function mapPublishedPayloadConsultantsForTest(
 }
 
 export async function listPublishedConsultants(): Promise<PublicConsultant[]> {
+  if (shouldUseDevFallbackConsultants() && !(await canReachLocalPayloadDatabase())) {
+    return DEV_FALLBACK_CONSULTANTS;
+  }
+
   try {
     const payload = await getPayload({ config: configPromise });
     const result = await payload.find({
@@ -130,6 +163,47 @@ export async function listPublishedConsultants(): Promise<PublicConsultant[]> {
 
     return mapPublishedPayloadConsultants(result.docs as unknown as PayloadConsultantDoc[]);
   } catch {
+    if (shouldUseDevFallbackConsultants()) {
+      return DEV_FALLBACK_CONSULTANTS;
+    }
+
     return [];
   }
+}
+
+function shouldUseDevFallbackConsultants(): boolean {
+  return process.env.NODE_ENV !== "production";
+}
+
+async function canReachLocalPayloadDatabase(): Promise<boolean> {
+  const databaseUri = process.env.DATABASE_URI;
+  if (!databaseUri) return true;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(databaseUri);
+  } catch {
+    return true;
+  }
+
+  if (!["localhost", "127.0.0.1", "::1"].includes(parsed.hostname)) {
+    return true;
+  }
+
+  const port = Number(parsed.port || 5432);
+  if (!Number.isSafeInteger(port) || port < 1) {
+    return true;
+  }
+
+  return new Promise((resolve) => {
+    const socket = net.createConnection({ host: parsed.hostname, port, timeout: 250 });
+    const finish = (result: boolean) => {
+      socket.destroy();
+      resolve(result);
+    };
+
+    socket.once("connect", () => finish(true));
+    socket.once("error", () => finish(false));
+    socket.once("timeout", () => finish(false));
+  });
 }

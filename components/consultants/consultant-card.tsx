@@ -11,17 +11,19 @@ export function ConsultantCard({ consultant }: { consultant: PublicConsultant })
 
   return (
     <article className="group flex h-full flex-col overflow-hidden rounded-2xl border border-[#DDEAF5] bg-property-surface shadow-[0_18px_50px_rgba(16,45,71,0.10)] transition duration-300 hover:-translate-y-1 hover:border-[#2F73F2]/30 hover:shadow-[0_26px_70px_rgba(16,45,71,0.16)] dark:border-white/10">
-      <div className="relative aspect-[4/3] overflow-hidden bg-[#EAF6FF]">
+      <div className="bg-[linear-gradient(135deg,#EAF6FF_0%,#D1F2FF_100%)] p-5 dark:bg-[linear-gradient(135deg,#102D47_0%,#1F2A37_100%)]">
         {consultant.photoUrl ? (
-          <Image
-            src={consultant.photoUrl}
-            alt={consultant.fullName}
-            fill
-            sizes="(min-width: 1536px) 25vw, (min-width: 1280px) 33vw, (min-width: 768px) 50vw, 100vw"
-            className="object-cover transition-transform duration-500 group-hover:scale-105"
-          />
+          <div className="relative mx-auto aspect-square w-full max-w-[260px] overflow-hidden rounded-2xl border border-white/80 bg-white/70 shadow-[0_18px_42px_rgba(16,45,71,0.14)] dark:border-white/10 dark:bg-white/10">
+            <Image
+              src={consultant.photoUrl}
+              alt={consultant.fullName}
+              fill
+              sizes="(min-width: 1536px) 260px, (min-width: 1280px) 22vw, (min-width: 768px) 36vw, 82vw"
+              className="object-contain transition-transform duration-500 group-hover:scale-[1.03]"
+            />
+          </div>
         ) : (
-          <div className="flex h-full w-full items-center justify-center bg-[linear-gradient(135deg,#EAF6FF_0%,#D1F2FF_100%)] text-[#2F73F2] dark:bg-[linear-gradient(135deg,#102D47_0%,#1F2A37_100%)]">
+          <div className="mx-auto flex aspect-square w-full max-w-[260px] items-center justify-center rounded-2xl border border-white/80 bg-white/65 text-[#2F73F2] shadow-[0_18px_42px_rgba(16,45,71,0.14)] dark:border-white/10 dark:bg-white/10">
             <div className="flex size-24 items-center justify-center rounded-full border border-white/70 bg-white/65 shadow-[0_14px_34px_rgba(16,45,71,0.12)] dark:border-white/10 dark:bg-white/10">
               <UserRound className="h-12 w-12" aria-hidden="true" />
             </div>

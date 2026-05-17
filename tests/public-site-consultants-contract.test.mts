@@ -51,6 +51,19 @@ test("public consultants API reads published Payload consultants without privile
   assert.doesNotMatch(source, /service_role|overrideAccess: true/);
 });
 
+test("public consultants API has development fallback profiles without exposing passive rows", () => {
+  const source = readProjectFile("lib/api/consultants.ts");
+
+  assert.match(source, /from "node:net"/);
+  assert.match(source, /DEV_FALLBACK_CONSULTANTS/);
+  assert.match(source, /shouldUseDevFallbackConsultants/);
+  assert.match(source, /canReachLocalPayloadDatabase/);
+  assert.match(source, /process\.env\.NODE_ENV !== "production"/);
+  assert.match(source, /Elif Yilmaz/);
+  assert.match(source, /Murat Arslan/);
+  assert.doesNotMatch(source, /Pasif Danisman/);
+});
+
 test("public consultant mapper filters passive rows and sorts by order then name", async () => {
   const { mapPublishedPayloadConsultantsForTest } = await import("../lib/api/consultants.ts");
 
@@ -111,6 +124,8 @@ test("public consultant cards show only backend-provided profile fields and no d
   assert.match(source, /rounded-2xl/);
   assert.match(source, /hover:-translate-y-1/);
   assert.match(source, /shadow-\[0_18px_50px_rgba/);
+  assert.match(source, /aspect-square/);
+  assert.match(source, /object-contain/);
   assert.match(source, /consultant\.phone \?/);
   assert.match(source, /consultant\.email \?/);
   assert.match(source, /consultant\.whatsappUrl \?/);
@@ -160,4 +175,16 @@ test("consultants surface stays separate from blog author or byline behavior", (
 
   assert.doesNotMatch(`${page}\n${card}\n${api}`, /blog_posts|author|byline|avatarUrl|blog author/i);
   assert.match(header, /href: "\/consultants"/);
+});
+
+test("local Supabase seed includes published and passive Payload consultant examples", () => {
+  const seed = readProjectFile("supabase/seed.sql");
+
+  assert.match(seed, /payload\.consultants/);
+  assert.match(seed, /elif-yilmaz/);
+  assert.match(seed, /murat-arslan/);
+  assert.match(seed, /pasif-danisman/);
+  assert.match(seed, /true,\s*0/);
+  assert.match(seed, /false,\s*99/);
+  assert.match(seed, /ON CONFLICT \(slug\) DO UPDATE/);
 });
