@@ -24,6 +24,7 @@ type ReadModelRpcName =
   | "list_public_listings"
   | "get_public_listing_filters"
   | "get_public_listing_detail"
+  | "get_public_listing_detail_by_slug"
   | "list_public_listing_services"
   | "list_admin_reservations"
   | "list_admin_orders"
@@ -302,15 +303,19 @@ export async function handlePublicListingDetailGet(
   dependencies: ReadModelRouteDependencies,
   params: { listingId: string },
 ): Promise<Response> {
-  const listingId = asUuid(params.listingId);
-  if (!listingId) {
-    return jsonError("Invalid listing id", 400);
+  const identifier = parsePublicListingIdentifier(params.listingId);
+  if (!identifier) {
+    return jsonError("Invalid listing identifier", 400);
   }
 
   const supabase = (await dependencies.createServerSupabaseClient()) as SupabaseClient;
-  const rpcResult = await supabase.rpc("get_public_listing_detail", {
-    p_listing_id: listingId,
-  });
+  const rpcResult = identifier.kind === "uuid"
+    ? await supabase.rpc("get_public_listing_detail", {
+        p_listing_id: identifier.value,
+      })
+    : await supabase.rpc("get_public_listing_detail_by_slug", {
+        p_listing_slug: identifier.value,
+      });
   if (rpcResult.error) {
     return jsonError(...mapPublicReadRpcError(rpcResult.error, "Listing not found"));
   }
@@ -990,6 +995,24 @@ function asUuid(value: unknown): string | null {
   }
 
   return normalized.toLowerCase();
+}
+
+function parsePublicListingIdentifier(value: unknown): { kind: "uuid" | "slug"; value: string } | null {
+  const normalized = asNonEmptyString(value);
+  if (!normalized) {
+    return null;
+  }
+
+  if (isUuid(normalized)) {
+    return { kind: "uuid", value: normalized.toLowerCase() };
+  }
+
+  const slug = normalized.toLowerCase();
+  if (!/^[a-z0-9][a-z0-9-]{0,119}$/.test(slug)) {
+    return null;
+  }
+
+  return { kind: "slug", value: slug };
 }
 
 function asIsoDateTime(value: unknown): string | null {

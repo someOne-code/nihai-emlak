@@ -25,9 +25,9 @@ export function LoginForm({
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get("redirect") ?? "/protected";
+  const redirectTo = searchParams.get("redirect") ?? "/";
   const safeRedirectTo =
-    redirectTo.startsWith("/") && !redirectTo.startsWith("//") ? redirectTo : "/protected";
+    redirectTo.startsWith("/") && !redirectTo.startsWith("//") ? redirectTo : "/";
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

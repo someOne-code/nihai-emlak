@@ -9,10 +9,11 @@ export function PublicFooter() {
           <div className="col-span-12 flex items-center px-4 md:col-span-4 sm:px-0">
             <Link href="/" className="mb-6 inline-block max-w-40">
               <Image
-                src="/property-nextjs-pro/images/logo/logo-white.svg"
-                alt="logo"
-                width={156}
-                height={38}
+                src="/umut-emlak-logo-light.png"
+                alt="Umut Emlak Logo"
+                width={140}
+                height={36}
+                className="h-9 w-auto object-contain"
                 unoptimized
               />
             </Link>
@@ -21,7 +22,7 @@ export function PublicFooter() {
             <div className="col-span-12 w-full lg:col-span-6">
               <h4 className="mb-4 text-lg text-white dark:text-white">Adres</h4>
               <p className="mb-6 text-base text-[#668199]">
-                Nihai Emlak, Kayseri merkezli gayrimenkul yönetimi ve danışmanlığı
+                Umut Emlak, Kayseri merkezli gayrimenkul yönetimi ve danışmanlığı
               </p>
               <div className="flex items-center gap-2">
                 <SocialLink label="Facebook">
@@ -64,11 +65,11 @@ export function PublicFooter() {
             <div className="flex flex-wrap gap-4 text-base text-black/50 lg:flex-nowrap lg:gap-11 sm:text-lg md:text-xl">
               <p className="text-white">
                 Telefon:
-                <Link href="#" className="text-[#668199] hover:text-white"> +(690) 2560 0020</Link>
+                <Link href="#" className="text-[#668199] hover:text-white"> +(850) 000 0000</Link>
               </p>
               <p className="text-white">
                 E-posta:
-                <Link href="#" className="text-[#668199] hover:text-white"> real@property.com</Link>
+                <Link href="#" className="text-[#668199] hover:text-white"> info@umutemlak.com</Link>
               </p>
             </div>
           </div>

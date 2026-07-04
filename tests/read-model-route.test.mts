@@ -717,6 +717,83 @@ test("public listing detail route maps not found RPC error to 404", async () => 
   assert.equal((await response.json()).error, "Listing not found");
 });
 
+test("public listing detail route reads canonical slug identifiers through slug RPC", async () => {
+  const calls: Array<{ functionName: string; args: Record<string, unknown> }> = [];
+  const response = await handlePublicListingDetailGet(
+    new Request("http://localhost:3000/api/public/listings/test-listing"),
+    createDependencies({
+      rpc: (functionName, args) => {
+        calls.push({ functionName, args });
+        return {
+          data: {
+            id: "11111111-1111-4111-8111-111111111111",
+            slug: "test-listing",
+            title: "Test listing",
+          },
+          error: null,
+        };
+      },
+    }),
+    { listingId: "test-listing" },
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(calls, [
+    {
+      functionName: "get_public_listing_detail_by_slug",
+      args: {
+        p_listing_slug: "test-listing",
+      },
+    },
+  ]);
+});
+
+test("public listing detail route keeps UUID identifiers on legacy detail RPC", async () => {
+  const calls: Array<{ functionName: string; args: Record<string, unknown> }> = [];
+  const response = await handlePublicListingDetailGet(
+    new Request("http://localhost:3000/api/public/listings/11111111-1111-4111-8111-111111111111"),
+    createDependencies({
+      rpc: (functionName, args) => {
+        calls.push({ functionName, args });
+        return {
+          data: {
+            id: "11111111-1111-4111-8111-111111111111",
+            slug: "test-listing",
+            title: "Test listing",
+          },
+          error: null,
+        };
+      },
+    }),
+    { listingId: "11111111-1111-4111-8111-111111111111" },
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(calls, [
+    {
+      functionName: "get_public_listing_detail",
+      args: {
+        p_listing_id: "11111111-1111-4111-8111-111111111111",
+      },
+    },
+  ]);
+});
+
+test("public listing detail route rejects invalid slug identifiers before RPC", async () => {
+  const response = await handlePublicListingDetailGet(
+    new Request("http://localhost:3000/api/public/listings/INVALID SLUG"),
+    createDependencies({
+      rpc: () => {
+        throw new Error("rpc should not run for invalid listing identifier");
+      },
+    }),
+    { listingId: "INVALID SLUG" },
+  );
+
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).error, "Invalid listing identifier");
+});
+
 test("public listing services route rejects invalid listing id", async () => {
   const response = await handlePublicListingServicesGet(
     new Request("http://localhost:3000/api/public/listings/not-a-uuid/services"),

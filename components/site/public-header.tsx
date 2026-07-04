@@ -5,6 +5,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useEffect, useRef, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import type { User } from "@supabase/supabase-js";
 
 type HeaderItem = {
   href: string;
@@ -27,6 +29,100 @@ export function PublicHeader() {
   const [sticky, setSticky] = useState(false);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
   const usesDarkBlogChrome = false;
+  const router = useRouter();
+
+  const [user, setUser] = useState<User | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    let subscription: any = null;
+
+    async function initAuth() {
+      try {
+        const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+
+        if (!url || !key) {
+          console.warn("Supabase client environment variables are missing.");
+          if (active) setLoading(false);
+          return;
+        }
+
+        const supabase = createClient();
+
+        // Safe getSession
+        const sessionResult = await supabase.auth.getSession();
+        if (!active) return;
+
+        const session = sessionResult?.data?.session;
+        if (session?.user) {
+          setUser(session.user);
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("role")
+            .eq("id", session.user.id)
+            .maybeSingle();
+          if (active) {
+            setIsAdmin(profile?.role === "admin");
+          }
+        } else {
+          setUser(null);
+          setIsAdmin(false);
+        }
+
+        // Safe onAuthStateChange subscription
+        const authListener = supabase.auth.onAuthStateChange(async (event, session) => {
+          if (!active) return;
+          if (session?.user) {
+            setUser(session.user);
+            try {
+              const { data: profile } = await supabase
+                .from("profiles")
+                .select("role")
+                .eq("id", session.user.id)
+                .maybeSingle();
+              if (active) {
+                setIsAdmin(profile?.role === "admin");
+              }
+            } catch (err) {
+              console.error("Profile role fetch error:", err);
+            }
+          } else {
+            setUser(null);
+            setIsAdmin(false);
+          }
+          if (active) setLoading(false);
+        });
+
+        if (authListener?.data) {
+          subscription = authListener.data.subscription;
+        }
+      } catch (err) {
+        console.error("Auth initialization error:", err);
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    initAuth();
+
+    return () => {
+      active = false;
+      if (subscription) {
+        subscription.unsubscribe();
+      }
+    };
+  }, []);
+
+  const handleLogout = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    setUser(null);
+    setIsAdmin(false);
+    router.push("/auth/login");
+  };
 
   useEffect(() => {
     function handleScroll() {
@@ -63,15 +159,17 @@ export function PublicHeader() {
   return (
     <>
       <header
-        className={`fixed top-0 z-50 h-24 w-full bg-transparent py-1 transition-all ${
+        className={`fixed top-0 z-50 w-full transition-all duration-300 ${
           sticky
-            ? "bg-white shadow-lg dark:bg-[#0e1624] dark:shadow-[rgba(145,158,171,0.2)_0px_0px_2px_0px,rgba(145,158,171,0.12)_0px_12px_24px_-4px]"
+            ? "bg-white/95 backdrop-blur-md shadow-lg dark:bg-[#0e1624]/95 dark:shadow-[rgba(145,158,171,0.2)_0px_0px_2px_0px,rgba(145,158,171,0.12)_0px_12px_24px_-4px]"
             : usesDarkBlogChrome
               ? "border-b border-white/10 bg-[#102D47]"
-              : "shadow-none"
+              : "bg-transparent shadow-none"
         }`}
       >
-        <div className="container mx-auto flex items-center justify-between px-4 py-6 md:max-w-screen-md lg:max-w-screen-xl">
+        <div className={`container mx-auto flex items-center justify-between px-4 transition-all duration-300 md:max-w-screen-md lg:max-w-screen-xl ${
+          sticky ? "py-4" : "py-6"
+        }`}>
           <Logo forceLight={usesDarkBlogChrome} />
           <nav className="hidden flex-grow items-center justify-center gap-6 lg:flex">
             {headerData.map((item) => (
@@ -99,22 +197,48 @@ export function PublicHeader() {
               </svg>
             </button>
 
-            <Link
-              href="/auth/login"
-              className={`hidden rounded-lg border px-4 py-2 transition lg:block ${
-                usesDarkBlogChrome
-                  ? "border-white/40 bg-transparent text-white hover:border-[#2F73F2] hover:bg-[#2F73F2]"
-                  : "border-[#2F73F2] bg-transparent text-[#2F73F2] hover:bg-blue-600 hover:text-white"
-              }`}
-            >
-              Giriş Yap
-            </Link>
-            <Link
-              href="/auth/sign-up"
-              className="hidden rounded-lg bg-[#2F73F2] px-4 py-2 text-white hover:bg-blue-700 lg:block"
-            >
-              Kayıt Ol
-            </Link>
+            {!loading && user ? (
+              <div className="hidden items-center gap-3 lg:flex">
+                <Link
+                  href={isAdmin ? "/admin" : "/protected"}
+                  className="rounded-lg bg-[#2F73F2] px-4 py-2 text-white hover:bg-blue-700"
+                >
+                  {isAdmin ? "Yönetim Paneli" : "Hesabım"}
+                </Link>
+                <button
+                  onClick={handleLogout}
+                  className={`rounded-lg border px-4 py-2 transition ${
+                    usesDarkBlogChrome
+                      ? "border-white/40 bg-transparent text-white hover:border-red-500 hover:bg-red-500"
+                      : "border-red-500 bg-transparent text-red-500 hover:bg-red-500 hover:text-white"
+                  }`}
+                  type="button"
+                >
+                  Çıkış Yap
+                </button>
+              </div>
+            ) : !loading ? (
+              <>
+                <Link
+                  href="/auth/login"
+                  className={`hidden rounded-lg border px-4 py-2 transition lg:block ${
+                    usesDarkBlogChrome
+                      ? "border-white/40 bg-transparent text-white hover:border-[#2F73F2] hover:bg-[#2F73F2]"
+                      : "border-[#2F73F2] bg-transparent text-[#2F73F2] hover:bg-blue-600 hover:text-white"
+                  }`}
+                >
+                  Giriş Yap
+                </Link>
+                <Link
+                  href="/auth/sign-up"
+                  className="hidden rounded-lg bg-[#2F73F2] px-4 py-2 text-white hover:bg-blue-700 lg:block"
+                >
+                  Kayıt Ol
+                </Link>
+              </>
+            ) : (
+              <div className="hidden h-10 w-36 animate-pulse rounded-lg bg-slate-100 dark:bg-slate-800 lg:block" />
+            )}
 
             <button
               onClick={() => setNavbarOpen((isOpen) => !isOpen)}
@@ -148,22 +272,44 @@ export function PublicHeader() {
             {headerData.map((item) => (
               <MobileHeaderLink key={item.href} item={item} onNavigate={() => setNavbarOpen(false)} />
             ))}
-            <div className="mt-4 flex w-full flex-col gap-4">
-              <Link
-                href="/auth/login"
-                className="rounded-lg border border-[#2F73F2] bg-transparent px-4 py-2 text-center text-[#2F73F2] hover:bg-blue-600 hover:text-white"
-                onClick={() => setNavbarOpen(false)}
-              >
-                Giriş Yap
-              </Link>
-              <Link
-                href="/auth/sign-up"
-                className="rounded-lg bg-[#2F73F2] px-4 py-2 text-center text-white hover:bg-blue-700"
-                onClick={() => setNavbarOpen(false)}
-              >
-                Kayıt Ol
-              </Link>
-            </div>
+            {!loading && user ? (
+              <div className="mt-4 flex w-full flex-col gap-4">
+                <Link
+                  href={isAdmin ? "/admin" : "/protected"}
+                  className="rounded-lg bg-[#2F73F2] px-4 py-2 text-center text-white hover:bg-blue-700"
+                  onClick={() => setNavbarOpen(false)}
+                >
+                  {isAdmin ? "Yönetim Paneli" : "Hesabım"}
+                </Link>
+                <button
+                  onClick={() => {
+                    setNavbarOpen(false);
+                    handleLogout();
+                  }}
+                  className="rounded-lg border border-red-500 bg-transparent px-4 py-2 text-center text-red-500 hover:bg-red-500 hover:text-white"
+                  type="button"
+                >
+                  Çıkış Yap
+                </button>
+              </div>
+            ) : !loading ? (
+              <div className="mt-4 flex w-full flex-col gap-4">
+                <Link
+                  href="/auth/login"
+                  className="rounded-lg border border-[#2F73F2] bg-transparent px-4 py-2 text-center text-[#2F73F2] hover:bg-blue-600 hover:text-white"
+                  onClick={() => setNavbarOpen(false)}
+                >
+                  Giriş Yap
+                </Link>
+                <Link
+                  href="/auth/sign-up"
+                  className="rounded-lg bg-[#2F73F2] px-4 py-2 text-center text-white hover:bg-blue-700"
+                  onClick={() => setNavbarOpen(false)}
+                >
+                  Kayıt Ol
+                </Link>
+              </div>
+            ) : null}
           </nav>
         </div>
       </header>
@@ -175,19 +321,19 @@ function Logo({ forceLight = false }: { forceLight?: boolean }) {
   return (
     <Link href="/">
       <Image
-        src="/property-nextjs-pro/images/logo/logo.svg"
-        alt="logo"
-        width={160}
-        height={50}
-        className={forceLight ? "hidden" : "dark:hidden"}
+        src="/umut-emlak-logo-dark.png"
+        alt="Umut Emlak Logo"
+        width={140}
+        height={36}
+        className={`h-9 w-auto object-contain ${forceLight ? "hidden" : "dark:hidden"}`}
         unoptimized
       />
       <Image
-        src="/property-nextjs-pro/images/logo/logo-white.svg"
-        alt="logo"
-        width={160}
-        height={50}
-        className={forceLight ? "block" : "hidden dark:block"}
+        src="/umut-emlak-logo-light.png"
+        alt="Umut Emlak Logo"
+        width={140}
+        height={36}
+        className={`h-9 w-auto object-contain ${forceLight ? "block" : "hidden dark:block"}`}
         unoptimized
       />
     </Link>

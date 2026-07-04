@@ -67,3 +67,4 @@ test("admin sidebar component renders hierarchy affordances and shadcn mobile cl
   assert.match(source, /border-l/);
   assert.match(source, /aria-label="Aktif sayfa"/);
 });
+

@@ -1,6 +1,6 @@
 \set ON_ERROR_STOP on
 
-create extension if not exists dblink;
+create extension if not exists dblink with schema extensions;
 
 -- Phase 3 / Task 4: create_checkout must atomically create reservation/order/items/payment.
 

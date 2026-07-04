@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { connection } from "next/server";
 
 import { ConsultantCard } from "@/components/consultants/consultant-card";
 import { PublicFooter } from "@/components/site/public-footer";
@@ -6,11 +7,12 @@ import { PublicHeader } from "@/components/site/public-header";
 import { listPublishedConsultants } from "@/lib/api/consultants";
 
 export const metadata: Metadata = {
-  title: "Danışmanlarımız | Nihai Emlak",
+  title: "Danışmanlarımız | Umut Emlak",
   description: "Gayrimenkul danışmanlarımızı tanıyın ve yayındaki ekip profillerini inceleyin.",
 };
 
 export default async function ConsultantsPage() {
+  await connection();
   const consultants = await listPublishedConsultants();
 
   return (

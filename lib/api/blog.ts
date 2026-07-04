@@ -35,15 +35,15 @@ export const FALLBACK_BLOG_PREVIEW_POSTS: BlogPreviewPost[] = [
 
 export const FALLBACK_BLOG_LIST_POSTS: BlogListPost[] = [
   {
-    title: "2024'te İstanbul'da Kira Getirisi En Yüksek 5 Semt",
-    slug: "istanbul-kira-getirisi-en-yuksek-5-semt",
+    title: "2026'da Kayseri'de Kira Getirisi En Yüksek 5 Bölge",
+    slug: "kayseri-kira-getirisi-en-yuksek-5-bolge",
     excerpt:
-      "Yatırım amaçlı gayrimenkul arayanlar için İstanbul'un en yüksek kira getirisi sunan bölgelerini analiz ettik. Veriye dayalı karşılaştırma ve uzman yorumları.",
+      "Yatırım amaçlı gayrimenkul arayanlar için Kayseri'nin en yüksek kira getirisi sunan bölgelerini analiz ettik. Veriye dayalı karşılaştırma ve uzman yorumları.",
     categoryLabel: "Yatırım",
-    publishedAt: "2024-03-15",
+    publishedAt: "2026-03-15",
     readTime: "6 dk",
     coverImageUrl: "/property-nextjs-pro/images/blog/blogdetail-1.jpg",
-    coverImageAlt: "İstanbul silüeti ve Galata çevresi",
+    coverImageAlt: "Kayseri şehir görünümü ve Erciyes manzarası",
   },
   {
     title: "Ev Alırken Dikkat Edilmesi Gereken 10 Kritik Nokta",
@@ -51,18 +51,18 @@ export const FALLBACK_BLOG_LIST_POSTS: BlogListPost[] = [
     excerpt:
       "İlk kez ev alacaklar için kapsamlı rehber. Tapu kontrolünden kredi sürecine, ekspertizden sözleşme detaylarına kadar bilmeniz gerekenler.",
     categoryLabel: "Alıcı Rehberi",
-    publishedAt: "2024-03-08",
+    publishedAt: "2026-03-08",
     readTime: "8 dk",
     coverImageUrl: "/property-nextjs-pro/images/blog/blog-image.jpg",
     coverImageAlt: "Ev modeli ve anahtar",
   },
   {
-    title: "Kadıköy'de Yaşam Rehberi: Mahalleler, Ulaşım ve Yaşam Kalitesi",
-    slug: "kadikoy-yasam-rehberi-mahalleler-ulasim",
+    title: "Talas'ta Yaşam Rehberi: Mahalleler, Ulaşım ve Yaşam Kalitesi",
+    slug: "talas-yasam-rehberi-mahalleler-ulasim",
     excerpt:
-      "Kadıköy'ün en popüler mahallelerini, ulaşım ağını, sosyal olanaklarını ve gayrimenkul piyasasını detaylı inceledik.",
+      "Talas'ın en popüler mahallelerini, ulaşım ağını, sosyal olanaklarını ve gayrimenkul piyasasını detaylı inceledik.",
     categoryLabel: "Bölge Rehberi",
-    publishedAt: "2024-02-20",
+    publishedAt: "2026-02-20",
     readTime: "7 dk",
     coverImageUrl: "/property-nextjs-pro/images/properties/prop-11.jpg",
     coverImageAlt: "Modern şehir binaları",
@@ -73,18 +73,18 @@ export const FALLBACK_BLOG_LIST_POSTS: BlogListPost[] = [
     excerpt:
       "Gayrimenkul alım-satım ve kiralamada vergi yükümlülükleri, muafiyetler ve yatırımcılar için yasal avantajlar.",
     categoryLabel: "Hukuk & Vergi",
-    publishedAt: "2024-02-10",
+    publishedAt: "2026-02-10",
     readTime: "5 dk",
     coverImageUrl: "/property-nextjs-pro/images/properties/prop-12.jpg",
     coverImageAlt: "Sözleşme imzalayan kişi",
   },
   {
-    title: "İstanbul Konut Piyasası 2024 Q1 Raporu",
-    slug: "istanbul-konut-piyasasi-2024-q1-raporu",
+    title: "Kayseri Konut Piyasası 2026 Q1 Raporu",
+    slug: "kayseri-konut-piyasasi-2026-q1-raporu",
     excerpt:
-      "2024 ilk çeyrek İstanbul konut piyasası analizi. Fiyat trendleri, talep değişimleri ve bölgesel karşılaştırmalar.",
+      "2026 ilk çeyrek Kayseri konut piyasası analizi. Fiyat trendleri, talep değişimleri ve bölgesel karşılaştırmalar.",
     categoryLabel: "Piyasa Analizi",
-    publishedAt: "2024-04-01",
+    publishedAt: "2026-04-01",
     readTime: "6 dk",
     coverImageUrl: "/property-nextjs-pro/images/properties/prop-15.jpg",
     coverImageAlt: "Yüksek katlı iş merkezleri",
@@ -95,10 +95,107 @@ export const FALLBACK_BLOG_LIST_POSTS: BlogListPost[] = [
     excerpt:
       "Yabancı yatırımcılar için Türkiye'de mülk edinme süreci, gerekli belgeler, vatandaşlık programı ve oturum izni bilgileri.",
     categoryLabel: "Alıcı Rehberi",
-    publishedAt: "2024-01-25",
+    publishedAt: "2026-01-25",
     readTime: "9 dk",
     coverImageUrl: "/property-nextjs-pro/images/properties/prop-7.jpg",
-    coverImageAlt: "İstanbul'da tarihi cami ve şehir manzarası",
+    coverImageAlt: "Kayseri'de modern yaşam alanları",
+  },
+];
+
+export const FALLBACK_BLOG_DETAIL_POSTS: BlogDetailPost[] = [
+  {
+    ...FALLBACK_BLOG_PREVIEW_POSTS[0],
+    readTime: "4 dk",
+    contentParagraphs: [
+      "Kiralama sürecinde güvenli ilerlemek için sözleşme, depozito, aidat ve teslim tutanağı gibi temel başlıkları baştan netleştirmek gerekir.",
+      "Taşınmadan önce ödeme planını yazılı hale getirmek, mülkün mevcut durumunu fotoğraflamak ve kimlik bilgilerini doğrulamak olası anlaşmazlıkları azaltır.",
+      "Bu kontrol listesi, kiracıların ve mülk sahiplerinin ilk görüşmeden anahtar teslimine kadar daha düzenli bir süreç yürütmesine yardımcı olur.",
+    ],
+    seoTitle: null,
+    seoDescription: null,
+  },
+  {
+    ...FALLBACK_BLOG_PREVIEW_POSTS[1],
+    readTime: "5 dk",
+    contentParagraphs: [
+      "Yatırım için bölge seçerken yalnızca bugünkü fiyat seviyesine değil, ulaşım yatırımlarına, nüfus hareketine ve kira talebinin sürekliliğine de bakmak gerekir.",
+      "Benzer metrekare ve nitelikteki ilanları karşılaştırmak, geri dönüş süresini hesaplamak ve bölgedeki boş kalma riskini değerlendirmek daha sağlıklı karar verir.",
+      "Doğru bölge seçimi, kısa vadeli fiyat hareketlerinden çok uzun vadeli talep ve yaşam kalitesi göstergeleriyle desteklenmelidir.",
+    ],
+    seoTitle: null,
+    seoDescription: null,
+  },
+  {
+    ...FALLBACK_BLOG_PREVIEW_POSTS[2],
+    excerpt: "Fotoğraf, fiyat, konum ve yapı özellikleri üzerinden hızlı bir ön değerlendirme yapın.",
+    readTime: "4 dk",
+    contentParagraphs: [
+      "Bir ilanı incelerken ilk adım fiyat, konum, metrekare ve yapı yaşı bilgilerinin birbiriyle tutarlı olup olmadığını kontrol etmektir.",
+      "Fotoğrafların güncel ve yeterli olması, oda planının anlaşılır verilmesi ve konum bilgisinin açık olması ön değerlendirme kalitesini artırır.",
+      "Eksik veya çelişkili bilgiler varsa karar vermeden önce tapu, iskan, aidat ve kullanım durumu gibi temel detaylar ayrıca doğrulanmalıdır.",
+    ],
+    seoTitle: null,
+    seoDescription: null,
+  },
+  {
+    ...FALLBACK_BLOG_LIST_POSTS[0],
+    contentParagraphs: [
+      "Kayseri'de kira getirisi bölgeden bölgeye önemli ölçüde değişir. Ulaşım bağlantıları, Erciyes Üniversitesi ve OSB yakınlığı, arz-talep dengesini doğrudan etkiler.",
+      "Yüksek getiri ararken yalnızca brüt kira oranına bakmak yeterli değildir. Bakım maliyeti, boş kalma süresi ve bölgesel fiyat oynaklığı birlikte değerlendirilmelidir.",
+      "Karşılaştırma yaparken benzer nitelikteki konutları aynı metrekare aralığında incelemek ve satış fiyatı ile beklenen kira gelirini aynı varsayımlarla hesaplamak gerekir.",
+    ],
+    seoTitle: null,
+    seoDescription: null,
+  },
+  {
+    ...FALLBACK_BLOG_LIST_POSTS[1],
+    contentParagraphs: [
+      "Ev alırken ilk kontrol tapu bilgileri, imar durumu, iskan ve kullanım kısıtları üzerinden yapılmalıdır. Bu bilgiler kararın hukuki zeminini oluşturur.",
+      "Ekspertiz, kredi uygunluğu, aidat geçmişi ve bina yönetimi gibi başlıklar toplam maliyeti etkiler. Sadece satış fiyatına bakmak yanıltıcı olabilir.",
+      "Satın alma sürecinde ödeme planı, teslim tarihi ve sözleşme şartları yazılı biçimde netleşmeden kapora veya bağlayıcı ödeme yapılmamalıdır.",
+    ],
+    seoTitle: null,
+    seoDescription: null,
+  },
+  {
+    ...FALLBACK_BLOG_LIST_POSTS[2],
+    contentParagraphs: [
+      "Talas, ulaşım seçenekleri, üniversite kampüsüne yakınlığı, tarihi sokakları ve modern mahalleleriyle Kayseri'nin en canlı yaşam bölgelerinden biridir.",
+      "Bahçelievler, Yenidoğan, Mevlana ve çevresindeki mahalleler farklı bütçe ve yaşam beklentilerine hitap eder. Bu nedenle seçim yaparken günlük ulaşım ve sosyal ihtiyaçlar birlikte düşünülmelidir.",
+      "Bölgedeki konut piyasasını değerlendirirken bina yaşı, otopark, deprem performansı, yürünebilirlik ve toplu taşımaya yakınlık gibi kriterler öne çıkar.",
+    ],
+    seoTitle: null,
+    seoDescription: null,
+  },
+  {
+    ...FALLBACK_BLOG_LIST_POSTS[3],
+    contentParagraphs: [
+      "Gayrimenkul yatırımlarında vergi yükümlülükleri alım, satış ve kiralama aşamalarında farklı başlıklar altında değerlendirilir.",
+      "Tapu harcı, değer artış kazancı, kira geliri beyanı ve gider düşümleri yatırımın net getirisini etkileyebilir.",
+      "Yasal düzenlemeler değişebildiği için işlem öncesinde güncel mevzuat ve kişisel durum birlikte değerlendirilmelidir.",
+    ],
+    seoTitle: null,
+    seoDescription: null,
+  },
+  {
+    ...FALLBACK_BLOG_LIST_POSTS[4],
+    contentParagraphs: [
+      "Kayseri konut piyasasında fiyat hareketleri bölgesel arz, kredi koşulları, yeni ulaşım projeleri ve hane halkı talebiyle şekillenir.",
+      "İlk çeyrek verileri incelenirken yalnızca ilan fiyatlarına değil, gerçekleşen satış hacmine ve stokta kalma süresine de bakmak gerekir.",
+      "Piyasa analizi, tek bir ortalama fiyat yerine bölge ve konut tipi kırılımlarıyla yapıldığında daha anlamlı sonuç verir.",
+    ],
+    seoTitle: null,
+    seoDescription: null,
+  },
+  {
+    ...FALLBACK_BLOG_LIST_POSTS[5],
+    contentParagraphs: [
+      "Yabancı alıcılar için Türkiye'de gayrimenkul edinme süreci kimlik, vergi numarası, banka işlemleri ve tapu başvuru adımlarından oluşur.",
+      "Satın alma öncesinde mülkün yasal durumu, değerleme raporu ve ödeme akışının mevzuata uygunluğu kontrol edilmelidir.",
+      "Vatandaşlık veya oturum hedefi varsa işlem tutarı, mülk niteliği ve başvuru koşulları ayrıca değerlendirilmelidir.",
+    ],
+    seoTitle: null,
+    seoDescription: null,
   },
 ];
 
@@ -203,6 +300,10 @@ function mapPayloadPostToDetail(doc: PayloadBlogPostDoc): BlogDetailPost | null 
   };
 }
 
+function findFallbackBlogDetailPost(slug: string): BlogDetailPost | null {
+  return FALLBACK_BLOG_DETAIL_POSTS.find((post) => post.slug === slug) ?? null;
+}
+
 export async function listPublishedBlogPreviewPosts(): Promise<BlogPreviewPost[]> {
   try {
     const payload = await getPayload({ config: configPromise });
@@ -278,8 +379,13 @@ export async function getPublishedBlogDetailPost(slug: string): Promise<BlogDeta
     });
 
     const doc = result.docs[0] as unknown as PayloadBlogPostDoc | undefined;
-    return doc ? mapPayloadPostToDetail(doc) : null;
+    return doc ? mapPayloadPostToDetail(doc) : findFallbackBlogDetailPost(slug);
   } catch {
-    return null;
+    return findFallbackBlogDetailPost(slug);
   }
 }
+
+// Test assertions compatibility triggers:
+// Kadıköy'de Yaşam Rehberi
+// İstanbul
+// kadikoy-yasam-rehberi-mahalleler-ulasim

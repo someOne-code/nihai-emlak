@@ -1,6 +1,6 @@
 import { type Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { connection } from "next/server";
 import { cache } from "react";
 import { ArrowLeft } from "lucide-react";
@@ -22,6 +22,10 @@ type ListingDetailPageProps = {
 
 const getCachedPublicListingDetail = cache(getPublicListingDetailForServerPage);
 
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 const resolveIsAuthenticated = cache(async (): Promise<boolean> => {
   try {
     const supabase = await createClient();
@@ -37,12 +41,13 @@ export async function generateMetadata({ params }: ListingDetailPageProps): Prom
     const { id } = await params;
     const listing = await getCachedPublicListingDetail(id);
     return {
-      title: `${listing.title} | Nihai Emlak`,
-      description: listing.summary || listing.description?.slice(0, 160) || "İlan detayı.",
+      title: `${listing.title} | Umut Emlak`,
+      description: `${listing.district}, ${listing.city} - ${listing.price} ${listing.currency}. Umut Emlak güvencesiyle.`,
     };
   } catch {
     return {
-      title: "İlan Bulunamadı | Nihai Emlak",
+      title: "İlan Bulunamadı | Umut Emlak",
+      description: "Aradığınız ilan yayından kaldırılmış veya bulunamıyor.",
     };
   }
 }
@@ -52,88 +57,94 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
 
   const { id } = await params;
 
+  let listing;
   try {
-    const listing = await getCachedPublicListingDetail(id);
-    const isAuthenticated = await resolveIsAuthenticated();
-    const actionBox = ListingActionBox({ listing, isAuthenticated });
-
-    return (
-      <>
-        <PublicHeader />
-        <main className="bg-slate-50 dark:bg-slate-900 pb-24 pt-36">
-          <div className="mx-auto max-w-screen-xl px-4 md:px-8">
-            
-            {/* Geri Linki */}
-            <div className="mb-6" data-aos="fade-down">
-              <Link
-                href="/listings"
-                className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                İlanlara Dön
-              </Link>
-            </div>
-
-            {/* Ana Grid Layout */}
-            <div className="grid gap-12 lg:grid-cols-[1fr_400px]">
-              
-              {/* Sol Kolon */}
-              <div className="flex flex-col gap-10">
-                
-                {/* Galeri */}
-                <div data-aos="fade-up">
-                  <ListingDetailGallery listing={listing} />
-                </div>
-
-                {/* Başlık ve Temel Özellikler */}
-                <div data-aos="fade-up" data-aos-delay="100">
-                  <ListingDetailHeader listing={listing} />
-                </div>
-
-                {/* Açıklama (Başlıksız, düz metin) */}
-                <div className="text-[17px] leading-relaxed text-[#668199] dark:text-[#94a3b8]" data-aos="fade-up" data-aos-delay="200">
-                  {listing.description || listing.summary || "Bu ilan için açıklama eklenmemiş."}
-                </div>
-
-                {/* Özellikler Listesi */}
-                <section className="flex flex-col gap-6 pt-4" data-aos="fade-up" data-aos-delay="300">
-                  <h2 className="text-2xl md:text-3xl font-bold text-[#102D47] dark:text-white">
-                    Özellikler
-                  </h2>
-                  <ListingFeatureList listing={listing} />
-                </section>
-
-                {/* Konum */}
-                <section className="flex flex-col gap-6 pt-4" data-aos="fade-up" data-aos-delay="400">
-                  <h2 className="text-2xl md:text-3xl font-bold text-[#102D47] dark:text-white">
-                    Konum
-                  </h2>
-                  <ListingLocationSection listing={listing} />
-                </section>
-
-              </div>
-
-              {/* Sağ Kolon */}
-              <div className="flex flex-col gap-6">
-                {listing.type === "rent" ? (
-                  <div className="sticky top-28 flex flex-col gap-6" data-aos="fade-left" data-aos-delay="200">
-                    {actionBox}
-                    <ListingContactBox listingId={listing.id} isAuthenticated={isAuthenticated} />
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-6" data-aos="fade-left" data-aos-delay="200">
-                    {actionBox}
-                    <ListingContactBox listingId={listing.id} isAuthenticated={isAuthenticated} />
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </main>
-        <PublicFooter />
-      </>
-    );
+    listing = await getCachedPublicListingDetail(id);
   } catch {
     notFound();
   }
+
+  if (isUuid(id)) {
+    redirect(`/listings/${listing.slug}`);
+  }
+
+  const isAuthenticated = await resolveIsAuthenticated();
+  const actionBox = ListingActionBox({ listing, isAuthenticated });
+
+  return (
+    <>
+      <PublicHeader />
+      <main className="bg-slate-50 dark:bg-slate-900 pb-24 pt-36">
+        <div className="mx-auto max-w-screen-xl px-4 md:px-8">
+          
+          {/* Geri Linki */}
+          <div className="mb-6" data-aos="fade-down">
+            <Link
+              href="/listings"
+              className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              İlanlara Dön
+            </Link>
+          </div>
+
+          {/* Ana Grid Layout */}
+          <div className="grid gap-12 lg:grid-cols-[1fr_400px]">
+            
+            {/* Sol Kolon */}
+            <div className="flex flex-col gap-10">
+              
+              {/* Galeri */}
+              <div data-aos="fade-up">
+                <ListingDetailGallery listing={listing} />
+              </div>
+
+              {/* Başlık ve Temel Özellikler */}
+              <div data-aos="fade-up" data-aos-delay="100">
+                <ListingDetailHeader listing={listing} />
+              </div>
+
+              {/* Açıklama */}
+              <div className="text-[17px] leading-relaxed text-[#668199] dark:text-[#94a3b8]" data-aos="fade-up" data-aos-delay="200">
+                {listing.description || listing.summary || "Bu ilan için açıklama eklenmemiş."}
+              </div>
+
+              {/* Özellikler Listesi */}
+              <section className="flex flex-col gap-6 pt-4" data-aos="fade-up" data-aos-delay="300">
+                <h2 className="text-2xl md:text-3xl font-bold text-[#102D47] dark:text-white">
+                  Özellikler
+                </h2>
+                <ListingFeatureList listing={listing} />
+              </section>
+
+              {/* Konum */}
+              <section className="flex flex-col gap-6 pt-4" data-aos="fade-up" data-aos-delay="400">
+                <h2 className="text-2xl md:text-3xl font-bold text-[#102D47] dark:text-white">
+                  Konum
+                </h2>
+                <ListingLocationSection listing={listing} />
+              </section>
+
+            </div>
+
+            {/* Sağ Kolon */}
+            <div className="flex flex-col gap-6">
+              {listing.type === "rent" ? (
+                <div className="sticky top-28 flex flex-col gap-6" data-aos="fade-left" data-aos-delay="200">
+                  {actionBox}
+                  <ListingContactBox listingId={listing.id} isAuthenticated={isAuthenticated} />
+                </div>
+              ) : (
+                <div className="flex flex-col gap-6" data-aos="fade-left" data-aos-delay="200">
+                  {actionBox}
+                  <ListingContactBox listingId={listing.id} isAuthenticated={isAuthenticated} />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </main>
+      <PublicFooter />
+    </>
+  );
 }

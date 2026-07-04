@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  BarChart3,
   Building2,
   FolderTree,
   Home,
@@ -39,7 +38,6 @@ type AdminSidebarProps = {
 };
 
 const SIDEBAR_ICON_MAP: Record<AdminSidebarIcon, LucideIcon> = {
-  "bar-chart": BarChart3,
   building: Building2,
   catalog: Landmark,
   dashboard: LayoutDashboard,
@@ -145,7 +143,7 @@ export default function AdminSidebar({
           className="text-sm font-semibold tracking-tight"
           onClick={onNavigate}
         >
-          Nihai Emlak Admin
+          Umut Emlak Admin
         </Link>
         <Button
           type="button"
@@ -171,3 +169,4 @@ export default function AdminSidebar({
     </aside>
   );
 }
+

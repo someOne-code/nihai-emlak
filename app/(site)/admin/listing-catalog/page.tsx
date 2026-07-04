@@ -2,6 +2,7 @@
 //
 // Protected page: checks admin role. If non-admin, redirects to /admin.
 
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { createClient as createServerSupabaseClient } from "@/lib/supabase/server";
@@ -11,9 +12,9 @@ import AdminCatalogView from "@/components/admin-catalog/AdminCatalogView";
 // `nextConfig.cacheComponents: true` disallows that segment config. The page
 // becomes dynamic implicitly via Supabase auth cookie reads below.
 
-export const metadata = {
-  title: "Fiyat Kataloğu | Nihai Emlak Admin",
-  description: "Ana ödeme kalemleri ve ek hizmetler kataloğunu yönetin.",
+export const metadata: Metadata = {
+  title: "Fiyat Kataloğu | Umut Emlak Admin",
+  description: "İlan paket fiyatlandırmaları ve kampanya yönetimi.",
 };
 
 export default async function ListingCatalogPage() {

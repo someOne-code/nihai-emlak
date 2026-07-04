@@ -43,3 +43,11 @@ test("listing empty state uses the localized copy and no-results image asset", (
   assert.match(empty, /Bu kriterlere uygun ilan bulunamad\u0131\./);
   assert.equal(existsSync(join(process.cwd(), imagePath)), true);
 });
+
+test("listing cards use database slugs for public detail links", () => {
+  const card = readProjectFile("components/listings/listing-card.tsx");
+
+  assert.match(card, /"slug"/);
+  assert.match(card, /href=\{`\/listings\/\$\{listing\.slug\}`\}/);
+  assert.doesNotMatch(card, /href=\{`\/listings\/\$\{listing\.id\}`\}/);
+});

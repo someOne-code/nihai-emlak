@@ -29,7 +29,7 @@ test("blog detail route exposes dynamic metadata from the published post", () =>
   assert.match(page, /getPublishedBlogDetailPost\(slug\)/);
   assert.match(page, /const title = post\.seoTitle \?\? post\.title/);
   assert.match(page, /const description = post\.seoDescription \?\? post\.excerpt/);
-  assert.match(page, /title: `\$\{title\} \| Nihai Emlak`/);
+  assert.match(page, /title: `\$\{title\} \| Umut Emlak`/);
   assert.match(page, /description,/);
   assert.match(page, /openGraph:/);
   assert.match(page, /twitter:/);
@@ -48,6 +48,30 @@ test("blog detail API fetches only published posts by slug with public Payload a
   assert.match(source, /depth: 1/);
   assert.match(source, /overrideAccess: false/);
   assert.doesNotMatch(source, /overrideAccess: true|service_role/);
+});
+
+test("blog detail API resolves fallback list slugs instead of sending them to 404", () => {
+  const source = readProjectFile("lib/api/blog.ts");
+
+  assert.match(source, /FALLBACK_BLOG_DETAIL_POSTS/);
+  assert.match(source, /kadikoy-yasam-rehberi-mahalleler-ulasim/);
+  assert.match(
+    source,
+    /return doc \? mapPayloadPostToDetail\(doc\) : findFallbackBlogDetailPost\(slug\);/,
+  );
+  assert.match(source, /catch \{\s*return findFallbackBlogDetailPost\(slug\);\s*\}/);
+  assert.doesNotMatch(source, /return FALLBACK_BLOG_DETAIL_POSTS\[0\]/);
+});
+
+test("blog detail source keeps Turkish text as UTF-8 instead of mojibake", () => {
+  const page = readProjectFile("app/(site)/blog/[slug]/page.tsx");
+  const source = readProjectFile("lib/api/blog.ts");
+
+  assert.match(page, /Güncel/);
+  assert.match(page, /Bloga Dön/);
+  assert.match(source, /Kadıköy'de Yaşam Rehberi/);
+  assert.match(source, /İstanbul/);
+  assert.doesNotMatch(`${page}\n${source}`, /Ã|Ä|Å/);
 });
 
 test("blog detail content is rendered as safe text paragraphs, not raw HTML", () => {

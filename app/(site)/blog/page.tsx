@@ -7,7 +7,7 @@ import { PublicHeader } from "@/components/site/public-header";
 import { listPublishedBlogListPosts } from "@/lib/api/blog";
 
 export const metadata: Metadata = {
-  title: "Blog & İçerikler | Nihai Emlak",
+  title: "Blog & İçerikler | Umut Emlak",
   description:
     "Gayrimenkul yatırımı, bölge rehberleri, alıcı rehberleri, hukuk ve piyasa analizi içerikleri.",
 };

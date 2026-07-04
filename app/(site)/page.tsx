@@ -41,7 +41,7 @@ export default async function Index() {
               <div className="col-span-6 flex flex-col items-start justify-center" data-aos="fade-right">
                 <div className="mb-8">
                   <p className="mb-4 ml-4 text-lg font-semibold text-[#2F73F2]">
-                    Premium Gayrimenkul Yönetimi
+                    Umut Emlak
                   </p>
                   <h1 className="ml-4 text-4xl font-bold leading-[1.2] text-[#102D47] dark:text-white md:text-[50px]">
                     Yaşam Alanınızı
@@ -68,7 +68,7 @@ export default async function Index() {
                     <div className="relative my-2 rounded-lg border-0">
                       <div className="flex min-h-44 items-center rounded-lg border border-[#6bc5f94d] bg-white px-6 py-8 dark:border-[#224767] dark:bg-[#0c121e]">
                         <p className="text-2xl font-semibold leading-snug text-[#102D47] dark:text-white md:text-3xl">
-                          İstanbul&apos;un en prestijli lokasyonlarında uzun dönem kiralama ve yatırım danışmanlığı.
+                          Kayseri ve çevresinde uzun dönem kiralama ve yatırım danışmanlığı.
                         </p>
                       </div>
                     </div>

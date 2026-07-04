@@ -5,6 +5,7 @@ import type { ApiListingListItem } from "@/types/listing";
 const fallbackFeaturedListings: ListingCardData[] = [
   {
     id: "sample-rent-1",
+    slug: "sample-rent-1",
     type: "rent",
     title: "Merkezde Ferah Kiralık Daire",
     city: "Kayseri",
@@ -19,6 +20,7 @@ const fallbackFeaturedListings: ListingCardData[] = [
   },
   {
     id: "sample-sale-1",
+    slug: "sample-sale-1",
     type: "sale",
     title: "Yatırıma Uygun Satılık Konut",
     city: "Kayseri",
@@ -33,6 +35,7 @@ const fallbackFeaturedListings: ListingCardData[] = [
   },
   {
     id: "sample-rent-2",
+    slug: "sample-rent-2",
     type: "rent",
     title: "Site İçinde Modern Kiralık Daire",
     city: "Kayseri",
@@ -47,6 +50,7 @@ const fallbackFeaturedListings: ListingCardData[] = [
   },
   {
     id: "sample-sale-2",
+    slug: "sample-sale-2",
     type: "sale",
     title: "Geniş Balkonlu Satılık Daire",
     city: "Kayseri",
@@ -61,6 +65,7 @@ const fallbackFeaturedListings: ListingCardData[] = [
   },
   {
     id: "sample-rent-3",
+    slug: "sample-rent-3",
     type: "rent",
     title: "Ulaşımı Kolay Kiralık Rezidans",
     city: "Kayseri",
@@ -75,6 +80,7 @@ const fallbackFeaturedListings: ListingCardData[] = [
   },
   {
     id: "sample-sale-3",
+    slug: "sample-sale-3",
     type: "sale",
     title: "Aile Yaşamına Uygun Satılık Villa",
     city: "Kayseri",

@@ -11,7 +11,11 @@ type SupabaseRpcResponse = {
 
 type PublicListingsServerClient = {
   rpc: (
-    functionName: "list_public_listings" | "get_public_listing_filters" | "get_public_listing_detail",
+    functionName:
+      | "list_public_listings"
+      | "get_public_listing_filters"
+      | "get_public_listing_detail"
+      | "get_public_listing_detail_by_slug",
     args: Record<string, unknown>,
   ) => Promise<SupabaseRpcResponse>;
 };
@@ -80,12 +84,20 @@ export async function getPublicListingFiltersForServerPage(): Promise<PublicList
 }
 
 export async function getPublicListingDetailForServerPage(
-  listingId: string,
+  listingIdentifier: string,
 ): Promise<ApiListingDetail> {
   const supabase = (await (createServerSupabaseClient as () => Promise<unknown>)()) as PublicListingsServerClient;
-  const result = await supabase.rpc("get_public_listing_detail", {
-    p_listing_id: listingId,
-  });
+  const normalizedIdentifier = listingIdentifier.trim();
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    normalizedIdentifier,
+  );
+  const result = isUuid
+    ? await supabase.rpc("get_public_listing_detail", {
+        p_listing_id: normalizedIdentifier.toLowerCase(),
+      })
+    : await supabase.rpc("get_public_listing_detail_by_slug", {
+        p_listing_slug: normalizedIdentifier.toLowerCase(),
+      });
 
   if (result.error) {
     throw new Error("Public listing detail read failed");

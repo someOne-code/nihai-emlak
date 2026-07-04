@@ -741,10 +741,29 @@ begin
     raise exception 'TEST FAILED: passive listing should be hidden from public listing list, got %', v_count;
   end if;
 
+  select count(*)
+  into v_count
+  from pg_index i
+  join pg_class t on t.oid = i.indrelid
+  join pg_attribute a on a.attrelid = t.oid and a.attnum = any(i.indkey)
+  where t.oid = 'public.listings'::regclass
+    and i.indisunique
+    and a.attname = 'slug';
+
+  if v_count = 0 then
+    raise exception 'TEST FAILED: public.listings.slug must stay unique';
+  end if;
+
   v_detail := public.get_public_listing_detail('cccccccc-dddd-4ddd-8ddd-ddddddddd101'::uuid);
 
   if v_detail ->> 'id' <> 'cccccccc-dddd-4ddd-8ddd-ddddddddd101' then
     raise exception 'TEST FAILED: public listing detail returned wrong listing: %', v_detail;
+  end if;
+
+  v_detail := public.get_public_listing_detail_by_slug('phase-5-active-listing');
+
+  if v_detail ->> 'id' <> 'cccccccc-dddd-4ddd-8ddd-ddddddddd101' then
+    raise exception 'TEST FAILED: public listing detail by slug returned wrong listing: %', v_detail;
   end if;
 
   if v_detail ? 'address_line' then
@@ -770,6 +789,22 @@ begin
     raise exception 'TEST FAILED: passive listing detail should be hidden';
   exception
     when sqlstate 'P0002' then
+      null;
+  end;
+
+  begin
+    perform public.get_public_listing_detail_by_slug('phase-5-passive-listing');
+    raise exception 'TEST FAILED: passive listing slug detail should be hidden';
+  exception
+    when sqlstate 'P0002' then
+      null;
+  end;
+
+  begin
+    perform public.get_public_listing_detail_by_slug('INVALID SLUG');
+    raise exception 'TEST FAILED: invalid listing slug should be rejected';
+  exception
+    when sqlstate '22023' then
       null;
   end;
 

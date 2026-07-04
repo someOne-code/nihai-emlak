@@ -7,7 +7,6 @@
 // page-level access guards remain authoritative.
 
 export type AdminSidebarIcon =
-  | "bar-chart"
   | "building"
   | "catalog"
   | "dashboard"
@@ -44,9 +43,9 @@ export type AdminSidebarItem = {
 export const ADMIN_SIDEBAR_LINKS: ReadonlyArray<AdminSidebarLink> =
   Object.freeze([
     Object.freeze({ label: "Kontrol Paneli", href: "/admin" }),
-    Object.freeze({ label: "İlanlar", href: "/admin/listings" }),
-    Object.freeze({ label: "Operasyonlar", href: "/admin/operations" }),
-    Object.freeze({ label: "Adminler", href: "/admin/users" }),
+        Object.freeze({ label: "İlanlar", href: "/admin/listings" }),
+        Object.freeze({ label: "Operasyonlar", href: "/admin/operations" }),
+        Object.freeze({ label: "Adminler", href: "/admin/users" }),
   ]);
 
 // Structured sidebar items with clear visual hierarchy.
@@ -66,7 +65,7 @@ export const ADMIN_SIDEBAR_ITEMS: ReadonlyArray<AdminSidebarItem> =
         }),
       ]),
     }),
-    Object.freeze({
+        Object.freeze({
       kind: "section" as const,
       label: "İçerik",
       icon: "section-content",
@@ -88,7 +87,7 @@ export const ADMIN_SIDEBAR_ITEMS: ReadonlyArray<AdminSidebarItem> =
         }),
       ]),
     }),
-    Object.freeze({
+        Object.freeze({
       kind: "section" as const,
       label: "Yönetim",
       icon: "section-management",
@@ -128,20 +127,20 @@ type AdminTitleRule = {
 // falling back to the "/admin" dashboard label.
 const ADMIN_TITLE_RULES: ReadonlyArray<AdminTitleRule> = Object.freeze([
   Object.freeze({ prefix: "/admin/users", title: "Adminler" }),
-  Object.freeze({ prefix: "/admin/system", title: "Sistem Sağlığı" }),
+        Object.freeze({ prefix: "/admin/system", title: "Sistem Sağlığı" }),
   Object.freeze({ prefix: "/admin/listing-catalog", title: "Fiyat Kataloğu" }),
-  Object.freeze({ prefix: "/admin/sale-leads", title: "Satış Leadleri" }),
-  Object.freeze({ prefix: "/admin/listings", title: "İlanlar" }),
-  Object.freeze({ prefix: "/admin/operations", title: "Operasyonlar" }),
-  Object.freeze({ prefix: "/admin/communications", title: "İletişim" }),
-  Object.freeze({ prefix: "/admin/content/posts", title: "Blog Yazıları" }),
-  Object.freeze({
+        Object.freeze({ prefix: "/admin/sale-leads", title: "Satış Leadleri" }),
+        Object.freeze({ prefix: "/admin/listings", title: "İlanlar" }),
+        Object.freeze({ prefix: "/admin/operations", title: "Operasyonlar" }),
+        Object.freeze({ prefix: "/admin/communications", title: "İletişim" }),
+        Object.freeze({ prefix: "/admin/content/posts", title: "Blog Yazıları" }),
+        Object.freeze({
     prefix: "/admin/content/categories",
     title: "Blog Kategorileri",
   }),
-  Object.freeze({ prefix: "/admin/content/consultants", title: "Danışmanlar" }),
-  Object.freeze({ prefix: "/admin/content", title: "İçerik" }),
-  Object.freeze({ prefix: "/admin", title: "Kontrol Paneli" }),
+        Object.freeze({ prefix: "/admin/content/consultants", title: "Danışmanlar" }),
+        Object.freeze({ prefix: "/admin/content", title: "İçerik" }),
+        Object.freeze({ prefix: "/admin", title: "Kontrol Paneli" }),
 ]);
 
 const ADMIN_TITLE_EXACT: Readonly<Record<string, string>> = Object.freeze({
@@ -184,3 +183,4 @@ export function resolveAdminHeaderTitle(pathname: string): string {
 
   return ADMIN_FALLBACK_TITLE;
 }
+

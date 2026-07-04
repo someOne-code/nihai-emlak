@@ -21,6 +21,7 @@ export type ListingCardData = Pick<
   | "price"
   | "primary_image_url"
   | "room_count"
+  | "slug"
   | "title"
   | "type"
 >;
@@ -36,7 +37,7 @@ export function ListingCard({
 
   return (
     <div className="overflow-hidden rounded-lg bg-white shadow-property dark:bg-[#1F2A37]" data-aos="fade-up">
-      <Link href={`/listings/${listing.id}`} className={`group ${isList ? "flex" : ""}`}>
+      <Link href={`/listings/${listing.slug}`} className={`group ${isList ? "flex" : ""}`}>
         <div className={`relative ${isList ? "w-[30%]" : ""}`}>
           <div className={`imageContainer relative h-[250px] w-full overflow-hidden ${isList ? "h-full md:h-52" : ""}`}>
             <Image

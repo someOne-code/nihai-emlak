@@ -19,8 +19,8 @@ const metadataBaseUrl = resolvePublicSiteOrigin({
 
 export const metadata: Metadata = {
   metadataBase: new URL(metadataBaseUrl),
-  title: "Nihai Emlak",
-  description: "Supabase, Payload ve odeme iskeleti ile emlak operasyon platformu.",
+  title: "Umut Emlak",
+  description: "Kayseri ve çevresinde kiralık ve satılık emlak ilanları. Umut Emlak.",
 };
 
 const geistSans = Geist({

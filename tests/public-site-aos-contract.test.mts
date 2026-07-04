@@ -100,6 +100,8 @@ test("public listing server pages use direct server read helper instead of self-
     /import \{ getPublicListingDetailForServerPage \} from "@\/lib\/read-models\/public-listings";/,
   );
   assert.match(listingDetailPage, /cache\(getPublicListingDetailForServerPage\)/);
+  assert.match(listingDetailPage, /import \{ notFound, redirect \} from "next\/navigation";/);
+  assert.match(listingDetailPage, /if \(isUuid\(id\)\) \{\s*redirect\(`\/listings\/\$\{listing\.slug\}`\);\s*\}/);
 });
 
 test("home discover properties section uses local static categories and copied public assets", () => {

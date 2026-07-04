@@ -9,6 +9,8 @@ import { PublicHeader } from "@/components/site/public-header";
 import { getPublishedBlogDetailPost } from "@/lib/api/blog";
 import type { BlogDetailPost } from "@/types/blog";
 
+import { connection } from "next/server";
+
 type BlogDetailPageProps = {
   params: Promise<{ slug: string }>;
 };
@@ -48,8 +50,8 @@ export async function generateMetadata({
   const canonical = `/blog/${post.slug}`;
 
   return {
-    title: `${title} | Nihai Emlak`,
-    description,
+    title: `${title} | Umut Emlak`,
+    description: description || "Umut Emlak Blog",
     alternates: {
       canonical,
     },
@@ -75,6 +77,7 @@ export async function generateMetadata({
 }
 
 export default async function BlogDetailPage({ params }: BlogDetailPageProps) {
+  await connection();
   const { slug: rawSlug } = await params;
   const slug = decodeSlug(rawSlug);
   const post = await getPublishedBlogDetailPost(slug);

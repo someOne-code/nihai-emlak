@@ -226,7 +226,23 @@ function formatNumber(value: number): string {
 }
 
 function getFirstDisplayableListingImageUrl(...values: Array<string | null | undefined>): string {
-  return values.find((value) => isDisplayableListingImageUrl(value ?? ""))?.trim() ?? "";
+  const url = values.find((value) => isDisplayableListingImageUrl(value ?? ""))?.trim() ?? "";
+  return normalizeLocalUrl(url);
+}
+
+function normalizeLocalUrl(url: string): string {
+  if (!url) {
+    return url;
+  }
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
+      return parsed.pathname;
+    }
+  } catch {
+    // Relative paths won't parse, return as is
+  }
+  return url;
 }
 
 function isDisplayableListingImageUrl(value: string): boolean {

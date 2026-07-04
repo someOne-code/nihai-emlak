@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { getLoginRedirectUrl } from "@/lib/auth/redirect";
@@ -11,6 +13,14 @@ export function RentPaymentPreviewBox({
   isAuthenticated: boolean;
   listing: ApiListingDetail;
 }) {
+  const handleScrollToContact = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    const element = document.getElementById("listing-contact");
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
   return (
     <div className="rounded-xl bg-white p-8 shadow-property dark:bg-[#1F2A37] dark:shadow-none">
       <div className="flex flex-col gap-6">
@@ -47,8 +57,12 @@ export function RentPaymentPreviewBox({
           </>
         )}
         
-        <Button asChild variant="outline" className="h-11 w-full rounded-lg border border-primary/35 bg-primary/5 font-medium text-primary transition hover:bg-primary/10 hover:border-primary/40">
-          <Link href="#listing-contact">İletişime Geç</Link>
+        <Button
+          onClick={handleScrollToContact}
+          variant="outline"
+          className="h-11 w-full rounded-lg border border-primary/35 bg-primary/5 font-medium text-primary transition hover:bg-primary/10 hover:border-primary/40 cursor-pointer"
+        >
+          İletişime Geç
         </Button>
       </div>
     </div>

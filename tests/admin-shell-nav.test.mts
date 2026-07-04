@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import test from "node:test";
 
 import {
@@ -6,6 +8,8 @@ import {
   ADMIN_SIDEBAR_LINKS,
   resolveAdminHeaderTitle,
 } from "../components/admin-shell/admin-shell-nav.ts";
+
+const repoRoot = resolve(import.meta.dirname, "..");
 
 function adminSidebarChildLinks() {
   return ADMIN_SIDEBAR_ITEMS.flatMap((item) => item.children);
@@ -68,6 +72,7 @@ test("admin sidebar items include Iletisim before Satis Leadleri and Fiyat Katal
   assert.equal(saleLeads?.href, "/admin/sale-leads");
 });
 
+
 test("admin header title resolves /admin/communications to İletişim", () => {
   assert.equal(resolveAdminHeaderTitle("/admin/communications"), "İletişim");
   assert.equal(resolveAdminHeaderTitle("/admin/communications/abc"), "İletişim");
@@ -76,6 +81,34 @@ test("admin header title resolves /admin/communications to İletişim", () => {
 test("admin header title resolves /admin/sale-leads to Satış Leadleri", () => {
   assert.equal(resolveAdminHeaderTitle("/admin/sale-leads"), "Satış Leadleri");
   assert.equal(resolveAdminHeaderTitle("/admin/sale-leads/abc"), "Satış Leadleri");
+});
+
+
+test("admin sidebar component maps every configured icon name", () => {
+  const source = readFileSync(
+    resolve(repoRoot, "components/admin-shell/AdminSidebar.tsx"),
+    "utf8",
+  );
+  const iconMapSource = source.match(
+    /const SIDEBAR_ICON_MAP: Record<AdminSidebarIcon, LucideIcon> = \{([\s\S]*?)\n\};/,
+  )?.[1];
+
+  assert.ok(iconMapSource, "SIDEBAR_ICON_MAP must be present");
+
+  const configuredIcons = new Set(
+    adminSidebarChildLinks().map((link) => link.icon),
+  );
+  for (const item of ADMIN_SIDEBAR_ITEMS) {
+    configuredIcons.add(item.icon);
+  }
+
+  for (const icon of configuredIcons) {
+    assert.match(
+      iconMapSource,
+      new RegExp(`["']?${icon}["']?\\s*:`),
+      `${icon} must be mapped in AdminSidebar`,
+    );
+  }
 });
 
 test("admin sidebar items do not expose legacy CMS fallback link", () => {
@@ -137,3 +170,5 @@ test("admin header title falls back to Admin for unknown or empty paths", () => 
   assert.equal(resolveAdminHeaderTitle("/"), "Admin");
   assert.equal(resolveAdminHeaderTitle(""), "Admin");
 });
+
+
