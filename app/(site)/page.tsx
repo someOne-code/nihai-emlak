@@ -38,7 +38,7 @@ export default async function Index() {
         <section className="relative overflow-x-hidden bg-property-hero bg-no-repeat pb-0 pt-44">
           <div className="container relative z-10 mx-auto max-w-screen-xl md:max-w-screen-md lg:max-w-screen-xl">
             <div className="grid grid-cols-1 lg:grid-cols-12">
-              <div className="col-span-6 flex flex-col items-start justify-center" data-aos="fade-right">
+              <div className="col-span-6 flex flex-col items-start justify-center">
                 <div className="mb-8">
                   <p className="mb-4 ml-4 text-lg font-semibold text-[#2F73F2]">
                     Umut Emlak
@@ -75,14 +75,14 @@ export default async function Index() {
                   </div>
                 </div>
                 <div className="mb-12 ml-4 mt-8 flex flex-col justify-start gap-3">
-                  <div className="flex gap-2" data-aos="fade-left">
+                  <div className="flex gap-2">
                     {Array.from({ length: 5 }).map((_, index) => (
                       <svg key={index} className="h-6 w-6 text-blue-500" fill="currentColor" viewBox="0 0 24 24">
                         <path d="M12 .587l3.668 7.431L24 9.763l-6 5.847L19.336 24 12 20.019 4.664 24 6 15.61 0 9.763l8.332-1.745z" />
                       </svg>
                     ))}
                   </div>
-                  <div data-aos="fade-left">
+                  <div>
                     <p className="text-lg text-black dark:text-white">
                       4.9/5 <span className="text-gray-400">- müşteri değerlendirmesi</span>
                     </p>

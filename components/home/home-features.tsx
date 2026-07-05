@@ -24,7 +24,7 @@ export function HomeFeatures() {
       <div className="container mx-auto max-w-screen-xl px-4 md:max-w-screen-md lg:max-w-screen-xl">
         <div className="flex flex-col items-center justify-between gap-12 lg:flex-row lg:gap-0">
           <div className="w-full flex-1">
-            <div className="relative" data-aos="fade-right">
+            <div className="relative">
               <Image
                 src="/property-nextjs-pro/images/features/features_iimage.jpg"
                 alt="Modern yaşam alanı"
@@ -35,8 +35,6 @@ export function HomeFeatures() {
 
               <div
                 className="absolute bottom-0 left-4 right-4 mx-auto max-w-sm rounded-t-lg bg-property-surface p-4 shadow-lg sm:left-auto sm:right-6"
-                data-aos="fade-up"
-                data-aos-delay="100"
               >
                 <div className="flex items-center gap-4">
                   <Image
@@ -59,11 +57,10 @@ export function HomeFeatures() {
             <div className="flex h-full flex-col justify-center lg:pl-20">
               <h2
                 className="mb-4 text-4xl font-bold leading-tight text-property-midnight dark:text-white"
-                data-aos="fade-left"
               >
                 Neden Bizi Seçmelisiniz?
               </h2>
-              <p className="mb-8 text-base leading-7 text-property-gray" data-aos="fade-left" data-aos-delay="100">
+              <p className="mb-8 text-base leading-7 text-property-gray">
                 Kiralama ve satın alma süreçlerinde güvenli, hızlı ve şeffaf bir deneyim sunuyoruz.
               </p>
 
@@ -72,8 +69,7 @@ export function HomeFeatures() {
                   <div
                     key={feature.title}
                     className="flex items-center gap-8"
-                    data-aos="fade-left"
-                    data-aos-delay="100"
+
                   >
                     <div className="flex h-[110px] w-[110px] shrink-0 items-center justify-center rounded-full bg-[#2F73F2]/20 p-4">
                       <Image src={feature.image} alt="" width={78} height={78} unoptimized />

@@ -20,7 +20,7 @@ export function SaleLeadPreviewBox({ listing }: { listing: ApiListingDetail }) {
           Bu ilan hakkında bilgi almak için iletişim bilgilerinizi bırakın.
         </p>
 
-        <div data-aos="fade-up" data-aos-delay="100">
+        <div>
           <SaleLeadForm listing={listing} />
         </div>
       </div>

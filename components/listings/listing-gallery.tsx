@@ -9,7 +9,7 @@ export function ListingGallery({ listing }: { listing: ApiListingDetail }) {
 
   return (
     <section className="px-4">
-      <div className="mx-auto max-w-screen-xl" data-aos="fade-up">
+      <div className="mx-auto max-w-screen-xl">
         <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
           <div className="imageContainer relative h-[520px] rounded-lg shadow-deatail">
             <Image

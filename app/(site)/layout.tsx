@@ -3,9 +3,7 @@ import { Geist } from "next/font/google";
 import { headers } from "next/headers";
 import { ThemeProvider } from "next-themes";
 import { Suspense } from "react";
-import { AosInit } from "@/components/site/aos-init";
 import { resolvePublicSiteOrigin } from "@/payload/server-url";
-import "aos/dist/aos.css";
 import "../globals.css";
 import "./operations.css";
 import "./property-pro.css";
@@ -39,11 +37,9 @@ export default function RootLayout({
       <body className={`${geistSans.className} antialiased`}>
         <Suspense fallback={null}>
           <NoncedThemeProvider>
-            <AosInit>
               <div className="property-pro">
                 {children}
               </div>
-            </AosInit>
           </NoncedThemeProvider>
         </Suspense>
       </body>

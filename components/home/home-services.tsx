@@ -61,7 +61,7 @@ export function HomeServices() {
     <section className="bg-property-light pb-20 pt-12 md:pb-24 md:pt-16">
       <div className="container mx-auto max-w-screen-xl px-4 md:max-w-screen-md lg:max-w-screen-xl">
         {/* Section header */}
-        <div className="mb-12 text-center" data-aos="fade-up">
+        <div className="mb-12 text-center">
           <p className="mb-3 text-sm font-semibold uppercase tracking-[0.2em] text-[#2F73F2]">
             HİZMETLERİMİZ
           </p>
@@ -72,12 +72,11 @@ export function HomeServices() {
 
         {/* 2-column grid */}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:gap-8">
-          {services.map((service, index) => (
+          {services.map((service) => (
             <div
               key={service.title}
               className="group rounded-2xl bg-property-surface p-8 shadow-[0_2px_16px_rgba(0,0,0,0.06)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_8px_30px_rgba(0,0,0,0.10)] dark:shadow-[0_2px_16px_rgba(0,0,0,0.3)]"
-              data-aos="fade-up"
-              data-aos-delay={index * 100}
+
             >
               <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-xl bg-[#2F73F2]/10 text-[#2F73F2] transition duration-300 group-hover:bg-[#2F73F2] group-hover:text-white">
                 {service.icon}

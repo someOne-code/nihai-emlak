@@ -24,7 +24,7 @@ export function CompanyInfo() {
     <section className="bg-property-light pb-20 pt-12 md:pb-24 md:pt-16">
       <div className="container mx-auto max-w-screen-xl px-4 md:max-w-screen-md lg:max-w-screen-xl">
         {/* Heading */}
-        <div className="mb-10 max-w-2xl" data-aos="fade-right">
+        <div className="mb-10 max-w-2xl">
           <h2 className="mb-4 text-4xl font-bold leading-tight text-property-midnight dark:text-white">
             Gayrimenkul Sürecinizi Tek Yerden Yönetin
           </h2>
@@ -45,8 +45,7 @@ export function CompanyInfo() {
                     ? "border-b border-white/20 md:border-b-0 md:border-r"
                     : ""
                 }`}
-                data-aos="fade-up"
-                data-aos-delay={index * 100}
+
               >
                 <p className="text-xl font-bold leading-snug text-white sm:text-2xl lg:text-[28px]">
                   {stat.value}
@@ -60,7 +59,7 @@ export function CompanyInfo() {
         </div>
 
         {/* CTA */}
-        <div className="mt-10 flex flex-col gap-4 sm:flex-row" data-aos="fade-up" data-aos-delay="200">
+        <div className="mt-10 flex flex-col gap-4 sm:flex-row">
           <Link
             href="/listings"
             className="inline-flex items-center justify-center rounded-lg bg-[#2F73F2] px-8 py-3.5 text-lg font-semibold text-white transition hover:bg-[#1d5fd8]"

@@ -365,7 +365,7 @@ function HeaderLink({ item, forceLight = false }: { item: HeaderItem; forceLight
         ) : null}
       </Link>
       {submenuOpen && item.submenu ? (
-        <div className="absolute left-0 top-9 mt-0.5 w-60 rounded-lg bg-white py-2 shadow-lg dark:bg-[#0c121e]" data-aos="fade-up" data-aos-duration="300">
+        <div className="absolute left-0 top-9 mt-0.5 w-60 rounded-lg bg-white py-2 shadow-lg dark:bg-[#0c121e]">
           {item.submenu.map((subItem) => (
             <Link
               key={subItem.href}

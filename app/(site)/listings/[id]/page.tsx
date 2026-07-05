@@ -78,7 +78,7 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
         <div className="mx-auto max-w-screen-xl px-4 md:px-8">
           
           {/* Geri Linki */}
-          <div className="mb-6" data-aos="fade-down">
+          <div className="mb-6">
             <Link
               href="/listings"
               className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
@@ -95,22 +95,22 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
             <div className="flex flex-col gap-10">
               
               {/* Galeri */}
-              <div data-aos="fade-up">
+              <div>
                 <ListingDetailGallery listing={listing} />
               </div>
 
               {/* Başlık ve Temel Özellikler */}
-              <div data-aos="fade-up" data-aos-delay="100">
+              <div>
                 <ListingDetailHeader listing={listing} />
               </div>
 
               {/* Açıklama */}
-              <div className="text-[17px] leading-relaxed text-[#668199] dark:text-[#94a3b8]" data-aos="fade-up" data-aos-delay="200">
+              <div className="text-[17px] leading-relaxed text-[#668199] dark:text-[#94a3b8]">
                 {listing.description || listing.summary || "Bu ilan için açıklama eklenmemiş."}
               </div>
 
               {/* Özellikler Listesi */}
-              <section className="flex flex-col gap-6 pt-4" data-aos="fade-up" data-aos-delay="300">
+              <section className="flex flex-col gap-6 pt-4">
                 <h2 className="text-2xl md:text-3xl font-bold text-[#102D47] dark:text-white">
                   Özellikler
                 </h2>
@@ -118,7 +118,7 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
               </section>
 
               {/* Konum */}
-              <section className="flex flex-col gap-6 pt-4" data-aos="fade-up" data-aos-delay="400">
+              <section className="flex flex-col gap-6 pt-4">
                 <h2 className="text-2xl md:text-3xl font-bold text-[#102D47] dark:text-white">
                   Konum
                 </h2>
@@ -130,12 +130,12 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
             {/* Sağ Kolon */}
             <div className="flex flex-col gap-6">
               {listing.type === "rent" ? (
-                <div className="sticky top-28 flex flex-col gap-6" data-aos="fade-left" data-aos-delay="200">
+                <div className="sticky top-28 flex flex-col gap-6">
                   {actionBox}
                   <ListingContactBox listingId={listing.id} isAuthenticated={isAuthenticated} />
                 </div>
               ) : (
-                <div className="flex flex-col gap-6" data-aos="fade-left" data-aos-delay="200">
+                <div className="flex flex-col gap-6">
                   {actionBox}
                   <ListingContactBox listingId={listing.id} isAuthenticated={isAuthenticated} />
                 </div>

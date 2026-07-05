@@ -11,47 +11,27 @@ function stripCssComments(css: string): string {
   return css.replace(/\/\*[\s\S]*?\*\//g, "");
 }
 
-test("public site keeps AOS motion controlled by the upstream AOS stylesheet", () => {
+test("public site property-pro.css does not contain data-aos rules", () => {
   const css = stripCssComments(readProjectFile("app/(site)/property-pro.css"));
 
   assert.equal(
     /\[data-aos[^\]]*\]/.test(css),
     false,
-    "Do not add scoped data-aos rules here; they override aos/dist/aos.css and make template scroll animations look static.",
+    "Do not add scoped data-aos rules here.",
   );
   assert.equal(
     /aos-animate/.test(css),
     false,
-    "Do not override aos-animate in property-pro.css; AOS must add/remove that class on scroll.",
-  );
-  assert.equal(
-    /prefers-reduced-motion/.test(css),
-    false,
-    "Do not disable AOS transitions in property-pro.css; this site mirrors the Property template motion behavior.",
+    "Do not add aos-animate rules in property-pro.css.",
   );
 });
 
-test("public site layout owns AOS css and initialization boundary without statically importing AOS JS", () => {
+test("public site layout does not use AOS (removed due to Vercel blank page bug)", () => {
   const layout = readProjectFile("app/(site)/layout.tsx");
 
-  assert.match(layout, /import "aos\/dist\/aos\.css";/);
-  assert.match(layout, /<AosInit>/);
-  assert.doesNotMatch(layout, /from "aos"/);
-});
-
-test("AOS initialization lazy-loads AOS JS after page load so animation classes do not race React hydration", () => {
-  const source = readProjectFile("components/site/aos-init.tsx");
-
-  assert.doesNotMatch(
-    source,
-    /import\s+AOS\s+from\s+"aos"/,
-    "AosInit must not statically import the AOS JS module into the global site client chunk.",
-  );
-  assert.match(source, /import\("aos"\)/);
-  assert.match(source, /window\.addEventListener\("load", initializeAos/);
-  assert.match(source, /window\.setTimeout/);
-  assert.match(source, /\.refreshHard\(\)/);
-  assert.match(source, /window\.removeEventListener\("load", initializeAos\)/);
+  assert.doesNotMatch(layout, /import "aos\/dist\/aos\.css";/, "AOS CSS must not be imported in layout.");
+  assert.doesNotMatch(layout, /<AosInit>/, "AosInit wrapper must not be used in layout.");
+  assert.doesNotMatch(layout, /from "aos"/, "AOS JS must not be imported in layout.");
 });
 
 test("public header keeps scroll stickiness listener passive and independent from mobile menu state", () => {
@@ -117,7 +97,7 @@ test("home discover properties section uses local static categories and copied p
   assert.match(discover, /Ticari/);
   assert.match(discover, /grid-cols-2[\s\S]*lg:grid-cols-6/);
   assert.match(discover, /group-hover:-translate-y-1/);
-  assert.match(discover, /data-aos="fade-up"/);
+  assert.doesNotMatch(discover, /data-aos/, "data-aos attributes must not be present (AOS removed).");
   assert.doesNotMatch(discover, /PropertyContext|updateFilter|\/api\/propertydata|fetch\(/);
 
   assert.equal(existsSync(join(process.cwd(), "public/property-nextjs-pro/images/properties/prop-1.jpg")), true);
@@ -132,8 +112,7 @@ test("home features section is static, localized, image-led, and excludes favori
   assert.match(features, /Kiralama S[üu]recinde Destek/);
   assert.match(features, /Dan[ıi][sş]manla H[ıi]zl[ıi] [İI]leti[sş]im/);
   assert.match(features, /\/property-nextjs-pro\/images\/features\/features_iimage\.jpg/);
-  assert.match(features, /data-aos="fade-right"/);
-  assert.match(features, /data-aos="fade-left"/);
+  assert.doesNotMatch(features, /data-aos/, "data-aos attributes must not be present (AOS removed).");
   assert.doesNotMatch(features, /\/api\/propertydata|\/api\/pagedata|fetch\(|favorite|heart|M12 21\.35|Save Your Money|Calculator/);
 
   assert.equal(existsSync(join(process.cwd(), "public/property-nextjs-pro/images/features/features_iimage.jpg")), true);

@@ -108,10 +108,10 @@ export function FeaturedListings({
     <section className="flex items-center justify-center bg-[#F0F6FA] py-16 dark:bg-[#0e1624]" data-listings-source={source}>
       <div className="container mx-auto max-w-screen-xl px-4 md:max-w-screen-md lg:max-w-screen-xl">
         <div className="mx-auto mb-12 max-w-3xl text-center">
-          <h2 className="mb-4 text-4xl font-bold text-[#102D47] dark:text-white" data-aos="fade-up">
+          <h2 className="mb-4 text-4xl font-bold text-[#102D47] dark:text-white">
             Öne Çıkan İlanlar
           </h2>
-          <p className="text-base leading-7 text-[#668199]" data-aos="fade-up" data-aos-delay="100">
+          <p className="text-base leading-7 text-[#668199]">
             Kayseri ve çevresindeki seçili kiralık ve satılık portföyleri, güncel fiyat ve temel özellikleriyle inceleyin.
           </p>
         </div>

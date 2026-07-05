@@ -322,8 +322,7 @@ test("sale listing detail exposes guest sale lead and separate login-gated chat 
   assert.doesNotMatch(rentActionSource, /SaleLeadForm|sale-lead-form/);
 
   assert.match(actionBoxSource, /import\s+\{\s*SaleLeadForm\s*\}/);
-  assert.match(actionBoxSource, /data-aos="fade-up"/);
-  assert.match(actionBoxSource, /data-aos-delay="100"/);
+  assert.doesNotMatch(actionBoxSource, /data-aos/, "data-aos attributes must not be present (AOS removed).");
   assert.match(actionBoxSource, /<SaleLeadForm\s+listing=\{listing\}/);
   assert.doesNotMatch(actionBoxSource, /href="#sale-lead-form"|href="#listing-contact"/);
   assert.doesNotMatch(actionBoxSource, /getLoginRedirectUrl|Giri[sş] Yap/);

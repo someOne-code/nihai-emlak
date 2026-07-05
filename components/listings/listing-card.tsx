@@ -36,7 +36,7 @@ export function ListingCard({
   const isList = viewMode === "list";
 
   return (
-    <div className="overflow-hidden rounded-lg bg-white shadow-property dark:bg-[#1F2A37]" data-aos="fade-up">
+    <div className="overflow-hidden rounded-lg bg-white shadow-property dark:bg-[#1F2A37]">
       <Link href={`/listings/${listing.slug}`} className={`group ${isList ? "flex" : ""}`}>
         <div className={`relative ${isList ? "w-[30%]" : ""}`}>
           <div className={`imageContainer relative h-[250px] w-full overflow-hidden ${isList ? "h-full md:h-52" : ""}`}>

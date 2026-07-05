@@ -20,8 +20,8 @@ export function ListingGrid({ listings }: { listings: ListingCardData[] }) {
 
   return (
     <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
-      {listings.map((listing, index) => (
-        <div key={listing.id} data-aos="fade-up" data-aos-delay={`${index * 100}`}>
+      {listings.map((listing) => (
+        <div key={listing.id}>
           <ListingCard listing={listing} />
         </div>
       ))}

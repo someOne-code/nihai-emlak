@@ -46,22 +46,20 @@ export function DiscoverProperties() {
       <div className="container mx-auto max-w-screen-xl px-4 md:max-w-screen-md lg:max-w-screen-xl">
         <h2
           className="mb-4 text-4xl font-bold leading-tight text-property-midnight dark:text-white"
-          data-aos="fade-left"
         >
           Gayrimenkul Türlerini Keşfedin
         </h2>
-        <p className="mb-12 max-w-2xl text-base leading-7 text-property-gray" data-aos="fade-left" data-aos-delay="100">
+        <p className="mb-12 max-w-2xl text-base leading-7 text-property-gray">
           İhtiyacınıza uygun kiralık ve satılık ilanları kolayca keşfedin.
         </p>
 
         <div className="grid grid-cols-2 gap-8 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 lg:gap-4">
-          {propertyCategories.map((category, index) => (
+          {propertyCategories.map((category) => (
             <Link
               key={category.label}
               href={category.href}
               className="group block"
-              data-aos="fade-up"
-              data-aos-delay={index * 100}
+
             >
               <span className="mb-6 flex h-[85px] w-[85px] items-center justify-center rounded-lg border-2 border-property bg-property-surface p-4 transition duration-500 group-hover:-translate-y-1 dark:border-[#224767]">
                 <Image
