@@ -21,10 +21,9 @@ const headerData: HeaderItem[] = [
   { href: "/consultants", label: "Danışmanlar" },
   { href: "/contact", label: "İletişim" },
 ];
-
 export function PublicHeader() {
   const pathUrl = usePathname();
-  const { theme, setTheme } = useTheme();
+  const { setTheme, resolvedTheme } = useTheme();
   const [navbarOpen, setNavbarOpen] = useState(false);
   const [sticky, setSticky] = useState(false);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
@@ -34,6 +33,11 @@ export function PublicHeader() {
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -156,10 +160,12 @@ export function PublicHeader() {
     };
   }, [navbarOpen]);
 
+
+
   return (
     <>
       <header
-        className={`fixed top-0 z-50 w-full transition-all duration-300 ${
+        className={`fixed h-24 top-0 py-1 z-50 w-full transition-all duration-300 ${
           sticky
             ? "bg-white/95 backdrop-blur-md shadow-lg dark:bg-[#0e1624]/95 dark:shadow-[rgba(145,158,171,0.2)_0px_0px_2px_0px,rgba(145,158,171,0.12)_0px_12px_24px_-4px]"
             : usesDarkBlogChrome
@@ -167,9 +173,7 @@ export function PublicHeader() {
               : "bg-transparent shadow-none"
         }`}
       >
-        <div className={`container mx-auto flex items-center justify-between px-4 transition-all duration-300 md:max-w-screen-md lg:max-w-screen-xl ${
-          sticky ? "py-4" : "py-6"
-        }`}>
+        <div className="container mx-auto flex items-center justify-between px-4 py-6 md:max-w-screen-md lg:max-w-screen-xl">
           <Logo forceLight={usesDarkBlogChrome} />
           <nav className="hidden flex-grow items-center justify-center gap-6 lg:flex">
             {headerData.map((item) => (
@@ -179,7 +183,11 @@ export function PublicHeader() {
           <div className="flex items-center gap-4">
             <button
               aria-label="Tema değiştir"
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              onClick={() => {
+                if (mounted) {
+                  setTheme(resolvedTheme === "dark" ? "light" : "dark");
+                }
+              }}
               className="flex size-8 items-center justify-center text-body-color duration-300 dark:text-white"
               type="button"
             >
@@ -197,7 +205,7 @@ export function PublicHeader() {
               </svg>
             </button>
 
-            {!loading && user ? (
+            {mounted && !loading && user ? (
               <div className="hidden items-center gap-3 lg:flex">
                 <Link
                   href={isAdmin ? "/admin" : "/protected"}
@@ -217,7 +225,7 @@ export function PublicHeader() {
                   Çıkış Yap
                 </button>
               </div>
-            ) : !loading ? (
+            ) : mounted && !loading ? (
               <>
                 <Link
                   href="/auth/login"
@@ -272,7 +280,7 @@ export function PublicHeader() {
             {headerData.map((item) => (
               <MobileHeaderLink key={item.href} item={item} onNavigate={() => setNavbarOpen(false)} />
             ))}
-            {!loading && user ? (
+            {mounted && !loading && user ? (
               <div className="mt-4 flex w-full flex-col gap-4">
                 <Link
                   href={isAdmin ? "/admin" : "/protected"}
@@ -292,7 +300,7 @@ export function PublicHeader() {
                   Çıkış Yap
                 </button>
               </div>
-            ) : !loading ? (
+            ) : mounted && !loading ? (
               <div className="mt-4 flex w-full flex-col gap-4">
                 <Link
                   href="/auth/login"

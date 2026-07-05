@@ -36,7 +36,7 @@ export default async function Index() {
       <PublicHeader />
       <main>
         <section className="relative overflow-x-hidden bg-property-hero bg-no-repeat pb-0 pt-44">
-          <div className="container relative z-10 mx-auto max-w-screen-xl md:max-w-screen-md lg:max-w-screen-xl">
+          <div className="container relative z-10 mx-auto px-4 max-w-screen-xl md:max-w-screen-md lg:max-w-screen-xl">
             <div className="grid grid-cols-1 lg:grid-cols-12">
               <div className="col-span-6 flex flex-col items-start justify-center">
                 <div className="mb-8">
