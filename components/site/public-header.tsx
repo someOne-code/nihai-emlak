@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { User } from "@supabase/supabase-js";
+import type { User, Subscription } from "@supabase/supabase-js";
 
 type HeaderItem = {
   href: string;
@@ -37,7 +37,7 @@ export function PublicHeader() {
 
   useEffect(() => {
     let active = true;
-    let subscription: any = null;
+    let subscription: Subscription | null = null;
 
     async function initAuth() {
       try {

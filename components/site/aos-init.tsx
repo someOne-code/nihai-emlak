@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
+import { usePathname } from "next/navigation";
 
 export function AosInit({ children }: Readonly<{ children?: ReactNode }>) {
+  const pathname = usePathname();
+
   useEffect(() => {
     let disposed = false;
     let timeout = 0;
@@ -23,7 +26,7 @@ export function AosInit({ children }: Readonly<{ children?: ReactNode }>) {
       }, 0);
     }
 
-    if (document.readyState === "complete") {
+    if (document.readyState === "complete" || document.readyState === "interactive") {
       initializeAos();
     } else {
       window.addEventListener("load", initializeAos, { once: true });
@@ -34,7 +37,7 @@ export function AosInit({ children }: Readonly<{ children?: ReactNode }>) {
       window.clearTimeout(timeout);
       window.removeEventListener("load", initializeAos);
     };
-  }, []);
+  }, [pathname]);
 
   return children ?? null;
 }
