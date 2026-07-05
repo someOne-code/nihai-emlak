@@ -12,17 +12,25 @@ export function AosInit({ children }: Readonly<{ children?: ReactNode }>) {
 
     function initializeAos() {
       timeout = window.setTimeout(async () => {
-        const { default: AOS } = await import("aos");
+        try {
+          const AOSModule = await import("aos");
+          const AOS = AOSModule.default || AOSModule;
 
-        if (disposed) {
-          return;
+          if (disposed) {
+            return;
+          }
+
+          AOS.init({
+            duration: 800,
+            once: false,
+          });
+          AOS.refreshHard();
+        } catch (err) {
+          console.error("AOS load error, running fallback:", err);
+          document.querySelectorAll("[data-aos]").forEach((el) => {
+            el.classList.add("aos-animate");
+          });
         }
-
-        AOS.init({
-          duration: 800,
-          once: false,
-        });
-        AOS.refreshHard();
       }, 0);
     }
 
